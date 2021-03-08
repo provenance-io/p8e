@@ -74,8 +74,7 @@ jobs:
 
   docker_build:
     name: Build and Push to GitHub Packages
-    # Ensure test job passes before pushing image.
-#     needs: test
+    needs: java_build
     strategy:
       matrix:
         project: [p8e-api, p8e-migration, p8e-api-webservice]
