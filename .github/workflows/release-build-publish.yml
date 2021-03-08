@@ -1,0 +1,128 @@
+name: Build and Publish
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  # Run tests.
+  # See also https://docs.docker.com/docker-hub/builds/automated-testing/
+#   test:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - uses: actions/checkout@v2
+
+#       - name: Run tests
+#         run: |
+#           if [ -f docker-compose.test.yml ]; then
+#             docker-compose --file docker-compose.test.yml build
+#             docker-compose --file docker-compose.test.yml run sut
+#           else
+#             docker build . --file Dockerfile
+#           fi
+
+  java_build:
+    name: Build and Publish Jar
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get Version
+        run: |
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "main" ] && VERSION=latest
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      # todo: step to take version and set for publication
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v1
+        with:
+          java-version: 11
+          server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
+          settings-path: ${{ github.workspace }} # location for the settings.xml file
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+    #       The USERNAME and TOKEN need to correspond to the credentials environment variables used in
+    #       the publishing section of your build.gradle
+      - name: Publish to GitHub Packages
+        run: gradle publish -Prelease=true --no-build-cache
+        env:
+          USERNAME: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload p8e-api Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: p8e-api
+          path: p8e-api/build/libs/*.jar
+
+      - name: Upload p8e-api-webservice Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: p8e-api-webservice
+          path: p8e-api-webservice/build/libs/*.jar
+
+  docker_build:
+    name: Build and Push to GitHub Packages
+    # Ensure test job passes before pushing image.
+#     needs: test
+    strategy:
+      matrix:
+        project: [p8e-api, p8e-migration, p8e-api-webservice]
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get Version
+        run: |
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "main" ] && VERSION=latest
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ matrix.project }}
+          path: ${{ matrix.project }}/build/libs
+        if: matrix.project != 'p8e-migration'
+
+      - name: Build image
+        run: docker build ${{ matrix.project }} --file ${{ matrix.project }}/docker/Dockerfile --tag "${{ matrix.project }}:$VERSION"
+
+      - name: Log into registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+
+      - name: Push image
+        run: |
+          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/${{ matrix.project }}
+
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+          echo IMAGE_ID=$IMAGE_ID
+          echo VERSION=$VERSION
+
+          docker tag ${{ matrix.project }} $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
