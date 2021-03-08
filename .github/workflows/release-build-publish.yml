@@ -55,7 +55,7 @@ jobs:
         run: ./gradlew build
 
       - name: Publish to GitHub Packages
-        run: gradle publish -Prelease=true --no-build-cache
+        run: ./gradlew publish -Prelease=true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
