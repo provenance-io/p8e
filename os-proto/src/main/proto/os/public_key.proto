@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package os;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "p8e/util.proto";
+
+option java_package = "io.provenance.os.proto";
+option java_outer_classname = "PublicKeys";
+
+service PublicKeyService {
+    rpc Create(PublicKeyRequest) returns (PublicKeyResponse) {};
+
+    rpc GetAll(google.protobuf.Empty) returns (PublicKeysResponse) {};
+
+    rpc Delete(PublicKeyRequest) returns (google.protobuf.Empty) {};
+}
+
+message PublicKeyRequest {
+    bytes public_key = 1;
+}
+
+message PublicKeyResponse {
+    UUID uuid = 1;
+    bytes public_key = 2;
+    google.protobuf.Timestamp created = 3;
+}
+
+message PublicKeysResponse {
+    repeated PublicKeyResponse key = 1;
+}

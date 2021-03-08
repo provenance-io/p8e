@@ -1,0 +1,15 @@
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} | %highlight(%-5level) | %gray(%-40logger{20}) | %-20thread{20} | MDC:[%mdc] | - %msg%n%xEx</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="Exposed" level="INFO">
+    <appender-ref ref="STDOUT" />
+  </logger>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT" />
+  </root>
+</configuration>

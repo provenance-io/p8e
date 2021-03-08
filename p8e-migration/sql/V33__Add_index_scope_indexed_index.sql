@@ -1,0 +1,1 @@
+CREATE INDEX idx_index_scope_indexed ON index_scope (indexed) WHERE NOT indexed;

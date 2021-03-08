@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package p8e;
+
+import "p8e/util.proto";
+import "p8e/public_key.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Authentication";
+
+service AuthenticationService {
+    rpc Authenticate (p8e.AuthenticationRequest) returns (p8e.Jwt) {}
+}
+
+message AuthenticationRequest {
+    PublicKey public_key = 1;
+    AuthenticationToken token = 2;
+    bytes signature = 3;
+}
+
+message AuthenticationToken {
+    bytes random_data = 1;
+    google.protobuf.Timestamp expiration = 2;
+}
+
+message Jwt {
+    string token = 1;
+}

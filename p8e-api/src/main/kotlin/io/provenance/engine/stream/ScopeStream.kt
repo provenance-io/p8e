@@ -1,0 +1,189 @@
+package io.provenance.engine.stream
+
+import io.grpc.ManagedChannelBuilder
+import io.grpc.stub.StreamObserver
+import io.p8e.proto.ContractScope.Scope
+import io.p8e.proto.Events.P8eEvent
+import io.p8e.proto.Events.P8eEvent.Event
+import io.p8e.util.*
+import io.provenance.p8e.shared.extension.logger
+import io.p8e.util.toProtoUuidProv
+import io.provenance.engine.config.EventStreamProperties
+import io.provenance.engine.domain.EventStreamRecord
+import io.provenance.engine.domain.TransactionStatusRecord
+import io.provenance.p8e.shared.index.data.IndexScopeRecord
+import io.provenance.engine.service.EventService
+import io.provenance.p8e.shared.domain.EnvelopeRecord
+import io.provenance.p8e.shared.index.ScopeEvent
+import io.provenance.p8e.shared.index.ScopeEventType
+import io.provenance.p8e.shared.index.toEventType
+import io.provenance.p8e.shared.util.P8eMDC
+import io.provenance.p8e.shared.util.toBlockHeight
+import io.provenance.p8e.shared.util.toTransactionHashes
+import io.provenance.pbc.esc.ApiKeyCallCredentials
+import io.provenance.pbc.esc.EventStreamApiKey
+import io.provenance.pbc.esc.StreamClientParams
+import io.provenance.pbc.ess.proto.EventProtos
+import io.provenance.pbc.ess.proto.EventStreamGrpc
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.stereotype.Component
+import java.net.URI
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import io.provenance.pbc.ess.proto.EventProtos.Event as StreamedEvent
+
+class EventStreamResponseObserver<T>(private val onNextHandler: (T) -> Unit) : StreamObserver<T> {
+    val finishLatch: CountDownLatch = CountDownLatch(1)
+    var error: Throwable? = null
+
+    override fun onNext(value: T) {
+        try {
+            onNextHandler(value)
+        } catch (t: Throwable) {
+            this.onError(t)
+        }
+    }
+
+    override fun onCompleted() {
+        finishLatch.countDown()
+    }
+
+    override fun onError(t: Throwable?) {
+        error = t
+        finishLatch.countDown()
+    }
+}
+
+@Component
+class ScopeStream(
+    private val eventService: EventService,
+    eventStreamProperties: EventStreamProperties
+) {
+    private val log = logger()
+
+    // We're only interested in scope events from pbc
+    private val eventTypes = ScopeEventType.values().map { it.value }
+
+    // The current event stream ID
+    private val eventStreamId = java.util.UUID.fromString(eventStreamProperties.id)
+
+    // The event stream service uri
+    private val uri = URI(eventStreamProperties.uri)
+
+    // The p8e -> pbc epoch, before which, no scopes exist on chain.
+    private val epochHeight = eventStreamProperties.epoch.toLong()
+
+    // The api key for grpc calls to the event stream server
+    private val apiKey = eventStreamProperties.key
+
+    private val eventAsyncClient: EventStreamGrpc.EventStreamStub
+
+    init {
+        val channel = ManagedChannelBuilder.forAddress(uri.host, uri.port)
+            .also {
+                if (uri.scheme == "grpcs") {
+                    it.useTransportSecurity()
+                } else {
+                    it.usePlaintext()
+                }
+            }
+            .maxInboundMessageSize(20 * 1024 * 1024) // ~ 20 MB
+            .idleTimeout(5, TimeUnit.MINUTES)
+            .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
+            .keepAliveTimeout(20, TimeUnit.SECONDS)
+            .build()
+
+        eventAsyncClient = EventStreamGrpc.newStub(channel)
+            .withCallCredentials(ApiKeyCallCredentials(EventStreamApiKey(apiKey)))
+    }
+
+    // This is scheduled so if the event streaming server or its proxied blockchain daemon node go down,
+    // we'll attempt to re-connect after a fixed delay.
+    @Scheduled(fixedDelay = 30_000)
+    fun consumeEventStream() {
+        // Initialize event stream state and determine start height
+        val record = transaction { EventStreamRecord.findById(eventStreamId) }
+        val lastHeight = record?.lastBlockHeight
+            ?: transaction { EventStreamRecord.insert(eventStreamId, epochHeight) }.lastBlockHeight
+        val request = EventProtos.EventStreamReq.newBuilder()
+            .addAllEventTypes(eventTypes)
+            .setStartHeight(lastHeight + 1)
+            .setConsumer(StreamClientParams(uri, apiKey).consumer)
+            .build()
+        val responseObserver = EventStreamResponseObserver<EventProtos.EventBatch>() { batch ->
+            queueIndexScopes(batch.height, batch.scopes())
+        }
+
+        log.info("Starting event stream at height ${lastHeight + 1}")
+
+        eventAsyncClient.streamEvents(request, responseObserver)
+
+        while (true) {
+            val isComplete = responseObserver.finishLatch.await(60, TimeUnit.SECONDS)
+
+            when (Pair(isComplete, responseObserver.error)) {
+                Pair(false, null) -> { log.info("Event stream active ping") }
+                Pair(true, null) -> { log.warn("Received completed"); return }
+                else -> { throw responseObserver.error!! }
+            } as Unit
+        }
+    }
+
+    // Extract all scopes from an event batch
+    private fun EventProtos.EventBatch.scopes(): List<ScopeEvent> =
+        this.eventsList.map { event ->
+            ScopeEvent(
+                event.findTxHash(),
+                event.findScope(),
+                event.eventType.toEventType()
+            )
+         }
+
+    // Find the transaction hash in an event.
+    private fun StreamedEvent.findTxHash(): String =
+        this.attributesList.find { it.key.toStringUtf8() == "tx_hash" }?.value?.toStringUtf8()
+            ?: throw IllegalStateException("Event does not contain a transaction hash")
+
+    // Find the scope in an event.
+    private fun StreamedEvent.findScope(): Scope =
+        this.attributesList.find { it.key.toStringUtf8() == "scope" }?.toScope()
+            ?: throw IllegalStateException("Event does not contain a scope")
+
+    // Parse a scope from an attribute value.
+    private fun EventProtos.Attribute.toScope(): Scope =
+        Scope.parseFrom(this.value.toStringUtf8().base64Decode())
+
+    // Queue a batch of scopes for indexing.
+    fun queueIndexScopes(blockHeight: Long, events: List<ScopeEvent>) = timed("ScopeStream_indexScopes_${events.size}") {
+        P8eMDC.set(blockHeight.toBlockHeight(), clear = true)
+            .set(events.map { it.txHash }.toTransactionHashes())
+
+        log.info("Received event stream block!")
+
+        transaction {
+            val uuids = IndexScopeRecord.batchInsert(blockHeight, events).flatMap { it.value }.toSet()
+            uuids.forEach {
+                // TODO: write a test for and possibly fix the case where multiple parties on multiparty contract share same node, but have different index names
+                // may need to index each separately to ensure both indexes populated https://github.com/FigureTechnologies/p8e/pull/444/files#r557465484
+                EnvelopeRecord.findByGroupAndExecutionUuid(it.groupUuid, it.executionUuid).forEachIndexed { i, envelope ->
+                    eventService.submitEvent(
+                        P8eEvent.newBuilder()
+                            .setEvent(if (i == 0) Event.SCOPE_INDEX else Event.SCOPE_INDEX_FRAGMENT)
+                            .setMessage(it.indexScopeUuid.toProtoUuidProv().toByteString())
+                            .build(),
+                        envelope.uuid.value
+                    )
+                }
+            }
+
+            events.map { it.txHash }
+                .toSet()
+                .also { txHashes -> log.debug("Received the following TXs $txHashes at height $blockHeight") }
+                .forEach { txHash -> TransactionStatusRecord.setSuccess(txHash) }
+
+            // Mark that we've stored up to the given block height for indexing.
+            EventStreamRecord.update(eventStreamId, blockHeight)
+        }
+    }
+}

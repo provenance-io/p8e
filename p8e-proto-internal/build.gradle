@@ -1,0 +1,58 @@
+buildscript {
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.7'
+    }
+}
+
+plugins {
+    id 'java-library'
+    id 'com.google.protobuf'
+}
+
+// Include the generated java proto implementations in the jar.
+sourceSets.main.java.srcDirs += 'build/generated/source/proto/main/java'
+
+dependencies {
+    implementation "javax.annotation:javax.annotation-api:1.3.1"
+    implementation "com.google.protobuf:protobuf-java:$protobuf_version"
+    implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
+
+    // TODO these are here because of the rpc definitions but ultimately
+    // they shouldn't be here so we can keep this small since it ends up in the uberjar for contracts
+    implementation group: 'io.grpc', name: 'grpc-stub', version: "$grpc_version"
+    implementation group: 'io.grpc', name: 'grpc-protobuf', version: "$grpc_version"
+}
+
+protobuf {
+    protoc {
+        // The artifact spec for the Protobuf Compiler
+        artifact = "com.google.protobuf:protoc:$protobuf_version"
+    }
+    plugins {
+        // Optional: an artifact spec for a protoc plugin, with "grpc" as
+        // the identifier, which can be referred to in the "plugins"
+        // container of the "generateProtoTasks" closure.
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.0.0-pre2'
+        }
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                python {}
+            }
+        }
+        ofSourceSet('main')*.plugins {
+            // Apply the "grpc" plugin whose spec is defined above, without
+            // options.  Note the braces cannot be omitted, otherwise the
+            // plugin will not be added. This is because of the implicit way
+            // NamedDomainObjectContainer binds the methods.
+            grpc {}
+        }
+    }
+}
+
+task buildCustom(type: GradleBuild) {
+    buildFile = project.file("build.gradle")
+    tasks = ['build']
+}

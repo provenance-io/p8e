@@ -1,0 +1,1 @@
+ALTER TABLE affiliate ADD COLUMN alias VARCHAR (255);

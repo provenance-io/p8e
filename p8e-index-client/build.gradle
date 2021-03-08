@@ -1,0 +1,12 @@
+dependencies {
+    implementation project(":p8e-index-domain")
+    implementation project(":p8e-common")
+    implementation project(":p8e-encryption")
+    implementation project(":p8e-proto-internal")
+    implementation project(":p8e-util")
+
+    implementation "com.google.protobuf:protobuf-java:$protobuf_version"
+    implementation group: 'io.grpc', name: 'grpc-stub', version: grpc_version
+
+    api("org.elasticsearch.client:elasticsearch-rest-high-level-client:7.4.1")
+}

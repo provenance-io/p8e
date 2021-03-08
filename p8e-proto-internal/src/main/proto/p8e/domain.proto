@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package p8e;
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+import "p8e/util.proto";
+import "p8e/contract_spec.proto";
+
+option java_outer_classname = "Domain";
+
+message SpecRequest {
+    reserved 1;
+    reserved 2;
+    reserved 3;
+    reserved 4;
+    reserved 5;
+    repeated ContractSpec spec = 6;
+}

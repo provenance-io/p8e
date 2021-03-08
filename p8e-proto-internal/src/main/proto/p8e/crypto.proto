@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package p8e.blockchain;
+
+option java_package = "io.p8e.crypto.proto";
+option java_outer_classname = "CryptoProtos";
+
+message Address {
+  string value = 1;
+  AddressType type = 2;
+
+}
+
+enum AddressType {
+  NO_ADDRESS_TYPE = 0;
+  BECH32 = 1;
+}
+
+message Key {
+  Address address = 1;
+  bytes encoded_key = 2;
+  string curve = 3; // prime256v1, ed25519
+  string encoding = 4; // PEM/DER
+}
+
+message KeyPair {
+  Key public_key = 1;
+  Key private_key = 2;
+}
+
+message Signature {
+  Key public_key = 1;
+  bytes signature_bytes = 2;
+}

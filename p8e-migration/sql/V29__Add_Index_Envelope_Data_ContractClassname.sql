@@ -1,0 +1,1 @@
+CREATE INDEX envelope_data_contract_classname_idx on envelope ((data->'contractClassname'));

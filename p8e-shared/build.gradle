@@ -1,0 +1,63 @@
+buildscript {
+    rootProject.apply {
+        from(rootProject.file("versions.gradle"))
+    }
+    ext {
+        springboot_version = '2.3.1.RELEASE'
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:$springboot_version"
+        classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlin_version"
+    }
+}
+
+plugins {
+    id 'java-library'
+}
+
+apply plugin: 'kotlin-spring'
+
+// In this section you declare where to find the dependencies of your project
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(":p8e-util")
+    implementation project(":p8e-common")
+    implementation project(":p8e-encryption")
+    implementation project(":os-client")
+    implementation project(":p8e-proto-internal")
+
+    implementation "com.auth0:java-jwt:$jwt_version"
+
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
+
+    // GRPC
+    implementation("io.grpc:grpc-protobuf:$grpc_version")
+    implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
+    implementation("io.grpc:grpc-netty:$grpc_version")
+
+    // HTTP
+    implementation "io.github.openfeign:feign-jackson:$feign_version"
+    implementation "io.github.openfeign:feign-httpclient:$feign_version"
+    implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jackson_version"
+
+    // elastic search
+    implementation "org.elasticsearch.client:elasticsearch-rest-high-level-client:$elasticsearch_version"
+    implementation "org.elasticsearch.client:elasticsearch-rest-client:$elasticsearch_version"
+    implementation "org.elasticsearch:elasticsearch:$elasticsearch_version"
+
+    // SQL
+    implementation "org.postgresql:postgresql:$postgres_version"
+    implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
+    implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
+    implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
+    implementation "com.zaxxer:HikariCP:$hikari_cp_version"
+
+    // Spring
+    implementation "org.springframework.boot:spring-boot-starter-web:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-integration:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-actuator:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-validation:$springboot_version"
+}

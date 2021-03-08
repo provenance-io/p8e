@@ -1,0 +1,20 @@
+syntax = 'proto3';
+
+package types;
+
+option go_package = "github.com/FigureTechnologies/provenance-blockchain/pkg/proto/types;types";
+option java_package = "io.provenance.pbc.proto.types";
+option java_outer_classname = "PartyProtos";
+
+enum PartyType {
+    PARTY_TYPE_UNKNOWN = 0;
+    PARTY_TYPE_ORIGINATOR = 1;
+    PARTY_TYPE_SERVICER = 2;
+    PARTY_TYPE_INVESTOR = 3;
+    PARTY_TYPE_CUSTODIAN = 4;
+    PARTY_TYPE_OWNER = 5;
+    PARTY_TYPE_AFFILIATE = 6;
+    PARTY_TYPE_OMNIBUS = 7;
+    PARTY_TYPE_PROVENANCE = 8;
+    PARTY_TYPE_MARKER = 9;
+}

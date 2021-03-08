@@ -1,0 +1,1 @@
+ALTER TABLE index_scope_fragment ADD COLUMN fact_type TEXT NOT NULL DEFAULT '';

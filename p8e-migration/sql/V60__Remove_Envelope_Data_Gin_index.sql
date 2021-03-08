@@ -1,0 +1,1 @@
+DROP INDEX envelope_data_state_idx_gin;

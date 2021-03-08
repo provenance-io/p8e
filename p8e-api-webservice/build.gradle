@@ -1,0 +1,107 @@
+buildscript {
+    rootProject.apply {
+        from(rootProject.file("versions.gradle"))
+    }
+    ext {
+        springboot_version = '2.3.1.RELEASE'
+    }
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.springframework.boot:spring-boot-gradle-plugin:$springboot_version"
+        classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlin_version"
+    }
+}
+
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+apply plugin: 'kotlin-spring'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+// In this section you declare where to find the dependencies of your project
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs += 'src/main/kotlin'
+        }
+    }
+    test {
+        java {
+            srcDirs += 'src/test/kotlin'
+        }
+    }
+}
+
+configurations.all {
+    // This is brought in by the object store client... We don't want figure dependencies in the p8e-api.
+    exclude group: 'com.figure', module: 'figure-util'
+}
+
+dependencies {
+    implementation project(":p8e-util")
+    implementation project(":p8e-encryption")
+    implementation project(":p8e-shared")
+    implementation project(":p8e-common")
+    implementation project(":p8e-sdk")
+    implementation project(":mailbox-client")
+    implementation project(":os-client")
+
+    implementation "com.google.protobuf:protobuf-java:$protobuf_version"
+
+    implementation "com.auth0:java-jwt:$jwt_version"
+
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
+
+    // Feign Things
+    implementation "io.github.openfeign:feign-jackson:$feign_version"
+    implementation "io.github.openfeign:feign-httpclient:$feign_version"
+
+    // Spring boot
+    implementation "org.springframework.boot:spring-boot-starter-web:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-integration:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-actuator:$springboot_version"
+    implementation "org.springframework.boot:spring-boot-starter-validation:$springboot_version"
+
+    // elastic search
+    implementation "org.elasticsearch.client:elasticsearch-rest-high-level-client:$elasticsearch_version"
+    implementation "org.elasticsearch.client:elasticsearch-rest-client:$elasticsearch_version"
+    implementation "org.elasticsearch:elasticsearch:$elasticsearch_version"
+
+    // Just SQL Things
+    implementation "org.postgresql:postgresql:$postgres_version"
+    implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
+    implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
+    implementation 'com.zaxxer:HikariCP:3.4.2'
+
+    // Redis
+    implementation "org.redisson:redisson:$redisson_version"
+
+    // Logging
+    implementation 'ch.qos.logback:logback-classic:1.2.3'
+    implementation 'ch.qos.logback:logback-core:1.2.3'
+
+    // Test Things
+    testImplementation 'com.h2database:h2:1.0.60'
+    testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.1.0'
+}
+
+def profiles = System.getenv("SPRING_PROFILES_ACTIVE") ?: "development"
+bootRun {
+    args = ["--spring.profiles.active=$profiles"]
+}
+
+springBoot {
+    mainClassName = 'io.provenance.p8e.webservice.ApplicationKt'
+}
+
+dependencyManagement {
+    resolutionStrategy {
+        cacheChangingModulesFor 0, 'seconds'
+    }
+}

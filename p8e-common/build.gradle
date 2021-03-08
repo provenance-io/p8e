@@ -1,0 +1,50 @@
+buildscript {
+    rootProject.apply {
+        from(rootProject.file("versions.gradle"))
+    }
+    repositories {
+        mavenCentral()
+    }
+}
+
+
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation project(":p8e-contract-base")
+    implementation project(":p8e-util")
+    implementation project(":os-client")
+    implementation project(":p8e-encryption")
+    implementation project(":p8e-proto-internal")
+
+    // Ketherium utilities
+    implementation "com.github.komputing.kethereum:crypto:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_api:$kethereum_version"
+    implementation "com.github.komputing.kethereum:model:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_impl_bouncycastle:$kethereum_version"
+
+    implementation "javax.validation:validation-api:2.0.1.Final"
+    implementation "io.github.openfeign:feign-core:10.2.3"
+    implementation "com.auth0:java-jwt:$jwt_version"
+
+    implementation "io.netty:netty-handler:4.1.48.Final"
+    implementation 'io.netty:netty-tcnative-boringssl-static:2.0.31.Final'
+    implementation "io.grpc:grpc-api:$grpc_version"
+    implementation "io.grpc:grpc-netty:$grpc_version"
+    implementation("io.grpc:grpc-protobuf:$grpc_version")
+    implementation group: 'io.grpc', name: 'grpc-stub', version: grpc_version
+
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
+
+    implementation("io.arrow-kt:arrow-core:$arrow_version")
+
+    // Apache Commons
+    implementation group: 'commons-io', name: 'commons-io', version: '2.8.0'
+    implementation group: 'commons-logging', name: 'commons-logging', version: '1.2'
+
+// todo: replace with an open-source contract alternative and update MemoryClassLoaderTest
+//    testCompile "io.p8e.contracts:p8e-contract:develop-10"
+//    testCompile "io.p8e.contracts:p8e-contract-proto:develop-10"
+}

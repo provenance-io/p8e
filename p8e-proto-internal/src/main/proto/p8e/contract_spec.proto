@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package p8e;
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "ContractSpecs";
+
+import "p8e/common.proto";
+
+message ContractSpec {
+    DefinitionSpec definition  = 1;
+    repeated DefinitionSpec input_specs = 2;
+    repeated PartyType parties_involved = 3;
+    repeated ConditionSpec condition_specs = 4;
+    repeated ConsiderationSpec consideration_specs = 5;
+}
+
+message ConditionSpec {
+    string func_name = 1;
+    repeated DefinitionSpec input_specs = 2;
+    OutputSpec output_spec = 3;
+}
+
+message ConsiderationSpec {
+    string func_name = 1;
+
+    // Invoking party
+    PartyType responsible_party = 2;
+
+    repeated DefinitionSpec input_specs = 3;
+    OutputSpec output_spec = 4;
+}
+
+enum PartyType {
+    NONE = 0;
+    ORIGINATOR = 1;
+    SERVICER = 2;
+    INVESTOR = 3;
+    CUSTODIAN = 4;
+    OWNER = 5;
+    AFFILIATE = 6;
+    OMNIBUS = 7;
+    PROVENANCE = 8;
+    MARKER = 9;
+}
+

@@ -1,0 +1,1 @@
+ALTER TABLE affiliate ADD COLUMN index_name VARCHAR (255) NOT NULL default 'scopes';

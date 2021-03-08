@@ -1,0 +1,21 @@
+apply plugin: 'java'
+apply plugin: 'kotlin'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(":os-proto")
+    implementation project(":p8e-util")
+    implementation project(":p8e-encryption")
+
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
+    implementation group: 'io.grpc', name: 'grpc-stub', version: grpc_version
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+}

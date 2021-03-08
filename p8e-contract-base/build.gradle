@@ -1,0 +1,12 @@
+plugins {
+    id "java-library"
+}
+
+// This jar is included in end users contract repositories. This means
+// that it will be uberjared as part of the bootstrapping process. For this reason
+// this jar should stay as small as possible.
+dependencies {
+    api project(":p8e-proto-internal")
+
+    implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
+}

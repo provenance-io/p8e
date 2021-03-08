@@ -1,0 +1,1 @@
+ALTER TABLE index_scope ADD COLUMN transaction_id TEXT NOT NULL DEFAULT '';

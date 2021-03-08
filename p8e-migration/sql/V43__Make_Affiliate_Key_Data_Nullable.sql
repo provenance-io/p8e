@@ -1,0 +1,1 @@
+ALTER TABLE affiliate ALTER COLUMN key_data DROP NOT NULL;

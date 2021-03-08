@@ -1,0 +1,57 @@
+/.gradle
+/build
+.DS_Store
+build/
+lib/
+
+# Eclipse
+/bin/
+.project
+.classpath
+
+# Intellij
+out/
+/.settings/
+profile.iml
+profile.ipr
+profile.iws
+/.datastore
+.idea/
+*.iml
+bin/
+.settings/
+.vscode/
+.project
+.classpath
+.gradle/
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# csr registrations
+p8e-affiliate-chaincode/registration/*/*
+!p8e-affiliate-chaincode/registration/vault/*
+
+dev-bin/
+bin/
+.fig/
+.sdkmanrc

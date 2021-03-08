@@ -1,0 +1,1 @@
+ALTER TABLE index_scope_fragment ADD COLUMN result_name TEXT NOT NULL DEFAULT '';

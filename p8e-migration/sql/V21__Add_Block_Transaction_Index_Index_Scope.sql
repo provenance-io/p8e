@@ -1,0 +1,1 @@
+ALTER TABLE index_scope ADD COLUMN block_transaction_index BIGINT NOT NULL DEFAULT -1;

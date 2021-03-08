@@ -1,0 +1,3 @@
+package io.provenance.engine.service
+
+interface IChaincodeInvokeService

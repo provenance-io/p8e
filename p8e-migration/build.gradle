@@ -1,0 +1,20 @@
+buildscript {
+    dependencies {
+        classpath 'org.postgresql:postgresql:42.2.5'
+    }
+}
+
+plugins {
+    id "org.flywaydb.flyway" version "5.2.4"
+}
+
+apply plugin: "org.flywaydb.flyway"
+
+flyway {
+    url = 'jdbc:postgresql://127.0.0.1:5432/p8e'
+    driver = 'org.postgresql.Driver'
+    user = 'postgres'
+    password = 'password1'
+    schemas = ['p8e']
+    locations = ['filesystem:p8e-migration/sql']
+}

@@ -1,0 +1,15 @@
+apply plugin: 'java'
+apply plugin: 'kotlin'
+
+dependencies {
+    implementation project(":os-client")
+    implementation project(":p8e-util")
+    implementation project(":p8e-encryption")
+
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
+    implementation group: 'io.grpc', name: 'grpc-stub', version: grpc_version
+    implementation("io.grpc:grpc-protobuf:$grpc_version")
+    implementation group: 'org.apache.httpcomponents', name: 'httpmime', version: '4.5.13'
+    implementation group: 'commons-io', name: 'commons-io', version: '2.8.0'
+    implementation group: 'javax.validation', name: 'validation-api', version: '2.0.1.Final'
+}

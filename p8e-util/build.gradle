@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    implementation project(":p8e-encryption")
+    implementation project(":p8e-proto-internal")
+
+    implementation group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: "$bouncy_castle"
+    implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: "$bouncy_castle"
+
+    implementation group: 'ch.qos.logback', name: 'logback-classic', version: "$logback_version"
+
+    //jackson / protobuf
+    implementation group: 'com.hubspot.jackson', name: 'jackson-datatype-protobuf', version: '0.9.9-jackson2.9-proto3'
+}

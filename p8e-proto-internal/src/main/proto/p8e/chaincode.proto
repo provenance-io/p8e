@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package p8e;
+
+import "google/protobuf/empty.proto";
+import "p8e/domain.proto";
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Chaincodes";
+
+service Chaincode {
+    rpc AddSpec (p8e.SpecRequest) returns (google.protobuf.Empty) {};
+}

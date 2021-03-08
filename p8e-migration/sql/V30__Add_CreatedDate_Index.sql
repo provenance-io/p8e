@@ -1,0 +1,1 @@
+CREATE INDEX envelope_audit_fields_created_idx ON envelope ((data->'auditFields'->'createdDate'));

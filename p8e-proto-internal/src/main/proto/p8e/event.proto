@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package p8e;
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Events";
+
+message P8eEvent {
+    bytes message = 1;
+    Event event = 2;
+    bool heartbeat = 3;
+
+    enum Event {
+        ENVELOPE_UPDATE = 0 [deprecated = true];
+        ENVELOPE_MAILBOX_OUTBOUND = 1;
+        ENVELOPE_FRAGMENT = 2;
+        ENVELOPE_REQUEST = 3;
+        ENVELOPE_RESPONSE = 4;
+        ENVELOPE_ERROR = 5;
+        ENVELOPE_CHAINCODE = 6;
+        SCOPE_INDEX = 7;
+        ENVELOPE_EXECUTION_ERROR = 8 [deprecated = true];
+        SCOPE_INDEX_FRAGMENT = 9;
+    }
+}

@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package p8e;
+
+import "p8e/common.proto";
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Objects";
+
+service Object {
+    rpc Store (p8e.WithAudience) returns (p8e.Location);
+
+    rpc Load (ObjectLoadRequest) returns (ObjectLoadResponse);
+
+    rpc LoadJson (ObjectLoadJsonRequest) returns (ObjectLoadJsonResponse);
+}
+
+message ObjectLoadRequest {
+    string uri = 1;
+}
+
+message ObjectLoadResponse {
+    bytes bytes = 1;
+}
+
+message ObjectLoadJsonRequest {
+    string hash = 1;
+    string classname = 2;
+    string contractSpecHash = 3;
+}
+
+message ObjectLoadJsonResponse {
+    string json = 1;
+}

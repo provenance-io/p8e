@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package p8e;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "p8e/util.proto";
+import "p8e/public_key.proto";
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Affiliate";
+
+service AffiliateService {
+    rpc Register (AffiliateRegisterRequest) returns (google.protobuf.Empty) {};
+    rpc WhitelistClass (AffiliateContractWhitelist) returns (google.protobuf.Empty) {};
+}
+
+message AffiliateRegisterRequest {
+    PrivateKey signing_private_key = 1;
+    PrivateKey encryption_private_key = 2;
+}
+
+message AffiliateContractWhitelist {
+    string classname = 1;
+    google.protobuf.Timestamp start_time = 2;
+    google.protobuf.Timestamp end_time = 3;
+}
+
+message AffiliateWhitelist {
+    repeated AffiliateContractWhitelist contract_whitelists = 1;
+
+    AuditFields audit_fields = 99;
+}
+
+message PublicKeyAllowed {
+    bytes publicKeyBytes = 1;
+    bool allowed = 2;
+}

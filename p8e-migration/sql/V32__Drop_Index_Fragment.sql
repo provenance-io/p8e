@@ -1,0 +1,4 @@
+DROP TABLE index_scope_fragment;
+
+ALTER TABLE index_scope ADD COLUMN indexed BOOL NOT NULL DEFAULT FALSE;
+ALTER TABLE index_scope ADD COLUMN updated TIMESTAMPTZ DEFAULT NULL;

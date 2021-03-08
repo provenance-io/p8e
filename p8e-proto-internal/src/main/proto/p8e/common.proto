@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package p8e;
+
+import "google/protobuf/timestamp.proto";
+import "p8e/public_key.proto";
+import "p8e/util.proto";
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Common";
+
+message Signature {
+    // Signature Detail
+    string algo = 1;
+    string provider = 2;
+    string signature = 3;
+
+    // Identity of signer
+    SigningAndEncryptionPublicKeys signer = 4;
+}
+
+message BooleanResult {
+    bool value = 1;
+}
+
+message DefinitionSpec {
+    string name = 1;
+    Location resource_location = 2;
+    Signature signature = 3;
+    Type type = 4;
+
+    enum Type {
+        NO_DEF_TYPE = 0;
+        PROPOSED = 1;
+        FACT = 2;
+        FACT_LIST = 3;
+    }
+}
+
+message OutputSpec {
+    DefinitionSpec spec = 1;
+    reserved 2;
+}
+
+message Location {
+    ProvenanceReference ref = 1;
+    string classname = 2;
+}
+
+message ProvenanceReference {
+    UUID scope_uuid = 1;     // [Req] [Scope.uuid] -- Scope ID
+    UUID group_uuid = 2;     // [Opt] [RecordGroup.group_uuid] -- require record to be within a specific group
+    string hash = 3;         // [Opt] [Record.result_hash] -- specify a specific record inside a scope (and group) by result-hash
+    string name = 4;         // [Opt] [Record.result_name] -- specify a result-name of a record within a scope
+}
+
+message ClassReference {
+    enum Type {
+        NO_CLASS_TYPE = 0;
+        PROTO = 1;
+        CONTRACT = 2;
+    }
+
+    Type type = 1;
+    string hash = 2;
+    string signature = 3;
+    UUID affiliate_certicate_uuid = 4;
+
+    google.protobuf.Timestamp created_time = 99;
+}
+
+message ClassReferenceCollection {
+    repeated ClassReference references = 1;
+}
+
+message ChaincodeProposal {
+    string payload = 1;
+    string timestamp = 2;
+    string endorser = 3;
+    string signature = 4;
+    bool has_endorsement = 5;
+}
+
+message ChaincodeTransaction {
+    string transaction_id = 1;
+    repeated ChaincodeProposal proposals = 2;
+}
+
+message WithAudience {
+    repeated bytes audience = 1;
+    bytes message = 2;
+}

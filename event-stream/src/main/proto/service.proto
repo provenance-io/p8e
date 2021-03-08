@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package spec;
+
+option go_package = "github.com/FigureTechnologies/provenance-eventstream/spec;spec";
+option java_package = "io.provenance.pbc.ess.proto";
+option java_outer_classname = "EventProtos";
+
+// A server-to-client streaming RPC service for tendermint events and errors.
+service EventStream {
+    rpc StreamEvents(EventStreamReq) returns (stream EventBatch) {}
+    rpc StreamErrors(ErrorStreamReq) returns (stream TxError) {}
+}
+
+// EventStreamReq is a request to stream specific data emitted by transaction handlers.
+message EventStreamReq {
+    // Start streaming events from this height. A zero value indicates live events only.
+    int64 start_height = 1;
+    // The types of events to stream. An empty list indicates all event types wil be streamed.
+    repeated string event_types = 2;
+    // A unique consumer ID. Allows only one consumer instance to be connected at a time.
+    string consumer = 3;
+}
+
+// EventBatch represents a group of events within a single block.
+message EventBatch {
+    // The height the events were emitted.
+    int64 height = 1;
+    // The events, matched by type
+    repeated Event events = 2;
+}
+
+// Event represents a single event emitted by transaction handlers.
+message Event {
+    // The height the event was emitted.
+    int64 height = 1;
+    // The event type.
+    string event_type = 2;
+    // The event data.
+    repeated Attribute attributes = 3;
+    // The tx result index
+    int32 result_index = 4;
+    // The tx hash
+    string tx_hash = 5;
+}
+
+// Attribute is a key value pair
+message Attribute {
+    // The attribute key.
+    bytes key = 1;
+    // The attribute value.
+    bytes value = 2;
+}
+
+// ErrorStreamReq is a request to stream errors emitted by transaction handlers.
+message ErrorStreamReq {
+    // A unique consumer ID. Allows only one consumer instance to be connected at a time.
+    string consumer = 1;
+}
+
+// TxError is the transaction error type.
+message TxError {
+    // The height the error occurred.
+    int64 height = 1;
+    // The transaction hash
+    string tx = 2;
+    // The index within the transaction.
+    uint32 index = 3;
+    // The error code
+    uint32 code = 4;
+    // The error messages
+    string log = 5;
+}

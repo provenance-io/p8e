@@ -1,0 +1,213 @@
+syntax = "proto3";
+
+package p8e;
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "ContractScope";
+
+import "p8e/common.proto";
+import "p8e/contract.proto";
+import "p8e/util.proto";
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/timestamp.proto";
+import "p8e/public_key.proto";
+
+//
+// Overview
+//
+//   When memorializing a contract the only pieces that matter are the results and facts.  We scope these inside the
+//   contract_group structure to represent a scope around this information and keep the controlling parties (recitals) attached
+//   which prevents a co-mingling of the rights to change/update these records.  The proof submitted to record the facts is part of
+//   the readset (the submitted Contract package) and is not important now that the information has been recorded.  If the
+//   source is required it can be pulled from the ReadSet and referenced (or any of the members that stored it under the
+//   associated URI.
+
+
+message Envelope {
+    // ref contains
+    // 1) the scope of the object being modified on blockchain.
+    // 2) the uuid of the contract execution.
+    // 3) the hash of the contract instance that has been executed.
+    ProvenanceReference ref = 1;
+
+    // The executed contract.
+    Contract contract = 2;
+
+    // Signatures for the contract.
+    repeated Signature signatures = 3;
+
+    reserved 4;
+
+    // Unique identifier for determining contract/group execution instance
+    UUID execution_uuid = 5;
+    // Unique identifier for determining previous execution instance
+    UUID prev_execution_uuid = 6;
+
+    // When a contract execution is considered stale and expired
+    google.protobuf.Timestamp expiration_time = 7;
+
+    // Scope snapshot for executing
+    Scope scope = 8;
+
+    Status status = 9;
+
+    enum Status {
+        CREATED = 0 [(description) = "Envelope created."];
+        FRAGMENT = 1 [(description) = "Envelope sent to other parties, awaiting responses."];
+        INBOX = 2 [(description) = "Envelope received."];
+        EXECUTED = 3 [(description) = "Envelope executed by non-invoker."];
+        OUTBOX = 4 [(description) = "Envelope response sent from non-invoker to invoker."];
+        SIGNED = 5 [(description) = "Envelope is complete with all signatures."];
+        CHAINCODE = 6 [(description) = "Envelope has been sent to chaincode."];
+        INDEX = 7 [(description) = "Envelope has been returned from chaincode."];
+        COMPLETE = 8 [(description) = "Envelope has been completed."];
+        ERROR = 11 [(description) = "Envelope is in error state."];
+    }
+}
+
+message EnvelopeError {
+    UUID uuid = 1;
+    UUID group_uuid = 2;
+    UUID execution_uuid = 3;
+
+    Type type = 4;
+    string message = 5;
+    google.protobuf.Timestamp read_time = 6;
+    UUID scope_uuid = 7;
+
+    Envelope envelope = 8;
+
+    enum Type {
+        NO_ERROR_TYPE = 0;
+        CONTRACT_WHITELIST = 1;
+        TTL_TIMEOUT = 2;
+        CC_INVOCATION = 3;
+        CONTRACT_INVOCATION = 4;
+        CONTRACT_CANCELLED = 5;
+        CONTRACT_REJECTED = 6;
+        PUBLIC_KEY_CHECK = 7;
+    }
+
+    AuditFields audit_fields = 99;
+}
+
+
+// Envelope wrapper for storing initial fragmented envelope, the executed/aggregated envelope and audit history of major
+// events for performance analysis.
+message EnvelopeState {
+    Envelope input = 1;
+    Envelope result = 2;
+    bool is_invoker = 3;
+    google.protobuf.Timestamp executed_time = 4;
+
+    // Timestamp for invoker envelopes
+    google.protobuf.Timestamp fragment_time = 5;
+
+    // Timestamp for inbox envelopes
+    google.protobuf.Timestamp inbox_time = 6;
+    google.protobuf.Timestamp outbound_time = 7;
+    google.protobuf.Timestamp read_time = 8;
+
+    // Timestamp for chaincode
+    google.protobuf.Timestamp signed_time = 9;
+    google.protobuf.Timestamp chaincode_time = 10;
+
+    // Complete
+    google.protobuf.Timestamp index_time = 11;
+    google.protobuf.Timestamp complete_time = 12;
+
+    // Proxy of input.spec.dataLocation.classname for easier querying
+    string contract_classname = 13;
+
+    // Error handling
+    repeated EnvelopeError errors = 14;
+    google.protobuf.Timestamp error_time = 15;
+
+    AuditFields audit_fields = 99;
+}
+
+
+// A collection wrapper around envelopes
+message EnvelopeCollection {
+    repeated Envelope envelopes = 1;
+}
+
+// A collection wrapper around envelope errors
+message ErrorCollection {
+    repeated EnvelopeError errors = 1;
+}
+
+// Event references in relation to scope
+message Event {
+    UUID group_uuid = 1;
+    UUID execution_uuid = 2;
+}
+
+// A ContractScope is a context that binds multiple p8e working together to create a set of facts managed a defined
+// set of affiliates.
+message Scope {
+    UUID uuid = 1;                          // Unique ID for building up ProvenanceReferences
+    repeated Recital parties = 2;           // Required parties on this scope.  These are union with any contract specific recital requirements
+
+    // Each contract memorialized in this scope is stored in this list of contract_group.  The list of groups is keyed
+    // as a hashmap based on the contract_spec_ref as a unique key.
+    repeated RecordGroup record_group = 3;
+
+    // Last event that resulted in scope changes.
+    Event last_event = 4;
+}
+
+// A collection wrapper around scopes
+message ScopeCollection {
+    repeated Scope scopes = 1;
+}
+
+
+// An record group is created for each contract memorialized against a scope.  This tracks who controls each record for future use.
+message RecordGroup {
+    string specification = 1;                           // contract.spec.data_location.hash -- the specific contract specification that was used to create this group.
+    UUID group_uuid = 2;                                // Unique ID for building up ProvenanceReferences.  Set to the value on of group_uuid on the incoming contract ref.
+    SigningAndEncryptionPublicKeys executor = 3;        // Identity that is memorializing this contract
+    repeated Recital parties = 4;                       // Set of identities that signed this contract
+    repeated Record records = 5;                        // Accumulated records (of fact) resulting from Considerations
+
+    string classname = 6;                               // name of the class associated with this record group specification
+
+    AuditFields audit = 99;                             // Created by, updated by, timestamps, version number, and related info.
+}
+
+
+// A record (of fact) is attached to an group or each consideration output from a contract.
+message Record {
+    string name = 1;                         // ConsiderationSpec.func_name <--> ConsiderationProto.consideration_name (method on the classname below that generated this)
+    string hash = 2;                         // ConsiderationSpec.outputSpec.spec.resourceLocation.ref.hash (this is the hash of the consideration which generated the record, see also result_hash)
+
+    string classname = 3;                    // ContractSpec.definition.resourceLocation.classname (class that contains the method 'name' as given above)
+
+    repeated RecordInput inputs = 4;         // ConsiderationProto.inputs for reference with ConsiderationSpec.input_spec for type
+    ExecutionResult.Result result = 5;       // ConsiderationProto.result.result      (indicates SKIP [not allowed], PASS, or FAIL result)
+    string result_name = 6;                  // ConsiderationProto.result.output.name
+    string result_hash = 7;                  // ConsiderationProto.result.output.hash (the hash of the data output from the consideration)
+
+    reserved 8;   // ConsiderationSpec.outputSpec.updateType (specification that controls name collision checking (single value vs list of values)
+}
+
+// Tracks the inputs used with a Consideration to establish the output record.  FACT references must have come from the input fact list.  For proposed we will only have the hash
+message RecordInput {
+    string name = 1;                        // Name value included to link back to the definition spec.
+    string hash = 2;                        // For proposed facts we only have the hash ... for facts this hash maps to something in the input list.
+    string classname = 3;                   // from proposed fact structure to unmarshal
+    Type type = 4;                          // Indicates if this input was a recorded fact on chain or just a given hashed input
+
+    enum Type {
+        NO_DEF_TYPE = 0;
+        PROPOSED = 1;
+        FACT = 2;
+    }
+
+}
+
+extend google.protobuf.EnumValueOptions {
+    string description = 65533;
+}

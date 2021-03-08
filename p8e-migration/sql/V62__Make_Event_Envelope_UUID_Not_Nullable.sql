@@ -1,0 +1,1 @@
+ALTER TABLE event ALTER COLUMN envelope_uuid SET NOT NULL;

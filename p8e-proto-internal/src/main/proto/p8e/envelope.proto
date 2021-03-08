@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package p8e;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "p8e/contract_scope.proto";
+import "p8e/util.proto";
+import "p8e/public_key.proto";
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
+option java_package = "io.p8e.proto";
+option java_outer_classname = "Envelope";
+
+service EnvelopeService {
+    rpc GetAllByGroupUuid (UUID) returns (p8e.EnvelopeCollection) {};
+
+    rpc GetByExecutionUuid (UUID) returns (p8e.Envelope) {};
+
+    rpc GetScopeByExecutionUuid (UUID) returns (p8e.Scope) {};
+
+    rpc RejectByExecutionUuid (RejectCancel) returns (p8e.Envelope) {};
+
+    rpc CancelByExecutionUuid (RejectCancel) returns (p8e.Envelope) {};
+
+    rpc Event (stream EnvelopeEvent) returns (stream EnvelopeEvent) {};
+
+    rpc Execute (EnvelopeEvent) returns (EnvelopeEvent) {};
+}
+
+message RejectCancel {
+    UUID execution_uuid = 1;
+    string message = 2;
+}
+
+message EnvelopeEvent {
+    reserved 1;
+    reserved 2;
+
+    string classname = 3;
+
+    p8e.Envelope envelope = 4;
+    p8e.EnvelopeError error = 5;
+
+    EventType event = 6;
+
+    Action action = 7;
+
+    SigningAndEncryptionPublicKeys public_key = 8;
+
+    enum EventType {
+        UNUSED_TYPE = 0;
+        ENVELOPE_REQUEST = 1;
+        ENVELOPE_RESPONSE = 2;
+        ENVELOPE_ERROR = 3;
+        ENVELOPE_MAILBOX_OUTBOUND = 4;
+        ENVELOPE_ACCEPTED = 5;
+        ENVELOPE_EXECUTION_ERROR = 6;
+    }
+
+    enum Action {
+        UNUSED_ACTION = 0;
+        ACK = 1;
+        REJECT = 2;
+        EXECUTE = 3;
+        EXECUTE_FRAGMENT = 4;
+        HEARTBEAT = 5;
+        CONNECT = 6;
+    }
+
+    google.protobuf.Timestamp timestamp = 99;
+}
+
+message EnvelopeUuidWithError {
+    UUID envelopeUuid = 1;
+    EnvelopeError error = 2;
+}

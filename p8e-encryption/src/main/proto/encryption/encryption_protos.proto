@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package encryption;
+
+option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/encryption";
+option java_package = "io.provenance.proto.encryption";
+
+import "p8e/util.proto";
+
+message DIME {
+    UUID uuid                      = 1; // Unique identifier for this entity on the block chain
+    Audience owner                 = 2; // Convienient structure for enforcing owner specification/encryption access to payload
+
+    map<string, string> metadata   = 3; // Clear text metadata key/values associated with this payload
+
+    repeated Audience audience     = 4; // DEKs for Processing and Retrieval
+    repeated Payload payload       = 5; // A set of encrypted payloads
+
+    AuditFields audit_fields = 99;
+}
+
+enum ContextType {
+    UNKNOWN    = 0; // This shouldn't happen
+    SUBMISSION = 1; // This is the owner(s)
+    PROCESSING = 2; // These are used by processing peers and removed before writing to blockchain
+    RETRIEVAL  = 3; // Audience included in committed blocks
+    TRANSFER  = 4; // Audience for transfer of block object
+}
+
+message Audience {
+    uint32 payload_id   = 1;
+    bytes public_key    = 2;
+    ContextType context = 3;
+    bytes tag = 4;
+    bytes ephemeral_pubkey = 5;
+    bytes encrypted_dek = 6;
+}
+
+message Payload {
+    uint32 id          = 1;
+    bytes cipher_text  = 2;
+}
+
+message ECIESCryptogram {
+    bytes ephemeral_public_key = 1;
+    bytes tag = 2;
+    bytes encrypted_data = 3;
+}

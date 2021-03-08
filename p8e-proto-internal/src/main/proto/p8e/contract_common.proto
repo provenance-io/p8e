@@ -1,0 +1,3 @@
+syntax = "proto3";
+
+option go_package = "github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";

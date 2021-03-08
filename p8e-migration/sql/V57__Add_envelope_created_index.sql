@@ -1,0 +1,1 @@
+CREATE INDEX CONCURRENTLY envelope_created_time_idx ON envelope (created_time);

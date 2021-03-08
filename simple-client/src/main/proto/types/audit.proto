@@ -1,0 +1,19 @@
+syntax = 'proto3';
+
+package types;
+
+option go_package = "github.com/FigureTechnologies/provenance-blockchain/pkg/proto/types;types";
+option java_package = "io.provenance.pbc.proto.types";
+option java_outer_classname = "AuditProtos";
+
+import "google/protobuf/timestamp.proto";
+
+// Audit
+message AuditFields {
+    google.protobuf.Timestamp created_date = 1;
+    string created_by = 2;
+    google.protobuf.Timestamp updated_date = 3;
+    string updated_by = 4;
+    int32 version = 5;
+    string message = 6;
+}
