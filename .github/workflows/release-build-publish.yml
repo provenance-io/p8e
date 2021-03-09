@@ -73,7 +73,7 @@ jobs:
           path: p8e-api-webservice/build/libs/*.jar
 
   docker_build:
-    name: Build and Push to GitHub Packages
+    name: Build and Push to GitHub Docker Package Registry
     needs: java_build
     strategy:
       matrix:
@@ -108,11 +108,11 @@ jobs:
         run: docker build ${{ matrix.project }} --file ${{ matrix.project }}/docker/Dockerfile --tag "${{ matrix.project }}:$VERSION"
 
       - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.DOCKER_REGISTRY_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push image
         run: |
-          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/${{ matrix.project }}
+          IMAGE_ID=ghcr.io/${{ github.repository }}/${{ matrix.project }}
 
           # Change all uppercase to lowercase
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
