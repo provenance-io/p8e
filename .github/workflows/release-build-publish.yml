@@ -3,6 +3,12 @@ name: Build and Publish
 on:
   release:
     types: [created]
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   # Run tests.
@@ -52,13 +58,14 @@ jobs:
           server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
 
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew clean build --refresh-dependencies
 
       - name: Publish to GitHub Packages
         run: ./gradlew publish -Prelease=true
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.event_name != 'release'
 
       - name: Upload p8e-api Artifact
         uses: actions/upload-artifact@v2
@@ -80,6 +87,8 @@ jobs:
         project: [p8e-api, p8e-migration, p8e-api-webservice]
 
     runs-on: ubuntu-latest
+
+    if: github.event_name != 'release'
 
     steps:
       - uses: actions/checkout@v2
