@@ -18,6 +18,7 @@ class TestUtils {
             Database.connect(
                 url = listOf(
                     "jdbc:h2:mem:test",
+                    "DB_CLOSE_DELAY=-1",
                     "LOCK_TIMEOUT=10000",
                     "INIT=" + listOf(
                         "create domain if not exists jsonb as other",

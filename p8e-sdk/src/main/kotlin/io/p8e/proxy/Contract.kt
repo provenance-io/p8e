@@ -42,6 +42,12 @@ sealed class RecitalData
 class RecitalPublicKey(val key: PublicKey): RecitalData()
 class RecitalAddress(val address: ByteArray): RecitalData()
 
+data class ContractError<T : P8eContract>(
+    val contractClazz: Class<T>,
+    val event: EnvelopeEvent,
+    val error: ContractScope.EnvelopeError,
+)
+
 class Contract<T: P8eContract>(
     private val contractManager: ContractManager,
     private val client: P8eClient,
@@ -49,7 +55,8 @@ class Contract<T: P8eContract>(
     val envelope: Envelope,
     val contractClazz: Class<T>,
     private val executor: (EnvelopeEvent) -> Either<P8eError, Contract<T>>,
-    val isFragment: Boolean = false
+    val isFragment: Boolean = false,
+    val constructedFromEvent: EnvelopeEvent? = null
 ) {
     private var stagedPrevExecutionUuid: Util.UUID? = null
     private var stagedExecutionUuid = envelope.executionUuid

@@ -95,7 +95,7 @@ class EventService() {
         }
     }
 
-    private fun pollChunked(query: () -> SizedIterable<EventRecord>) {
+    private fun pollChunked(query: PollChunked) {
         do {
             val count = transaction {
                 query()
@@ -260,6 +260,7 @@ class NotificationHandler(private val event: Event) {
     }
 }
 
+typealias PollChunked = () -> SizedIterable<EventRecord>
 typealias EventHandler = (P8eEvent) -> EventStatus?
 
 private fun Event.channel() = NotificationHandler.channels[this].orThrow { IllegalStateException("Event ${this.name} has no channel") }

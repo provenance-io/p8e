@@ -39,14 +39,13 @@ import io.p8e.proto.ContractSpecs.PartyType
 import io.p8e.proto.Envelope.EnvelopeEvent
 import io.p8e.proto.Envelope.EnvelopeEvent.EventType
 import io.p8e.proxy.Contract
-import io.p8e.proxy.PermissionUpdater
+import io.p8e.proxy.ContractError
 import io.p8e.spec.ContractSpecMapper
 import io.p8e.spec.ContractSpecMapper.newContract
 import io.p8e.spec.P8eContract
 import io.p8e.util.*
 import io.p8e.util.configureProvenance
 import io.provenance.p8e.shared.extension.logger
-import io.p8e.proto.Util
 import org.apache.commons.logging.LogFactory
 import org.apache.commons.logging.impl.Log4JLogger
 import java.io.Closeable
@@ -56,7 +55,8 @@ import java.security.KeyPair
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.time.OffsetDateTime
-import java.util.*
+import java.util.ServiceLoader
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
@@ -141,7 +141,7 @@ class ContractManager(
     data class ContractHandlers<T: P8eContract>(
         val requestHandler: ContractEventHandler<T>,
         val stepCompletionHandler: ContractEventHandler<T>,
-        val errorHandler: ContractErrorHandler
+        val errorHandler: ContractErrorHandler<T>
     )
 
     private val heartbeatConnections = ConcurrentHashMap<HeartbeatConnectionKey, HeartbeatQueuer>()
@@ -192,55 +192,40 @@ class ContractManager(
             )
 
     /**
-     * Create a new wrapper from a contract spec.
+     * Returns a new Contract object that can be configured and executed. This should only be called for creating a Contract
+     * against a brand new Scope.
+     *
+     * @param contractClazz subclass of P8eContract that represents this contract
+     * @param scopeUuid the scope uuid to set for this contract
+     * @param executionUuid the execution uuid to set for this contract execution
+     * @param invokerRole the PartyType to satisfy for this ContractManager's public key
      */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, executionUuid: UUID? = null): Contract<T> {
-        return newContract(contractClazz, null as Scope?, null as PartyType?, executionUuid)
+    fun <T: P8eContract> newContract(contractClazz: Class<T>, scopeUuid: UUID, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
+        val scope = Scope.newBuilder()
+            .setUuid(scopeUuid.toProtoUuidProv())
+            .build()
+
+        return newContract(contractClazz, scope, executionUuid, invokerRole)
     }
 
     /**
-     * Create a new wrapper from a contract spec and specify the invoker role.
+     * Returns a new Contract object that can be configured and executed. This should be called for creation of all Contract's
+     * against an existing Scope.
+     *
+     * @param contractClazz subclass of P8eContract that represents this contract
+     * @param scope the Scope to set for this contract
+     * @param executionUuid the execution uuid to set for this contract execution
+     * @param invokerRole the PartyType to satisfy for this ContractManager's public key
      */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, invokerRole: PartyType, executionUuid: UUID? = null): Contract<T> {
-        return newContract(contractClazz, null as Scope?, invokerRole, executionUuid)
-    }
-
-    /**
-     * Create a new wrapper from a contract spec and specify a uuid.
-     */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, uuid: Util.UUID, executionUuid: UUID? = null): Contract<T> {
-        return newContract(contractClazz, uuid, null as PartyType?, executionUuid)
-    }
-
-    /**
-     * Create a new wrapper from a contract spec and specify a uuid and invoker role.
-     */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, uuid: Util.UUID, invokerRole: PartyType?, executionUuid: UUID? = null): Contract<T> {
-        val scope = Scope.newBuilder().setUuid(uuid).build()
-        return newContract(contractClazz, scope, invokerRole, executionUuid)
-    }
-
-    /**
-     * Create a new wrapper from a contract spec using an existing scope.
-     */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, scope: Scope?, executionUuid: UUID? = null): Contract<T> {
-        return newContract(contractClazz, scope, null as PartyType?, executionUuid)
-    }
-
-    /**
-     * Create a new wrapper from a contract spec using an existing scope and the invoker role.
-     */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, scope: Scope?, invokerRole: PartyType?, executionUuid: UUID? = null): Contract<T> {
+    fun <T: P8eContract> newContract(contractClazz: Class<T>, scope: Scope, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
         val env = Envelope.newBuilder()
             .setContract(newContractProto(contractClazz).build())
-            .setExecutionUuid(executionUuid?.toProtoUuidProv() ?: UUID.randomUUID().toProtoUuidProv())
-            .setRef(
-                ProvenanceReference.newBuilder()
-                    .setScopeUuid(scope?.uuid ?: UUID.randomUUID().toProtoUuidProv())
-                    .setGroupUuid(UUID.randomUUID().toProtoUuidProv())
+            .setExecutionUuid(executionUuid.or { UUID.randomUUID() }.toProtoUuidProv())
+            .setScope(scope)
+            .setRef(ProvenanceReference.newBuilder()
+                .setScopeUuid(scope.uuid)
+                .setGroupUuid(UUID.randomUUID().toProtoUuidProv())
             )
-
-        scope?.let(env::setScope)
 
         return Contract(
             this,
@@ -254,6 +239,16 @@ class ContractManager(
         }
     }
 
+    /**
+     * <strong>EXPERIMENTAL</strong>
+     *
+     * Returns a new Contract object that can be configured and executed. This Contract represents a contract
+     * based on a previously executed Contract that did not complete successfully. The envelope should contain
+     * a different execution uuid than was originally associated with the Envelope when it failed execution.
+     *
+     * @param contractClazz subclass of P8eContract that represents this contract
+     * @param envelope the Envelope to set for this contract
+     */
     fun <T: P8eContract> newContract(contractClazz: Class<T>, envelope: Envelope): Contract<T> {
         val contract = envelope.contract
 
@@ -278,15 +273,21 @@ class ContractManager(
     }
 
     /**
-     * Creates a scope change contract.
+     * Returns a new Contract object that can be configured and executed. This Contract represents a change in ownership
+     * of the Scope.
+     *
+     * @param contractClazz subclass of P8eContract that represents this contract
+     * @param scope the Scope to set for this contract
+     * @param executionUuid the execution uuid to set for this contract execution
+     * @param invokerRole the PartyType to satisfy for this ContractManager's public key
      */
-    fun <T: P8eContract> changeScopeOwnership(contractClazz: Class<T>, scope: Scope, invokerRole: PartyType? = null): Contract<T> {
+    fun <T: P8eContract> changeScopeOwnership(contractClazz: Class<T>, scope: Scope, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
         val contractProto = newContractProto(contractClazz)
             .setType(Contracts.ContractType.CHANGE_SCOPE)
             .build()
         val env = Envelope.newBuilder()
             .setContract(contractProto)
-            .setExecutionUuid(randomProtoUuidProv())
+            .setExecutionUuid(executionUuid.or { UUID.randomUUID() }.toProtoUuidProv())
             .setScope(scope)
             .setRef(ProvenanceReference.newBuilder().setScopeUuid(scope.uuid).setGroupUuid(randomProtoUuidProv()).build())
             .build()
@@ -385,8 +386,8 @@ class ContractManager(
             true
         }.toContractEventHandler()
 
-        private var errorHandler: ContractErrorHandler = { error: EnvelopeError ->
-            logger().error("Received contract error on public key ${publicKey.toHex()} for execution ${error.executionUuid.value} group ${error.groupUuid.value}\n${error.message}")
+        private var errorHandler: ContractErrorHandler<T> = { contractError: ContractError<T> ->
+            logger().error("Received contract error on public key ${publicKey.toHex()} for execution ${contractError.error.executionUuid.value} group ${contractError.error.groupUuid.value}\n${contractError.error.message}")
             true
         }.toContractErrorHandler()
 
@@ -417,12 +418,12 @@ class ContractManager(
             return this
         }
 
-        fun error(errorHandler: ContractErrorHandler): WatchBuilder<T> {
+        fun error(errorHandler: ContractErrorHandler<T>): WatchBuilder<T> {
             this.errorHandler = errorHandler
             return this
         }
 
-        fun error(errorHandler: (EnvelopeError) -> Boolean): WatchBuilder<T> {
+        fun error(errorHandler: (ContractError<T>) -> Boolean): WatchBuilder<T> {
             this.errorHandler = errorHandler.toContractErrorHandler()
             return this
         }
@@ -482,7 +483,7 @@ class ContractManager(
         clazz: Class<T>,
         requestHandler: ContractEventHandler<T>,
         stepCompletionHandler: ContractEventHandler<T>,
-        errorHandler: ContractErrorHandler,
+        errorHandler: ContractErrorHandler<T>,
         disconnectHandler: DisconnectHandlerWrapper<T>
     ) = synchronized(watchLock) {
         if (queuers.containsKey(clazz) || handlers.containsKey(clazz)) {
@@ -540,7 +541,12 @@ class ContractManager(
                 throw t
             }
             EventType.ENVELOPE_ERROR -> try {
-                classHandlers.errorHandler.handle(event.error)
+                val contractError = ContractError(
+                    contractClazz = clazz,
+                    event = event,
+                    error = event.error,
+                )
+                classHandlers.errorHandler.cast<T>().handle(contractError)
             } catch (t: Throwable) {
                 logger().error("Error during error handler: ", t)
                 throw t
@@ -553,9 +559,32 @@ class ContractManager(
         }
     }
 
+    fun <T: P8eContract> ackProcessedEvent(contract: Contract<T>) {
+        contract.constructedFromEvent
+            .takeIf { it != null }
+            ?.let { ackProcessedEvent(contract.contractClazz, it) }
+    }
+
+    fun <T: P8eContract> ackProcessedEvent(contractError: ContractError<T>) {
+        ackProcessedEvent(contractError.contractClazz, contractError.event)
+    }
+
+    private fun <T: P8eContract> ackProcessedEvent(contractClazz: Class<T>, event: EnvelopeEvent) {
+        if (event.action == EnvelopeEvent.Action.HEARTBEAT) {
+            return
+        }
+
+        queuers[contractClazz]?.queue(event.toBuilder().setAction(EnvelopeEvent.Action.ACK).build())
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun <T: P8eContract> ContractEventHandler<out P8eContract>.cast(): ContractEventHandler<T> {
         return this as ContractEventHandler<T>
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T: P8eContract> ContractErrorHandler<out P8eContract>.cast(): ContractErrorHandler<T> {
+        return this as ContractErrorHandler<T>
     }
 
     private fun <T: P8eContract> constructContract(
@@ -574,7 +603,8 @@ class ContractManager(
                 EventType.ENVELOPE_RESPONSE -> false
                 EventType.ENVELOPE_ACCEPTED -> false
                 else -> throw IllegalStateException("Unable to handle event of type ${event.event.name} as REQUEST/RESPONSE")
-            }
+            },
+            event
         )
     }
 
@@ -715,10 +745,10 @@ fun <T: P8eContract> ((Contract<T>) -> Boolean).toContractEventHandler(): Contra
     }
 }
 
-fun ((EnvelopeError) -> Boolean).toContractErrorHandler(): ContractErrorHandler {
-    return object: ContractErrorHandler {
-        override fun handle(error: EnvelopeError): Boolean {
-            return invoke(error)
+fun<T: P8eContract> ((ContractError<T>) -> Boolean).toContractErrorHandler(): ContractErrorHandler<T> {
+    return object: ContractErrorHandler<T> {
+        override fun handle(contractError: ContractError<T>): Boolean {
+            return invoke(contractError)
         }
     }
 }
