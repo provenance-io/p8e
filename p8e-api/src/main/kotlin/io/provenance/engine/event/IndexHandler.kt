@@ -137,7 +137,7 @@ class IndexHandler(
                 EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey.toJavaPublicKey(), it)
                     ?.data?.chaincodeTime?.toOffsetDateTimeProv()
             } ?: OffsetDateTime.MIN
-        lastExecutionTime < data.chaincodeTime.toOffsetDateTimeProv()
+        lastExecutionTime <= data.chaincodeTime.toOffsetDateTimeProv()
     }
 
     private fun ScopeDocument.toMap(scopeData: Map<String, Any>): Map<String, Any> {

@@ -171,7 +171,9 @@ class IndexService(
 
     private fun QueryBuilder.forKey(publicKey: PublicKey) = BoolQueryBuilder()
         .must(this)
-        .must(("p8e.parties.encryptionPublicKeys" equal publicKey.toSha512Hex()).toQuery())
+        .must(("p8e.parties.encryptionPublicKeys" equal publicKey.getEncryptionKey().toSha512Hex()).toQuery())
+
+    private fun PublicKey.getEncryptionKey() : PublicKey = transaction { affiliateService.getEncryptionKeyPair(this@getEncryptionKey).public }
 
     private fun SearchSourceBuilder.distinctScopes() = collapse(CollapseBuilder("scopeUuid.keyword"))
 }

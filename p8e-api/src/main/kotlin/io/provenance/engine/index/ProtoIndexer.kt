@@ -15,6 +15,7 @@ import io.provenance.os.client.OsClient
 import io.p8e.proto.Util.Index
 import io.p8e.proto.Util.Index.Behavior
 import io.p8e.proto.Util.Index.Behavior.*
+import io.provenance.p8e.shared.extension.logger
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.security.KeyPair
@@ -31,14 +32,14 @@ class ProtoIndexer(
     fun indexFields(scope: Scope, keyPairs: Map<String, KeyPair>): Map<String, Any> =
         scope.recordGroupList
             // find all record groups where there's at least one party member that's an affiliate on this p8e instance
-            .filter { group -> group.partiesList.any { keyPairs.containsKey(it.signer.signingPublicKey.toHex()) } }
+            .filter { group -> group.partiesList.any { keyPairs.containsKey(it.signer.encryptionPublicKey.toHex()) } }
             .flatMap { group ->
                 group.recordsList
                     .map { fact ->
                         val keyPair: KeyPair = group.partiesList
                             .map { it.signer }
-                            .first { keyPairs.containsKey(it.signingPublicKey.toHex()) }
-                            .let { keyPairs.getValue(it.signingPublicKey.toHex()) }
+                            .first { keyPairs.containsKey(it.encryptionPublicKey.toHex()) }
+                            .let { keyPairs.getValue(it.encryptionPublicKey.toHex()) }
 
                         // Try to re-use MemoryClassLoader if possible for caching reasons
                         val spec = _definitionService.loadProto(keyPair, group.specification, ContractSpec::class.java.name) as ContractSpec
@@ -224,11 +225,37 @@ class ProtoIndexer(
 fun FieldDescriptor.getIndex(
     extensionDescriptor: FieldDescriptor
 ): Index? {
-    return options.getField(extensionDescriptor) as? Index
+    // return options.getField(extensionDescriptor) as? Index
+    // Pierce Trey - 03/10/2021 replaced the above line with the below to handle old versions of p8e-contract
+    // that use the io.provenance.util namespaced Index class (while we only have access to the new io.p8e.util namespace)
+    // which caused all fields to get skipped for indexing.
+    // todo: change back to the old line once p8e-contract is converted to use the new index extension and
+    // the old Index message/extension have been removed from provenance-corelib
+    return options.getField(extensionDescriptor)?.let {
+        try {
+            Index.parseFrom((it as Message).toByteArray())
+        } catch (t: Throwable) {
+            logger().error("FieldDescriptor.getIndex failed to parse index extension with error", t)
+            null
+        }
+    }
 }
 
 fun Descriptor.getIndex(
     extensionDescriptor: FieldDescriptor
 ): Index? {
-    return options.getField(extensionDescriptor) as? Index
+    // return options.getField(extensionDescriptor) as? Index
+    // Pierce Trey - 03/10/2021 replaced the above line with the below to handle old versions of p8e-contract
+    // that use the io.provenance.util namespaced Index class (while we only have access to the new io.p8e.util namespace)
+    // which caused all fields to get skipped for indexing.
+    // todo: change back to the old line once p8e-contract is converted to use the new index extension and
+    // the old Index message/extension have been removed from provenance-corelib
+    return options.getField(extensionDescriptor)?.let {
+        try {
+            Index.parseFrom((it as Message).toByteArray())
+        } catch (t: Throwable) {
+            logger().error("Descriptor.getIndex failed to parse index extension with error", t)
+            null
+        }
+    }
 }
