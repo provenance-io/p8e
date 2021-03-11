@@ -12,9 +12,9 @@ import io.p8e.proto.ContractScope.Scope
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.util.toHex
 import io.provenance.os.client.OsClient
-import io.p8e.proto.Util.Index
-import io.p8e.proto.Util.Index.Behavior
-import io.p8e.proto.Util.Index.Behavior.*
+import io.p8e.proto.IndexProto.Index
+import io.p8e.proto.IndexProto.Index.Behavior
+import io.p8e.proto.IndexProto.Index.Behavior.*
 import io.provenance.p8e.shared.extension.logger
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream

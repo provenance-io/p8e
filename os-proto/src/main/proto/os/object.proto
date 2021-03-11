@@ -13,7 +13,7 @@ service ObjectService {
 
     rpc Get(Sha512Request) returns (stream ChunkBidi) {};
 
-    rpc GetByUuid(UUID) returns (stream ChunkBidi) {};
+    rpc GetByUuid(p8e.UUID) returns (stream ChunkBidi) {};
 }
 
 message ChunkBidi {
@@ -62,8 +62,8 @@ message Item {
 }
 
 message Object {
-    UUID uuid = 1;
-    UUID object_uuid = 2;
+    p8e.UUID uuid = 1;
+    p8e.UUID object_uuid = 2;
     bytes unencrypted_sha_512 = 3;
     repeated Signature signatures = 4;
     string uri = 5;
@@ -79,8 +79,8 @@ message Object {
 }
 
 message ObjectMetadata {
-    UUID uuid = 1;
-    UUID document_uuid = 2;
+    p8e.UUID uuid = 1;
+    p8e.UUID document_uuid = 2;
     bytes sha_512 = 3;
     int32 length = 4;
     string connector_class = 5;
