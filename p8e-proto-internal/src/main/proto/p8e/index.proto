@@ -2,104 +2,37 @@ syntax = "proto3";
 
 package p8e;
 
-option go_package="github.com/FigureTechnologies/p8e-proto-go/pkg/p8e";
 option java_package = "io.p8e.proto";
+option java_outer_classname = "IndexProto";
 
-import "google/protobuf/timestamp.proto";
-import "p8e/contract.proto";
-import "p8e/contract_scope.proto";
-import "p8e/util.proto";
-import "p8e/public_key.proto";
+import "google/protobuf/descriptor.proto";
 
-option java_outer_classname = "Index";
+// Metadata to flag indexing by p8e indexer
+message Index {
+  Behavior index = 1;
 
-service IndexService {
-    rpc ElasticSearchQuery (ElasticSearchQueryRequest) returns (ScopeWrappers) {};
+  enum Behavior {
+    NOT_SET = 0;
 
-    rpc Query (QueryRequest) returns (ScopeWrappers) {};
+    // Never index
+    NEVER = 1;
 
-    rpc ElasticSearchRawQuery (ElasticSearchQueryRequest) returns (RawQueryResults) {};
+    // Always index
+    ALWAYS = 2;
 
-    rpc RawQuery (QueryRequest) returns (RawQueryResults) {};
+    // Index unless Parent says otherwise
+    INDEX_DEFER_PARENT = 3;
 
-    rpc FindLatestScopeByUuid (UUID) returns (ScopeWrapper) {};
-
-    rpc FindLatestScopesByUuids (ScopesRequest) returns (ScopeWrappers) {};
-
-    rpc QueryCount (QueryRequest) returns (QueryCountResponse) {};
-
-    rpc QueryWithCount (QueryRequest) returns (QueryScopeWrapper) {};
-
-    rpc GetFactHistory (FactHistoryRequest) returns (FactHistoryResponse) {};
+    // Don't index unless Parent says otherwise
+    NO_INDEX_DEFER_PARENT = 4;
+  }
 }
 
-message ElasticSearchQueryRequest {
-    string query = 1;
+extend google.protobuf.MessageOptions {
+  Index message_index = 65534;
 }
 
-message QueryRequest {
-    string json = 1;
+extend google.protobuf.FieldOptions {
+  Index index = 65535;
 }
 
-message ScopesRequest {
-    repeated UUID uuids = 1;
-}
-
-message ScopeWrappers {
-    repeated ScopeWrapper scopes = 1;
-}
-
-message ScopeWrapper {
-    uint64 blockNumber = 1;
-    uint64 blockTransactionIndex = 2;
-    p8e.Scope scope = 3;
-}
-
-message RawQueryResults {
-    repeated RawQueryResult results = 1;
-}
-
-message RawQueryResult {
-    string id = 1;
-    string fieldJson = 2;
-}
-
-message QueryCountResponse {
-    uint64 count = 1;
-    bool isTerminateEarly = 2;
-    uint32 successfulShards = 3;
-    uint32 skippedShards = 4;
-    uint32 failedShards = 5;
-    uint32 totalShards = 6;
-}
-
-message QueryScopeWrapper {
-    repeated ScopeWrapper scopes = 1;
-    uint64 totalHits = 2;
-}
-
-message FactHistoryRequest {
-    UUID scope_uuid = 1;
-    string fact_name = 2;
-    string classname = 3;
-    google.protobuf.Timestamp start_window = 4;
-    google.protobuf.Timestamp end_window = 5;
-}
-
-message FactHistoryResponse {
-    repeated FactHistoryResponseEntry entries = 1;
-}
-
-message FactHistoryResponseEntry {
-    SigningAndEncryptionPublicKeys executor = 1;
-    repeated Recital parties = 2;
-    string contract_jar_hash = 3;
-    string contract_classname = 4;
-    string function_name = 5;
-    string result_name = 6;
-    string result_hash = 7;
-    bytes fact_bytes = 8;
-    AuditFields fact_audit_fields = 9;
-    uint64 block_number = 10;
-    uint64 block_transaction_index = 11;
-}

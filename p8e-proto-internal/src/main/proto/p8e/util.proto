@@ -1,8 +1,9 @@
 syntax = "proto3";
 
+package p8e;
+
 option java_package = "io.p8e.proto";
 
-import "google/protobuf/descriptor.proto";
 import "google/protobuf/timestamp.proto";
 
 //UUID stored as a string
@@ -19,33 +20,3 @@ message AuditFields {
   int32 version = 5;
   string message = 6;
 }
-
-// Metadata to flag indexing by p8e indexer
-message Index {
-  Behavior index = 1;
-
-  enum Behavior {
-    NOT_SET = 0;
-
-    // Never index
-    NEVER = 1;
-
-    // Always index
-    ALWAYS = 2;
-
-    // Index unless Parent says otherwise
-    INDEX_DEFER_PARENT = 3;
-
-    // Don't index unless Parent says otherwise
-    NO_INDEX_DEFER_PARENT = 4;
-  }
-}
-
-extend google.protobuf.MessageOptions {
-  Index message_index = 65534;
-}
-
-extend google.protobuf.FieldOptions {
-  Index index = 65535;
-}
-

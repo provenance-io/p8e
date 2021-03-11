@@ -22,7 +22,7 @@ message PublicKeyRequest {
 }
 
 message PublicKeyResponse {
-    UUID uuid = 1;
+    p8e.UUID uuid = 1;
     bytes public_key = 2;
     google.protobuf.Timestamp created = 3;
 }
