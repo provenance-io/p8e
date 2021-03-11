@@ -125,4 +125,6 @@ jobs:
           echo VERSION=$VERSION
 
           docker tag "${{ matrix.project }}:$VERSION" $IMAGE_ID:$VERSION
+          docker tag "${{ matrix.project }}:$VERSION" $IMAGE_ID:latest
           docker push $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:latest
