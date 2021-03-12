@@ -53,7 +53,7 @@ jobs:
           server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
 
       - name: Build with Gradle
-        run: ./gradlew clean build --refresh-dependencies -Pversion=$VERSION
+        run: ./gradlew clean build :p8e-api:jacocoTestReport --refresh-dependencies -Pversion=$VERSION
 
       - name: Publish to GitHub Packages
         run: ./gradlew publish -Pversion=$VERSION
@@ -73,6 +73,12 @@ jobs:
         with:
           name: p8e-api-webservice
           path: p8e-api-webservice/build/libs/*.jar
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1.2.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: p8e-api/build/reports/jacoco/test/*.xml
 
   docker_build:
     name: Build and Push to GitHub Docker Package Registry
