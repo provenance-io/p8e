@@ -53,7 +53,7 @@ jobs:
           server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
 
       - name: Build with Gradle
-        run: ./gradlew clean build --refresh-dependencies -Pversion=$VERSION
+        run: ./gradlew clean build :p8e-api:codeCoverageReport --refresh-dependencies -Pversion=$VERSION
 
       - name: Publish to GitHub Packages
         run: ./gradlew publish -Pversion=$VERSION
