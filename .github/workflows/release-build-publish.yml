@@ -75,9 +75,10 @@ jobs:
           path: p8e-api-webservice/build/libs/*.jar
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v1.2.2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          directory: p8e-api/build/test-results/**/*.xml
 
   docker_build:
     name: Build and Push to GitHub Docker Package Registry
