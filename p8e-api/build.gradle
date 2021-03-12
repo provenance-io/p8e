@@ -165,3 +165,7 @@ dependencyManagement {
         cacheChangingModulesFor 0, 'seconds'
     }
 }
+
+codeCoverageReport.dependsOn {
+    test
+}
