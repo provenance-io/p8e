@@ -42,6 +42,8 @@ class MailboxProperties {
 class EventStreamProperties {
     @NotNull lateinit var id: String
     @NotNull lateinit var uri: String
+    @NotNull lateinit var websocketUri: String
+    @NotNull lateinit var rpcUri: String
     @NotNull lateinit var epoch: String
     @NotNull lateinit var key: String
 }

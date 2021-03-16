@@ -3,6 +3,10 @@ package io.provenance.engine.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.timgroup.statsd.NonBlockingStatsDClientBuilder
+import feign.Feign
+import feign.Logger
+import feign.jackson.JacksonDecoder
+import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
@@ -13,6 +17,7 @@ import io.provenance.engine.index.query.OperationDeserializer
 import io.provenance.engine.service.DataDogMetricCollector
 import io.provenance.engine.service.LogFileMetricCollector
 import io.provenance.engine.service.MetricsService
+import io.provenance.engine.service.RPCClient
 import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -102,6 +107,20 @@ class AppConfig : WebMvcConfigurer {
         module.addDeserializer(Operation::class.java, OperationDeserializer(Operation::class.java))
         return ObjectMapper().configureProvenance()
             .registerModule(module)
+    }
+
+    @Bean
+    fun rpcClient(
+        objectMapper: ObjectMapper,
+        eventStreamProperties: EventStreamProperties
+    ): RPCClient {
+        return Feign.builder()
+            .encoder(JacksonEncoder(objectMapper))
+            .decoder(JacksonDecoder(objectMapper))
+            .target(
+                RPCClient::class.java,
+                eventStreamProperties.rpcUri
+            )
     }
 
     @Bean

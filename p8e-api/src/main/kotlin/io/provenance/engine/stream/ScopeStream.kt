@@ -13,6 +13,10 @@ import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.p8e.shared.index.data.IndexScopeRecord
 import io.provenance.engine.service.EventService
+import io.provenance.engine.stream.domain.Attribute
+import io.provenance.engine.stream.domain.EventBatch
+import io.provenance.engine.stream.domain.EventStreamResponseObserver
+import io.provenance.engine.stream.domain.StreamEvent
 import io.provenance.p8e.shared.domain.EnvelopeRecord
 import io.provenance.p8e.shared.index.ScopeEvent
 import io.provenance.p8e.shared.index.ScopeEventType
@@ -23,7 +27,6 @@ import io.provenance.p8e.shared.util.toTransactionHashes
 import io.provenance.pbc.esc.ApiKeyCallCredentials
 import io.provenance.pbc.esc.EventStreamApiKey
 import io.provenance.pbc.esc.StreamClientParams
-import io.provenance.pbc.ess.proto.EventProtos
 import io.provenance.pbc.ess.proto.EventStreamGrpc
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.scheduling.annotation.Scheduled
@@ -31,34 +34,12 @@ import org.springframework.stereotype.Component
 import java.net.URI
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import io.provenance.pbc.ess.proto.EventProtos.Event as StreamedEvent
-
-class EventStreamResponseObserver<T>(private val onNextHandler: (T) -> Unit) : StreamObserver<T> {
-    val finishLatch: CountDownLatch = CountDownLatch(1)
-    var error: Throwable? = null
-
-    override fun onNext(value: T) {
-        try {
-            onNextHandler(value)
-        } catch (t: Throwable) {
-            this.onError(t)
-        }
-    }
-
-    override fun onCompleted() {
-        finishLatch.countDown()
-    }
-
-    override fun onError(t: Throwable?) {
-        error = t
-        finishLatch.countDown()
-    }
-}
 
 @Component
 class ScopeStream(
     private val eventService: EventService,
-    eventStreamProperties: EventStreamProperties
+    eventStreamProperties: EventStreamProperties,
+    private val eventStreamFactory: EventStreamFactory
 ) {
     private val log = logger()
 
@@ -106,18 +87,15 @@ class ScopeStream(
         val record = transaction { EventStreamRecord.findById(eventStreamId) }
         val lastHeight = record?.lastBlockHeight
             ?: transaction { EventStreamRecord.insert(eventStreamId, epochHeight) }.lastBlockHeight
-        val request = EventProtos.EventStreamReq.newBuilder()
-            .addAllEventTypes(eventTypes)
-            .setStartHeight(lastHeight + 1)
-            .setConsumer(StreamClientParams(uri, apiKey).consumer)
-            .build()
-        val responseObserver = EventStreamResponseObserver<EventProtos.EventBatch>() { batch ->
+
+        val responseObserver = EventStreamResponseObserver<EventBatch>() { batch ->
             queueIndexScopes(batch.height, batch.scopes())
         }
 
         log.info("Starting event stream at height ${lastHeight + 1}")
 
-        eventAsyncClient.streamEvents(request, responseObserver)
+        eventStreamFactory.getStream(eventTypes, lastHeight + 1, responseObserver)
+            .streamEvents()
 
         while (true) {
             val isComplete = responseObserver.finishLatch.await(60, TimeUnit.SECONDS)
@@ -131,8 +109,8 @@ class ScopeStream(
     }
 
     // Extract all scopes from an event batch
-    private fun EventProtos.EventBatch.scopes(): List<ScopeEvent> =
-        this.eventsList.map { event ->
+    private fun EventBatch.scopes(): List<ScopeEvent> =
+        this.events.map { event ->
             ScopeEvent(
                 event.findTxHash(),
                 event.findScope(),
@@ -141,18 +119,18 @@ class ScopeStream(
          }
 
     // Find the transaction hash in an event.
-    private fun StreamedEvent.findTxHash(): String =
-        this.attributesList.find { it.key.toStringUtf8() == "tx_hash" }?.value?.toStringUtf8()
+    private fun StreamEvent.findTxHash(): String =
+        this.attributes.find { it.key == "tx_hash" }?.value
             ?: throw IllegalStateException("Event does not contain a transaction hash")
 
     // Find the scope in an event.
-    private fun StreamedEvent.findScope(): Scope =
-        this.attributesList.find { it.key.toStringUtf8() == "scope" }?.toScope()
+    private fun StreamEvent.findScope(): Scope =
+        this.attributes.find { it.key == "scope" }?.toScope()
             ?: throw IllegalStateException("Event does not contain a scope")
 
     // Parse a scope from an attribute value.
-    private fun EventProtos.Attribute.toScope(): Scope =
-        Scope.parseFrom(this.value.toStringUtf8().base64Decode())
+    private fun Attribute.toScope(): Scope =
+        Scope.parseFrom(this.value.base64Decode())
 
     // Queue a batch of scopes for indexing.
     fun queueIndexScopes(blockHeight: Long, events: List<ScopeEvent>) = timed("ScopeStream_indexScopes_${events.size}") {

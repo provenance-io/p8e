@@ -1,8 +1,5 @@
 // Versions shared across subprojects
 ext {
-    provenance_gateway = 'master-5'
-    provenance_keystone = 'master-11'
-
     arrow_version = '0.11.0'
     identity_version = 'master-184'
     elasticsearch_version = '7.4.1'
@@ -17,6 +14,7 @@ ext {
     hikari_cp_version = '3.2.0'
     redisson_version = '3.11.0'
     grpc_version = '1.32.2'
+    scarlet_version = '0.1.11'
     protobuf_version = '3.6.1'
     kethereum_version = '0.83.4'
     khex_version = '1.0.0-RC6'
@@ -24,7 +22,7 @@ ext {
     datadog_version = '2.11.0'
     logback_version = '1.2.3'
 
-    p8e_contract_version_prod = 'master-86' // prod cronjob
-    p8e_contract_version_test = 'develop-165' // develop cronjob
+    gradle_download = '4.1.1'
+    provenance_version = '0.2.1'
 }
 
