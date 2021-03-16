@@ -260,7 +260,7 @@ class TestUtils {
                         .addAllRecordGroup(
                             mutableListOf(
                                 ContractScope.RecordGroup.newBuilder()
-                                    .setSpecification("some-hash-specification")
+                                    .setSpecification("AyZYcO1gmfndNHU+v4ltISy+nZb5rdwNjfc5+Q66dbpC3tlfF5Nt79usqSZjIz8h3HoJEYcIz3LE7sM09uTUXg==")
                                     .setGroupUuid(groupUuid)
                                     .setExecutor(
                                         PK.SigningAndEncryptionPublicKeys.newBuilder()
