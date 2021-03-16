@@ -3,6 +3,7 @@ package io.provenance.engine.stream.domain
 import com.tinder.scarlet.WebSocket
 import com.tinder.scarlet.ws.Receive
 import com.tinder.scarlet.ws.Send
+import io.p8e.util.base64Decode
 import io.p8e.util.base64String
 import io.reactivex.Flowable
 
@@ -13,8 +14,6 @@ interface EventStreamService {
     fun subscribe(subscribe: Subscribe)
     @Receive
     fun streamEvents(): Flowable<RPCResponse<Result>>
-    @Send
-    fun unsubscribe(unsubscribe: Unsubscribe = Unsubscribe())
 }
 
 data class Result(
@@ -41,7 +40,7 @@ data class BlockHeader(
 )
 
 data class BlockData(
-    val txs: List<ByteArray>
+    val txs: List<String>?
 )
 
 data class Event(
@@ -70,11 +69,9 @@ class Attribute(
     val value = String(value)
 }
 
-data class Subscribe(
-    val query: String
+class Subscribe(
+    query: String
 ) : RPCRequest("subscribe", SubscribeParams(query))
-
-class Unsubscribe() : RPCRequest("unsubscribe")
 
 open class RPCRequest(val method: String, val params: Any? = null) {
     val jsonrpc = "2.0"

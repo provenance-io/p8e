@@ -9,6 +9,7 @@ import io.grpc.netty.NettyChannelBuilder
 import io.p8e.crypto.Hash
 import io.p8e.engine.threadedMap
 import io.p8e.util.ThreadPoolFactory
+import io.p8e.util.base64decode
 import io.p8e.util.timed
 import io.p8e.util.toHexString
 import io.provenance.engine.batch.shutdownHook
@@ -84,18 +85,20 @@ class EventStreamFactory(
         private var subscription: Disposable? = null
 
         fun streamEvents() {
-            // need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
+            // todo: need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
 
             // start event loop to start buffering events
-//            startEventLoop()
+            startEventLoop()
+            shutdownHook { shutdown() } // ensure we close socket gracefully when shutting down
 
             timed("EventStream:streamHistory") {
                 streamHistory()
             }
 
-            // check tendermint node connection every 30s
+            // todo: check tendermint node connection every 30s?
 
             // listen for live events
+
         }
 
         private fun streamHistory() {
@@ -117,9 +120,11 @@ class EventStreamFactory(
             // query block heights in batches (concurrent batches)
             var height = startHeight
             val capacity = HISTORY_BATCH_SIZE
+            val capacityRange = (0 until capacity).toList()
             val chunkSize = 20 // Tendermint limit on how many block metas can be queried in one call.
+            var numHistoricalEvents = 0
             do {
-                val batches = (0 until capacity).toList().threadedMap(executor) { i ->
+                val batches = capacityRange.threadedMap(executor) { i ->
                     val beg = height + i * chunkSize
                     if (beg > lastBlockHeight) {
                         null
@@ -134,18 +139,23 @@ class EventStreamFactory(
                 .flatten()
 
                 if (batches.isNotEmpty()) {
+                    numHistoricalEvents += batches.fold(0) { acc, batch -> acc + batch.events.size }
+
                     batches.sortedBy { it.height }
                         .forEach {
-                            handleEvent(it)
+                            handleEventBatch(it)
                         }
                 }
 
                 height += capacity * chunkSize
             } while (height <= lastBlockHeight)
+
+            log.info("Streamed $numHistoricalEvents historical events")
         }
 
         private fun startEventLoop() {
             // subscribe to block events tm.event='NewBlock' (handle fail)
+            log.info("opening EventStream websocket")
             lifecycle.onNext(Lifecycle.State.Started)
             subscription = eventStreamService.observeWebSocketEvent()
                 .filter { it is WebSocket.Event.OnConnectionOpened<*> }
@@ -155,16 +165,29 @@ class EventStreamFactory(
                 }
                 .filter { !it.result.query.isNullOrBlank() && it.result.data.value.block.header.height >= startHeight }
                 .map { event -> event.result }
-                .subscribe({
-//                    handleEvent(it) // todo: fetch event details
-                }) { t -> handleError(t) }
+                .subscribe(
+                    { handleEvent(it) },
+                    { handleError(it) }
+                )
 
-            // query height to get transactions (handle fail) (queryBlockEvents)
-
-            // pass events to buffer w/ height
         }
 
-        private fun handleEvent(event: EventBatch) {
+        private fun handleEvent(event: Result) {
+            val blockHeight = event.data.value.block.header.height
+
+            queryEvents(blockHeight).also {
+                log.info("queried events for height $blockHeight and got ${it.size}")
+            }
+                .takeIf { it.isNotEmpty() }
+                ?.also {
+                    log.info("got batch of ${it.count()} events")
+                    handleEventBatch(
+                        EventBatch(blockHeight, it)
+                    )
+                }
+        }
+
+        private fun handleEventBatch(event: EventBatch) {
             log.info("got event! $event")
             observer.onNext(event)
         }
@@ -172,11 +195,11 @@ class EventStreamFactory(
         private fun handleError(t: Throwable) {
             log.error("EventStream error ${t.message}")
             observer.onError(t)
+            shutdown()
         }
 
         fun shutdown() {
             log.info("Cleaning up EventStream Websocket")
-            eventStreamService.unsubscribe()
             lifecycle.onNext(Lifecycle.State.Stopped.WithReason(ShutdownReason.GRACEFUL))
             subscription
                 ?.takeIf { !it.isDisposed }
@@ -190,22 +213,27 @@ class EventStreamFactory(
             }
 
             return transactionQueryService.blocksWithTransactions(minHeight, maxHeight)
-                .takeIf { it.count() > 0 }
+                .takeIf { it.isNotEmpty() }
                 ?.map { height ->
                     EventBatch(
                         height,
                         queryEvents(height)
                     )
-                }
+                }?.filter { it.events.isNotEmpty() }
+                ?.takeIf { it.isNotEmpty() }
         }
 
         fun queryEvents(height: Long): List<StreamEvent> {
             val block = transactionQueryService.block(height)
+            if (block.block.data.txs == null) { // empty block
+                return listOf()
+            }
+
             val results = transactionQueryService.blockResults(height)
 
             return results.txsResults
                 .flatMapIndexed { index, tx ->
-                    val txHash = block.block.data.txs[index].hash()
+                    val txHash = block.block.data.txs[index].base64decode().hash()
                     tx.events
                         .filter { it.shouldStream() }
                         .map { event ->
