@@ -35,7 +35,6 @@ class EventStreamFactory(
     private val log = logger()
 
     private val abciService = URI(eventStreamProperties.uri).let { uri ->
-        log.info("uri is ${eventStreamProperties.uri}")
         val channel = NettyChannelBuilder.forAddress(uri.host, uri.port)
             // todo: set appropriate options for timeouts and what-not
             .also {
@@ -109,7 +108,7 @@ class EventStreamFactory(
 
             // get latest block height
             val lastBlockHeight = transactionQueryService.abciInfo().also {
-                info -> log.info("lastBlockHeight: ${info.lastBlockHeight}")
+                info -> log.info("EventStream lastBlockHeight: ${info.lastBlockHeight}")
             }.lastBlockHeight
 
             // Requested start height is in the future
@@ -160,6 +159,7 @@ class EventStreamFactory(
             subscription = eventStreamService.observeWebSocketEvent()
                 .filter { it is WebSocket.Event.OnConnectionOpened<*> }
                 .switchMap {
+                    log.info("initializing subscription for tm.event='NewBlock'")
                     eventStreamService.subscribe(Subscribe("tm.event='NewBlock'"))
                     eventStreamService.streamEvents()
                 }
@@ -169,15 +169,12 @@ class EventStreamFactory(
                     { handleEvent(it) },
                     { handleError(it) }
                 )
-
         }
 
         private fun handleEvent(event: Result) {
             val blockHeight = event.data.value.block.header.height
 
-            queryEvents(blockHeight).also {
-                log.info("queried events for height $blockHeight and got ${it.size}")
-            }
+            queryEvents(blockHeight)
                 .takeIf { it.isNotEmpty() }
                 ?.also {
                     log.info("got batch of ${it.count()} events")
@@ -188,7 +185,6 @@ class EventStreamFactory(
         }
 
         private fun handleEventBatch(event: EventBatch) {
-            log.info("got event! $event")
             observer.onNext(event)
         }
 
