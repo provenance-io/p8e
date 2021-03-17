@@ -40,7 +40,7 @@ sourceSets {
             srcDirs += 'src/main/kotlin'
         }
         proto {
-            srcDir "$buildDir/proto"
+            srcDir "src/main/proto"
         }
     }
     test {
@@ -48,7 +48,7 @@ sourceSets {
             srcDirs += 'src/test/kotlin'
         }
         proto {
-            srcDir "$buildDir/proto"
+            srcDir "src/main/proto"
         }
     }
 }
@@ -190,7 +190,7 @@ task downloadZipFile(type: Download) {
 
 task downloadAndUnzipFile(dependsOn: downloadZipFile, type: Copy) {
     from zipTree(downloadZipFile.dest)
-    into buildDir
+    into 'src/main'
 }
 
 protobuf {
@@ -207,9 +207,6 @@ protobuf {
         }
     }
     generateProtoTasks {
-        all().each { task ->
-            task.dependsOn(downloadAndUnzipFile)
-        }
         ofSourceSet('main')*.plugins {
             // Apply the "grpc" plugin whose spec is defined above, without
             // options.  Note the braces cannot be omitted, otherwise the
