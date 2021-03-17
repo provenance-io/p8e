@@ -8,11 +8,15 @@ import org.springframework.stereotype.Component
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.EventStreamProperties
 import io.provenance.engine.domain.EventStreamRecord
+import io.provenance.engine.domain.GetTxResult
 import io.provenance.engine.domain.TransactionStatusRecord
-import io.provenance.pbc.clients.*
+import io.provenance.engine.domain.TxResult
+import io.provenance.engine.service.TransactionQueryService
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.provenance.engine.service.TransactionStatusService
 import io.provenance.engine.stream.ScopeStream
+import io.provenance.engine.stream.domain.Attribute
+import io.provenance.engine.stream.domain.Event
 import io.provenance.p8e.shared.index.ScopeEvent
 import io.provenance.p8e.shared.index.isScopeEventType
 import io.provenance.p8e.shared.index.toEventType
@@ -25,7 +29,7 @@ import java.time.OffsetDateTime
 @Component
 class TxErrorReaper(
     private val transactionStatusService: TransactionStatusService,
-    private val sc: SimpleClient,
+    private val transactionQueryService: TransactionQueryService,
     private val scopeStream: ScopeStream,
     eventStreamProperties: EventStreamProperties
 ) {
@@ -46,26 +50,22 @@ class TxErrorReaper(
         }.forEach {
             try {
                 P8eMDC.set(it.transactionHash.value.toTransactionHashes(), clear = true)
-                sc.fetchTx(it.transactionHash.value).let { transactionStatus ->
-                    if (transactionStatus.isErrored()) {
+                transactionQueryService.fetchTransaction(it.transactionHash.value).let { transactionStatus ->
+                    if (transactionStatus.isNotFound()) {
+                        log.warn("Retrying transaction not found in mempool with hash ${it.transactionHash.value}")
+                        transaction { transactionStatusService.retryDead(it, transactionStatus.data) }
+                    } else if (transactionStatus.isErrored()) {
                         transaction { transactionStatusService.setError(it, transactionStatus.getError()) }
-                    } else {
-                        P8eMDC.set(transactionStatus.height.toLong().toBlockHeight())
-                        val blockHeight = transactionStatus.height.toLong()
+                    } else if (transactionStatus.isSuccessful()) {
+                        P8eMDC.set(transactionStatus.height.toBlockHeight())
+                        val blockHeight = transactionStatus.height
                         if (blockHeight <= latestBlockHeight) { // EventStream is past this height, need to process manually
-                            transactionStatus.events()
+                            transactionStatus.scopeEvents()
                                 ?.also { events -> log.error("indexing ${events.size} events missed by eventStream") }
                                 ?.map { event -> event.toScopeEvent() }
                                 ?.also { events -> scopeStream.queueIndexScopes(blockHeight, events) }
                         }
                     }
-                }
-            } catch (e: CosmosRemoteInvocationException) {
-                if (e.status == HttpStatus.NOT_FOUND.value()) {
-                    log.warn("Retrying transaction not found in mempool with hash ${it.transactionHash.value}")
-                    transaction { transactionStatusService.retryDead(it, e.message) }
-                } else {
-                    log.error("Error fetching status for tx hash ${it.transactionHash.value}", e)
                 }
             } catch (t: Throwable) {
                 log.warn("Error processing expired transaction", t)
@@ -73,20 +73,24 @@ class TxErrorReaper(
         }
     }
 
-    private fun TxQuery.isErrored() = (code ?: 0) > 0
+    private fun GetTxResult.isNotFound() = txResult == null
 
-    private fun TxQuery.getError() = logs?.filter { it.log.isNotBlank() }?.takeIf { it.isNotEmpty() }?.joinToString("; ") { it.log } ?: raw_log
+    private fun GetTxResult.isErrored() = txResult?.code != null && txResult?.code > 0
 
-    private fun TxQuery.events(): List<StdTxEvent>? = logs?.flatMap { it.events.filter { it.type.isScopeEventType() } }
+    private fun GetTxResult.isSuccessful() = txResult?.code == 0
 
-    private fun StdTxEvent.findTxHash(): String = attributes.find { it.key == "tx_hash" }?.value
+    private fun GetTxResult.getError() = txResult?.log ?: "Unknown Error"
+
+    private fun GetTxResult.scopeEvents(): List<Event>? = txResult?.events?.filter { it.type.isScopeEventType() }
+
+    private fun Event.findTxHash(): String = attributes.find { it.key == "tx_hash" }?.value
         ?: throw IllegalStateException("Event does not contain a transaction hash")
 
-    private fun StdTxEvent.findScope(): Scope = attributes.find { it.key == "scope" }?.toScope()
+    private fun Event.findScope(): Scope = attributes.find { it.key == "scope" }?.toScope()
         ?: throw IllegalStateException("Event does not contain a scope")
 
-    private fun StdTxEvent.toScopeEvent(): ScopeEvent = ScopeEvent(findTxHash(), findScope(), type.toEventType())
+    private fun Event.toScopeEvent(): ScopeEvent = ScopeEvent(findTxHash(), findScope(), type.toEventType())
 
-    private fun StdTxEventAttribute.toScope(): Scope = value?.base64Decode().let { Scope.parseFrom(it) }
+    private fun Attribute.toScope(): Scope = value.base64Decode().let { Scope.parseFrom(it) }
         ?: throw IllegalStateException("Event attribute does not contain a scope")
 }

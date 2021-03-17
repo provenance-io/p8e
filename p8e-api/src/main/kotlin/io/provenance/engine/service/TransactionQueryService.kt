@@ -1,7 +1,6 @@
 package io.provenance.engine.service
 
 import io.provenance.engine.domain.*
-import io.provenance.p8e.shared.extension.logger
 import org.springframework.stereotype.Component
 
 @Component
