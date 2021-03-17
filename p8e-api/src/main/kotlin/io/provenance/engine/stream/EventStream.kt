@@ -229,7 +229,7 @@ class EventStreamFactory(
 
             return results.txsResults
                 .flatMapIndexed { index, tx ->
-                    val txHash = block.block.data.txs[index].base64decode().hash()
+                    val txHash = block.block.data.txs[index].hash()
                     tx.events
                         .filter { it.shouldStream() }
                         .map { event ->
@@ -258,6 +258,6 @@ class EventStreamFactory(
                 }
             } != null
 
-        fun ByteArray.hash(): String = Hash.sha256(this).toHexString()
+        fun String.hash(): String = Hash.sha256(base64decode()).toHexString()
     }
 }
