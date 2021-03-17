@@ -10,6 +10,7 @@ import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
+import io.provenance.engine.domain.RPCClient
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.engine.index.query.Operation
@@ -17,7 +18,6 @@ import io.provenance.engine.index.query.OperationDeserializer
 import io.provenance.engine.service.DataDogMetricCollector
 import io.provenance.engine.service.LogFileMetricCollector
 import io.provenance.engine.service.MetricsService
-import io.provenance.engine.service.RPCClient
 import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
