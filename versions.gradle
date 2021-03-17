@@ -24,5 +24,6 @@ ext {
 
     gradle_download = '4.1.1'
     provenance_version = '0.2.1'
+    cosmos_version = '0.42.1'
 }
 
