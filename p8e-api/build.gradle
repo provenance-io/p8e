@@ -182,17 +182,6 @@ dependencyManagement {
     }
 }
 
-task downloadProvenanceProtos(type: Download) {
-    src "https://github.com/provenance-io/provenance/releases/download/v${provenance_version}/protos-v${provenance_version}.zip"
-    dest new File(buildDir, "${provenance_version}.zip")
-    onlyIfModified true
-}
-
-task downloadAndUnzipProvenanceProtos(dependsOn: downloadProvenanceProtos, type: Copy) {
-    from zipTree(downloadProvenanceProtos.dest)
-    into 'src/main'
-}
-
 task downloadCosmosProtos(type: Download) {
     src "https://github.com/cosmos/cosmos-sdk/tarball/v$cosmos_version"
     dest new File(buildDir, "${cosmos_version}.tar.gz")
@@ -200,17 +189,35 @@ task downloadCosmosProtos(type: Download) {
 }
 
 task downloadAndUntarCosmosProtos(dependsOn: downloadCosmosProtos, type: Copy) {
-    from(tarTree(resources.gzip(downloadCosmosProtos.dest))) {
+    from(tarTree(downloadCosmosProtos.dest)) {
         include "**/*.proto"
         eachFile { fcd ->
-            fcd.relativePath = new RelativePath(true, fcd.relativePath.segments.drop(1))
+            def relativePath = new RelativePath(true, fcd.relativePath.segments.drop(1))
+            def isThirdParty = relativePath.toString().startsWith("third_party")
+            if (isThirdParty) {
+                relativePath = new RelativePath(true, relativePath.segments.drop(1))
+            }
+            fcd.relativePath = relativePath
         }
         includeEmptyDirs = false
     }
     into 'src/main'
 }
 
-task downloadAllExternalProtos(dependsOn: [downloadAndUnzipProvenanceProtos, downloadAndUntarCosmosProtos])
+task downloadProvenanceProtos(type: Download) {
+    src "https://github.com/provenance-io/provenance/releases/download/v${provenance_version}/protos-v${provenance_version}.zip"
+    dest new File(buildDir, "${provenance_version}.zip")
+    onlyIfModified true
+}
+
+task downloadAndUnzipProvenanceProtos(dependsOn: [downloadProvenanceProtos, downloadAndUntarCosmosProtos], type: Copy) {
+    from zipTree(downloadProvenanceProtos.dest)
+    into 'src/main'
+}
+
+task downloadAllExternalProtos(dependsOn: [downloadAndUnzipProvenanceProtos, downloadAndUntarCosmosProtos]) {
+    tasks.findByName('downloadAndUnzipProvenanceProtos').mustRunAfter 'downloadAndUntarCosmosProtos'
+}
 
 protobuf {
     protoc {
