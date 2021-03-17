@@ -25,6 +25,11 @@ import tendermint.abci.ABCIApplicationGrpc
 import java.net.URI
 import java.time.Duration
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.concurrent.thread
+
+class EventStreamStaleException(message: String) : Throwable(message)
 
 @Component
 class EventStreamFactory(
@@ -82,10 +87,26 @@ class EventStreamFactory(
 
         private var subscription: Disposable? = null
 
+        private var lastBlockSeen = AtomicLong(-1)
+        private val eventMonitor = thread(start = false) {
+            var lastBlockMonitored = lastBlockSeen.get()
+            while (true) {
+                Thread.sleep(30000)
+                val lastBlockSeen = lastBlockSeen.get()
+                log.debug("Checking for event stream liveliness [lastBlockSeen: $lastBlockSeen vs. lastBlockMonitored: $lastBlockMonitored]")
+                if (lastBlockSeen <= lastBlockMonitored) {
+                    handleError(EventStreamStaleException("EventStream has not received a block in 30 seconds [lastBlockSeen: $lastBlockSeen vs. lastBlockMonitored: $lastBlockMonitored]"))
+                    break
+                }
+                lastBlockMonitored = lastBlockSeen
+            }
+            log.info("Exiting event monitor thread")
+        }
+
         fun streamEvents() {
             // todo: need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
 
-            // start event loop to start buffering events
+            // start event loop to start listening for events
             startEventLoop()
             shutdownHook { shutdown() } // ensure we close socket gracefully when shutting down
 
@@ -93,10 +114,7 @@ class EventStreamFactory(
                 streamHistory()
             }
 
-            // todo: check tendermint node connection every 30s?
-
-            // listen for live events
-
+            eventMonitor.start()
         }
 
         private fun streamHistory() {
@@ -152,7 +170,7 @@ class EventStreamFactory(
         }
 
         private fun startEventLoop() {
-            // subscribe to block events tm.event='NewBlock' (handle fail)
+            // subscribe to block events tm.event='NewBlock'
             log.info("opening EventStream websocket")
             lifecycle.onNext(Lifecycle.State.Started)
             subscription = eventStreamService.observeWebSocketEvent()
@@ -178,6 +196,8 @@ class EventStreamFactory(
 
         private fun handleEvent(event: Result) {
             val blockHeight = event.data.value.block.header.height
+
+            lastBlockSeen.set(blockHeight)
 
             queryEvents(blockHeight)
                 .takeIf { it.isNotEmpty() }
