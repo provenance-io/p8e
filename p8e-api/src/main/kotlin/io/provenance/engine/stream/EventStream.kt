@@ -25,7 +25,6 @@ import tendermint.abci.ABCIApplicationGrpc
 import java.net.URI
 import java.time.Duration
 import java.util.concurrent.TimeUnit
-import kotlin.concurrent.thread
 
 @Component
 class EventStreamFactory(
@@ -157,7 +156,13 @@ class EventStreamFactory(
             log.info("opening EventStream websocket")
             lifecycle.onNext(Lifecycle.State.Started)
             subscription = eventStreamService.observeWebSocketEvent()
-                .filter { it is WebSocket.Event.OnConnectionOpened<*> }
+                .filter {
+                    if (it is WebSocket.Event.OnConnectionFailed) {
+                        handleError(it.throwable)
+                    }
+
+                    it is WebSocket.Event.OnConnectionOpened<*>
+                }
                 .switchMap {
                     log.info("initializing subscription for tm.event='NewBlock'")
                     eventStreamService.subscribe(Subscribe("tm.event='NewBlock'"))

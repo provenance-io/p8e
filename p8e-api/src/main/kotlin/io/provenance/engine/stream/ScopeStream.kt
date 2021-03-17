@@ -49,35 +49,8 @@ class ScopeStream(
     // The current event stream ID
     private val eventStreamId = java.util.UUID.fromString(eventStreamProperties.id)
 
-    // The event stream service uri
-    private val uri = URI(eventStreamProperties.uri)
-
     // The p8e -> pbc epoch, before which, no scopes exist on chain.
     private val epochHeight = eventStreamProperties.epoch.toLong()
-
-    // The api key for grpc calls to the event stream server
-    private val apiKey = eventStreamProperties.key
-
-    private val eventAsyncClient: EventStreamGrpc.EventStreamStub
-
-    init {
-        val channel = ManagedChannelBuilder.forAddress(uri.host, uri.port)
-            .also {
-                if (uri.scheme == "grpcs") {
-                    it.useTransportSecurity()
-                } else {
-                    it.usePlaintext()
-                }
-            }
-            .maxInboundMessageSize(20 * 1024 * 1024) // ~ 20 MB
-            .idleTimeout(5, TimeUnit.MINUTES)
-            .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
-            .keepAliveTimeout(20, TimeUnit.SECONDS)
-            .build()
-
-        eventAsyncClient = EventStreamGrpc.newStub(channel)
-            .withCallCredentials(ApiKeyCallCredentials(EventStreamApiKey(apiKey)))
-    }
 
     // This is scheduled so if the event streaming server or its proxied blockchain daemon node go down,
     // we'll attempt to re-connect after a fixed delay.
