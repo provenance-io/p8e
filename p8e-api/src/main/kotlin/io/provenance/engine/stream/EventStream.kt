@@ -35,24 +35,24 @@ class EventStreamFactory(
 ) {
     private val log = logger()
 
-    private val abciService = URI(eventStreamProperties.uri).let { uri ->
-        val channel = NettyChannelBuilder.forAddress(uri.host, uri.port)
-            // todo: set appropriate options for timeouts and what-not
-            .also {
-                if (uri.scheme == "grpcs") {
-                    it.useTransportSecurity()
-                } else {
-                    it.usePlaintext()
-                }
-            }
-            .maxInboundMessageSize(20 * 1024 * 1024) // ~ 20 MB
-            .idleTimeout(5, TimeUnit.MINUTES)
-            .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
-            .keepAliveTimeout(20, TimeUnit.SECONDS)
-            .build()
-
-        ABCIApplicationGrpc.newBlockingStub(channel)
-    }
+//    private val abciService = URI(eventStreamProperties.uri).let { uri ->
+//        val channel = NettyChannelBuilder.forAddress(uri.host, uri.port)
+//            // todo: set appropriate options for timeouts and what-not
+//            .also {
+//                if (uri.scheme == "grpcs") {
+//                    it.useTransportSecurity()
+//                } else {
+//                    it.usePlaintext()
+//                }
+//            }
+//            .maxInboundMessageSize(20 * 1024 * 1024) // ~ 20 MB
+//            .idleTimeout(5, TimeUnit.MINUTES)
+//            .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
+//            .keepAliveTimeout(20, TimeUnit.SECONDS)
+//            .build()
+//
+//        ABCIApplicationGrpc.newBlockingStub(channel)
+//    }
 
     fun getStream(eventTypes: List<String>, startHeight: Long, observer: EventStreamResponseObserver<EventBatch>): EventStream {
         val lifecycle = LifecycleRegistry(0L)
