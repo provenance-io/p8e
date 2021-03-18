@@ -1,10 +1,10 @@
 package io.provenance.engine.stream
 
-import com.tinder.scarlet.*
+import com.tinder.scarlet.Lifecycle
+import com.tinder.scarlet.Scarlet
+import com.tinder.scarlet.ShutdownReason
+import com.tinder.scarlet.WebSocket
 import com.tinder.scarlet.lifecycle.LifecycleRegistry
-import com.tinder.scarlet.messageadapter.moshi.MoshiMessageAdapter
-import com.tinder.scarlet.streamadapter.rxjava2.RxJava2StreamAdapterFactory
-import com.tinder.scarlet.websocket.okhttp.newWebSocketFactory
 import io.grpc.netty.NettyChannelBuilder
 import io.p8e.crypto.Hash
 import io.p8e.engine.threadedMap
@@ -16,16 +16,12 @@ import io.provenance.engine.batch.shutdownHook
 import io.provenance.engine.config.EventStreamProperties
 import io.provenance.engine.service.TransactionQueryService
 import io.provenance.engine.stream.domain.*
-import io.provenance.engine.stream.domain.Event
 import io.provenance.p8e.shared.extension.logger
 import io.reactivex.disposables.Disposable
-import okhttp3.OkHttpClient
 import org.springframework.stereotype.Component
 import tendermint.abci.ABCIApplicationGrpc
 import java.net.URI
-import java.time.Duration
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
@@ -34,7 +30,8 @@ class EventStreamStaleException(message: String) : Throwable(message)
 @Component
 class EventStreamFactory(
     private val eventStreamProperties: EventStreamProperties,
-    private val transactionQueryService: TransactionQueryService
+    private val transactionQueryService: TransactionQueryService,
+    private val eventStreamBuilder: Scarlet.Builder
 ) {
     private val log = logger()
 
@@ -57,13 +54,25 @@ class EventStreamFactory(
         ABCIApplicationGrpc.newBlockingStub(channel)
     }
 
-    fun getStream(eventTypes: List<String>, startHeight: Long, observer: EventStreamResponseObserver<EventBatch>) = EventStream(URI(eventStreamProperties.websocketUri), eventTypes, startHeight, observer, transactionQueryService)
+    fun getStream(eventTypes: List<String>, startHeight: Long, observer: EventStreamResponseObserver<EventBatch>): EventStream {
+        val lifecycle = LifecycleRegistry(0L)
+
+        return EventStream(
+            eventTypes,
+            startHeight,
+            observer,
+            lifecycle,
+            eventStreamBuilder.lifecycle(lifecycle).build().create<EventStreamService>(),
+            transactionQueryService
+        )
+    }
 
     class EventStream(
-        val node: URI,
         val eventTypes: List<String>,
         val startHeight: Long,
         private val observer: EventStreamResponseObserver<EventBatch>,
+        private val lifecycle: LifecycleRegistry,
+        private val eventStreamService: EventStreamService,
         private val transactionQueryService: TransactionQueryService
     ) {
         companion object {
@@ -73,22 +82,10 @@ class EventStreamFactory(
 
         private val log = logger()
 
-        private val lifecycle = LifecycleRegistry(0L)
-        private val scarletInstance = Scarlet.Builder()
-            .lifecycle(lifecycle)
-            .webSocketFactory(OkHttpClient.Builder()
-                .readTimeout(Duration.ofSeconds(60)) // ~ 12 pbc block cuts
-                .build()
-                .newWebSocketFactory("${node.scheme}://${node.host}:${node.port}/websocket"))
-            .addMessageAdapterFactory(MoshiMessageAdapter.Factory())
-            .addStreamAdapterFactory(RxJava2StreamAdapterFactory())
-            .build()
-        private val eventStreamService = scarletInstance.create<EventStreamService>()
-
         private var subscription: Disposable? = null
 
         private var lastBlockSeen = AtomicLong(-1)
-        private val eventMonitor = thread(start = false) {
+        private val eventMonitor = thread(start = false, isDaemon = true) {
             var lastBlockMonitored = lastBlockSeen.get()
             while (true) {
                 Thread.sleep(30000)

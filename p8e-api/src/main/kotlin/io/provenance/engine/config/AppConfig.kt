@@ -3,6 +3,10 @@ package io.provenance.engine.config
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.timgroup.statsd.NonBlockingStatsDClientBuilder
+import com.tinder.scarlet.Scarlet
+import com.tinder.scarlet.messageadapter.moshi.MoshiMessageAdapter
+import com.tinder.scarlet.streamadapter.rxjava2.RxJava2StreamAdapterFactory
+import com.tinder.scarlet.websocket.okhttp.newWebSocketFactory
 import feign.Feign
 import feign.Logger
 import feign.jackson.JacksonDecoder
@@ -31,6 +35,7 @@ import io.provenance.pbc.clients.Denom
 import io.provenance.pbc.clients.SimpleClient
 import io.provenance.pbc.clients.SimpleClientOpts
 import io.provenance.pbc.clients.coins
+import okhttp3.OkHttpClient
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -52,6 +57,7 @@ import org.springframework.http.converter.protobuf.ProtobufHttpMessageConverter
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import java.lang.IllegalArgumentException
 import java.net.URI
+import java.time.Duration
 
 @Configuration
 @EnableCaching
@@ -121,6 +127,19 @@ class AppConfig : WebMvcConfigurer {
                 RPCClient::class.java,
                 eventStreamProperties.rpcUri
             )
+    }
+
+    @Bean
+    fun eventStreamBuilder(eventStreamProperties: EventStreamProperties): Scarlet.Builder {
+        val node = URI(eventStreamProperties.websocketUri)
+        return Scarlet.Builder()
+            .webSocketFactory(
+                OkHttpClient.Builder()
+                .readTimeout(Duration.ofSeconds(60)) // ~ 12 pbc block cuts
+                .build()
+                .newWebSocketFactory("${node.scheme}://${node.host}:${node.port}/websocket"))
+            .addMessageAdapterFactory(MoshiMessageAdapter.Factory())
+            .addStreamAdapterFactory(RxJava2StreamAdapterFactory())
     }
 
     @Bean

@@ -117,6 +117,9 @@ dependencies {
     implementation "com.tinder.scarlet:stream-adapter-rxjava2:$scarlet_version"
     implementation "com.tinder.scarlet:message-adapter-moshi:$scarlet_version"
     implementation 'com.squareup.okhttp3:logging-interceptor:3.14.0'
+    testImplementation "com.tinder.scarlet:websocket-mockwebserver:$scarlet_version"
+    testImplementation "com.tinder.scarlet:test-utils:$scarlet_version"
+    testImplementation "io.reactivex.rxjava2:rxkotlin:2.2.0"
 
     // Spring boot
     implementation "org.springframework.boot:spring-boot-starter-web:$springboot_version"

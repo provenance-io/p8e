@@ -3,8 +3,6 @@ package io.provenance.engine.stream.domain
 import com.tinder.scarlet.WebSocket
 import com.tinder.scarlet.ws.Receive
 import com.tinder.scarlet.ws.Send
-import io.p8e.util.base64Decode
-import io.p8e.util.base64String
 import io.reactivex.Flowable
 
 interface EventStreamService {
