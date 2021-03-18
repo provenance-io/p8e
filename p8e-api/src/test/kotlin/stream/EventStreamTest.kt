@@ -46,6 +46,7 @@ class EventStreamTest {
     @Test
     fun `History is not streamed if startHeight is less than 0`() {
         setLastBlockHeight(100)
+
         buildEventStream(startHeight = -1).streamEvents()
 
         verify(transactionQueryService, times(0)).blocksWithTransactions(any(), any())
@@ -54,9 +55,32 @@ class EventStreamTest {
     @Test
     fun `History is not streamed if startHeight is greater than the last block height`() {
         setLastBlockHeight(100)
-        buildEventStream(startHeight = 101)
+
+        buildEventStream(startHeight = 101).streamEvents()
 
         verify(transactionQueryService, times(0)).blocksWithTransactions(any(), any())
+    }
+
+    @Test
+    fun `History is streamed if startHeight is less than last block height`() {
+        setLastBlockHeight(100)
+        whenever(transactionQueryService.blocksWithTransactions(90, 100)).thenReturn(listOf(95))
+        setBlockResults(95, listOf(txResult(0, listOf("scope_created"))))
+
+        buildEventStream(startHeight = 90).streamEvents()
+
+        verify(observer, times(1)).onNext(argThat { height == 95L && events.count() == 1 && events[0].eventType == "scope_created" })
+    }
+
+    @Test
+    fun `History of non-requested events is not streamed`() {
+        setLastBlockHeight(100)
+        whenever(transactionQueryService.blocksWithTransactions(90, 100)).thenReturn(listOf(95))
+        setBlockResults(95, listOf(txResult(0, listOf("scope_destroyed"))))
+
+        buildEventStream(startHeight = 90).streamEvents()
+
+        verify(observer, times(0)).onNext(any())
     }
 
     @Test
