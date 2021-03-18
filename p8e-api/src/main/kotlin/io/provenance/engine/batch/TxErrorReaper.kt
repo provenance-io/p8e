@@ -61,9 +61,9 @@ class TxErrorReaper(
                         val blockHeight = transactionStatus.height
                         if (blockHeight <= latestBlockHeight) { // EventStream is past this height, need to process manually
                             transactionStatus.scopeEvents()
-                                ?.also { events -> log.error("indexing ${events.size} events missed by eventStream") }
-                                ?.map { event -> event.toScopeEvent() }
-                                ?.also { events -> scopeStream.queueIndexScopes(blockHeight, events) }
+                                .also { events -> log.error("indexing ${events.size} events missed by eventStream") }
+                                .map { event -> event.toScopeEvent() }
+                                .also { events -> scopeStream.queueIndexScopes(blockHeight, events) }
                         }
                     }
                 }
@@ -81,7 +81,7 @@ class TxErrorReaper(
 
     private fun GetTxResult.getError() = txResult?.log ?: "Unknown Error"
 
-    private fun GetTxResult.scopeEvents(): List<Event>? = txResult?.events?.filter { it.type.isScopeEventType() }
+    private fun GetTxResult.scopeEvents(): List<Event> = txResult?.events?.filter { it.type.isScopeEventType() } ?: emptyList()
 
     private fun Event.findTxHash(): String = attributes.find { it.key == "tx_hash" }?.value
         ?: throw IllegalStateException("Event does not contain a transaction hash")
