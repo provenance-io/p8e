@@ -15,6 +15,7 @@ import io.provenance.engine.index.ProtoIndexer
 import io.provenance.os.client.OsClient
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.domain.inputstream.SignatureInputStream
+import io.provenance.os.util.CertificateUtil
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.encryption.ecies.ProvenanceECIESEncrypt
@@ -34,12 +35,11 @@ import org.junit.Test
 import org.mockito.Mockito
 import java.io.InputStream
 import java.security.KeyPair
+import java.security.Signature
 import java.util.Arrays
 import java.util.UUID
 
 class ProtoIndexerTest {
-
-    lateinit var scope: Scope
 
     lateinit var key: KeyPair
 
@@ -139,15 +139,40 @@ class ProtoIndexerTest {
             )
             .build()
 
-        dimeInputStream = DIMEInputStream(
-            dime = dime,
-            `in` = InputStream.nullInputStream()
+        val signatures = mutableListOf(
+            io.provenance.os.domain.Signature(
+                envelope.signaturesList[0].signer.signingPublicKey.toByteArray(),
+                CertificateUtil.publicKeyToPem(key.public).toByteArray(Charsets.UTF_8)
+            )
         )
 
-        Mockito.`when`(osClient.get(envelope.scope.recordGroupList[0].specification.base64Decode(), key.public)).thenReturn(dimeInputStream)
+        //Setup signatures
+        val signatureJava = Signature.getInstance("SHA512withECDSA", "BC").apply { initSign(key.private) }.let { it.sign() }
+
+        val verifySignature = Signature.getInstance("SHA512withECDSA", "BC").apply { initVerify(key.public) }
+
+        signatureInputStream = SignatureInputStream(
+            InputStream.nullInputStream(),
+            verifySignature,
+            envelope.signaturesList[0].signer.signingPublicKey.toByteArray()
+        )
+
+        dimeInputStream = DIMEInputStream(
+            dime = dime,
+            `in` = InputStream.nullInputStream(),
+            signatures = signatures
+        )
+
+        Mockito.`when`(osClient.get(envelope.scope.recordGroupList[0].specification.base64Decode(), key.public)).thenReturn(
+            DIMEInputStream(
+                dime = dime,
+                `in` = InputStream.nullInputStream(),
+                signatures = signatures
+            )
+        )
+        Mockito.`when`(dimeInputStream.getDecryptedPayload(key)).thenReturn(signatureInputStream)
 
         //Execute
-        //TODO: Running into `Signature is missing from object, has item been fetched from object store?`
         val result = protoIndexer.indexFields(envelope.scope, keyPairs)
 
         //Validate
