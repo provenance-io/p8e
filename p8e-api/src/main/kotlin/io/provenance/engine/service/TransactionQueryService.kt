@@ -1,12 +1,12 @@
 package io.provenance.engine.service
 
 import io.provenance.engine.domain.*
-import org.springframework.stereotype.Component
+import org.springframework.stereotype.Service
 
 open class TransactionQueryError(message: String): Throwable(message)
 class TransactionNotFoundError(message: String): TransactionQueryError(message)
 
-@Component
+@Service
 class TransactionQueryService(val rpcClient: RPCClient) {
     @Throws(TransactionQueryError::class)
     fun fetchTransaction(hash: String): GetTxResult {
