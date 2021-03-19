@@ -233,7 +233,6 @@ class ContractManager(
             contractClazz,
             contractClassExecutor(contractClazz)
         ).also { contract ->
-            // contract.envelope.contract.spec.dataLocation.ref.hash
             invokerRole?.let { contract.satisfyParticipant(it, publicKey) }
         }
     }
