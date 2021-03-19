@@ -108,7 +108,7 @@ class EventStreamFactory(
         }
 
         fun streamEvents() {
-            // todo: need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
+            // todo: concurrency - need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
 
             // start event loop to start listening for events
             startEventLoop()
