@@ -11,6 +11,7 @@ import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.domain.GetTxResult
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.domain.TxResult
+import io.provenance.engine.service.TransactionNotFoundError
 import io.provenance.engine.service.TransactionQueryService
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.provenance.engine.service.TransactionStatusService
@@ -51,10 +52,7 @@ class TxErrorReaper(
             try {
                 P8eMDC.set(it.transactionHash.value.toTransactionHashes(), clear = true)
                 transactionQueryService.fetchTransaction(it.transactionHash.value).let { transactionStatus ->
-                    if (transactionStatus.isNotFound()) {
-                        log.warn("Retrying transaction not found in mempool with hash ${it.transactionHash.value}")
-                        transaction { transactionStatusService.retryDead(it, transactionStatus.data) }
-                    } else if (transactionStatus.isErrored()) {
+                    if (transactionStatus.isErrored()) {
                         transaction { transactionStatusService.setError(it, transactionStatus.getError()) }
                     } else if (transactionStatus.isSuccessful()) {
                         P8eMDC.set(transactionStatus.height.toBlockHeight())
@@ -67,13 +65,14 @@ class TxErrorReaper(
                         }
                     }
                 }
+            } catch (e: TransactionNotFoundError) {
+                log.warn("Retrying transaction not found in mempool with hash ${it.transactionHash.value}")
+                transaction { transactionStatusService.retryDead(it, e.message) }
             } catch (t: Throwable) {
                 log.warn("Error processing expired transaction", t)
             }
         }
     }
-
-    private fun GetTxResult.isNotFound() = txResult == null
 
     private fun GetTxResult.isErrored() = txResult?.code != null && txResult?.code > 0
 

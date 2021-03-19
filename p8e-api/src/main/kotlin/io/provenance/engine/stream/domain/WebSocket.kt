@@ -79,7 +79,14 @@ open class RPCRequest(val method: String, val params: Any? = null) {
 data class RPCResponse<T>(
     val jsonrpc: String,
     val id: String,
-    val result: T
+    val result: T? = null,
+    val error: RPCError? = null
+)
+
+data class RPCError(
+    val code: Int,
+    val message: String,
+    val data: String
 )
 
 data class SubscribeParams(
