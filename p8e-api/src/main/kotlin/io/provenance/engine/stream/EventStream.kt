@@ -190,8 +190,8 @@ class EventStreamFactory(
                     eventStreamService.subscribe(Subscribe("tm.event='NewBlock'"))
                     eventStreamService.streamEvents()
                 }
-                .filter { !it.result.query.isNullOrBlank() && it.result.data.value.block.header.height >= startHeight }
-                .map { event -> event.result }
+                .filter { !it.result!!.query.isNullOrBlank() && it.result.data.value.block.header.height >= startHeight }
+                .map { event -> event.result!! }
                 .subscribe(
                     { handleEvent(it) },
                     { handleError(it) }
