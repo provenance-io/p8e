@@ -12,15 +12,20 @@ import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.base64decode
 import io.p8e.util.timed
 import io.p8e.util.toHexString
+import io.provenance.engine.batch.removeShutdownHook
 import io.provenance.engine.batch.shutdownHook
 import io.provenance.engine.config.EventStreamProperties
+import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.service.TransactionQueryService
 import io.provenance.engine.stream.domain.*
 import io.provenance.p8e.shared.extension.logger
 import io.reactivex.disposables.Disposable
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import tendermint.abci.ABCIApplicationGrpc
 import java.net.URI
+import java.time.OffsetDateTime
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
@@ -84,11 +89,13 @@ class EventStreamFactory(
 
         private var subscription: Disposable? = null
 
+        private var shuttingDown = CountDownLatch(1)
+        private var shutdownHook: Thread? = null
+
         private var lastBlockSeen = AtomicLong(-1)
         private val eventMonitor = thread(start = false, isDaemon = true) {
             var lastBlockMonitored = lastBlockSeen.get()
-            while (true) {
-                Thread.sleep(30000)
+            while (!shuttingDown.await(30, TimeUnit.SECONDS)) {
                 val lastBlockSeen = lastBlockSeen.get()
                 log.debug("Checking for event stream liveliness [lastBlockSeen: $lastBlockSeen vs. lastBlockMonitored: $lastBlockMonitored]")
                 if (lastBlockSeen <= lastBlockMonitored) {
@@ -105,7 +112,7 @@ class EventStreamFactory(
 
             // start event loop to start listening for events
             startEventLoop()
-            shutdownHook { shutdown() } // ensure we close socket gracefully when shutting down
+            shutdownHook = shutdownHook { shutdown(false) } // ensure we close socket gracefully when shutting down
 
             timed("EventStream:streamHistory") {
                 streamHistory()
@@ -216,13 +223,15 @@ class EventStreamFactory(
             shutdown()
         }
 
-        fun shutdown() {
+        fun shutdown(removeShutdownHook: Boolean = true) {
             log.info("Cleaning up EventStream Websocket")
+            shuttingDown.countDown()
             lifecycle.onNext(Lifecycle.State.Stopped.WithReason(ShutdownReason.GRACEFUL))
             subscription
                 ?.takeIf { !it.isDisposed }
                 ?.dispose()
             observer.onCompleted()
+            shutdownHook?.takeIf { removeShutdownHook }?.also { removeShutdownHook(it) }
         }
 
         fun queryBatchRange(minHeight: Long, maxHeight: Long): List<EventBatch>? {

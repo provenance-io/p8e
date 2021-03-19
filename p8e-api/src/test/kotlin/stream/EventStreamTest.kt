@@ -13,6 +13,7 @@ import io.provenance.engine.stream.EventStreamFactory
 import io.provenance.engine.stream.domain.*
 import io.reactivex.Flowable
 import io.reactivex.rxkotlin.toFlowable
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
@@ -27,6 +28,8 @@ class EventStreamTest {
 
     lateinit var eventStreamService: EventStreamService
 
+    var eventStream: EventStreamFactory.EventStream? = null
+
     @Before
     fun setUp() {
         observer = mock()
@@ -39,13 +42,21 @@ class EventStreamTest {
         whenever(eventStreamService.observeWebSocketEvent()).thenReturn(listOf(mock<WebSocket.Event.OnConnectionOpened<WebSocket>>()).toFlowable())
     }
 
+    @After
+    fun tearDown() {
+        eventStream?.shutdown()
+    }
+
     fun buildEventStream(eventTypes: List<String> = listOf("scope_created", "scope_updated"), startHeight: Long = 100): EventStreamFactory.EventStream {
-        return EventStreamFactory.EventStream(eventTypes, startHeight, observer, lifecycle, eventStreamService, transactionQueryService)
+        return EventStreamFactory.EventStream(eventTypes, startHeight, observer, lifecycle, eventStreamService, transactionQueryService).also {
+            eventStream = it
+        }
     }
 
     @Test
     fun `History is not streamed if startHeight is less than 0`() {
         setLastBlockHeight(100)
+        queueEvents()
 
         buildEventStream(startHeight = -1).streamEvents()
 
@@ -55,6 +66,7 @@ class EventStreamTest {
     @Test
     fun `History is not streamed if startHeight is greater than the last block height`() {
         setLastBlockHeight(100)
+        queueEvents()
 
         buildEventStream(startHeight = 101).streamEvents()
 
@@ -64,6 +76,7 @@ class EventStreamTest {
     @Test
     fun `History is streamed if startHeight is less than last block height`() {
         setLastBlockHeight(100)
+        queueEvents()
         whenever(transactionQueryService.blocksWithTransactions(90, 100)).thenReturn(listOf(95))
         setBlockResults(95, listOf(txResult(0, listOf("scope_created"))))
 
@@ -75,6 +88,7 @@ class EventStreamTest {
     @Test
     fun `History of non-requested events is not streamed`() {
         setLastBlockHeight(100)
+        queueEvents()
         whenever(transactionQueryService.blocksWithTransactions(90, 100)).thenReturn(listOf(95))
         setBlockResults(95, listOf(txResult(0, listOf("scope_destroyed"))))
 
@@ -157,7 +171,7 @@ class EventStreamTest {
     fun setBlockResults(height: Long, transactions: List<TxResult>) {
         whenever(transactionQueryService.block(height)).thenReturn(BlockResponse(
             BlockID("block_${height}_hash", PartSetHeader(1, "part_${height}_hash")),
-            Block(BlockHeader(height), BlockData(transactions.mapIndexed { i, _ -> "txhash" }))
+            Block(BlockHeader(height), BlockData(transactions.map { "txhash" }))
         ))
         whenever(transactionQueryService.blockResults(height)).thenReturn(BlockResults(
             height,
