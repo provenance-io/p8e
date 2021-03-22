@@ -1,0 +1,332 @@
+syntax = "proto3";
+package provenance.metadata.v1;
+
+import "gogoproto/gogo.proto";
+import "provenance/metadata/v1/scope.proto";
+import "provenance/metadata/v1/specification.proto";
+import "provenance/metadata/v1/p8e/p8e.proto";
+
+import "provenance/metadata/v1/objectstore.proto";
+
+option go_package = "github.com/provenance-io/provenance/x/metadata/types";
+
+option java_package        = "io.provenance.metadata.v1";
+option java_multiple_files = true;
+
+// Msg defines the Metadata Msg service.
+service Msg {
+  // AddScope adds a new scope
+  rpc AddScope(MsgAddScopeRequest) returns (MsgAddScopeResponse);
+  // DeleteScope deletes a scope and all associated Records, Sessions
+  rpc DeleteScope(MsgDeleteScopeRequest) returns (MsgDeleteScopeResponse);
+
+  // AddSession adds a new session context to a scope
+  rpc AddSession(MsgAddSessionRequest) returns (MsgAddSessionResponse);
+  // AddRecord adds a set of records in a session within a scope
+  rpc AddRecord(MsgAddRecordRequest) returns (MsgAddRecordResponse);
+  // DeleteRecord deletes a record in a session
+  rpc DeleteRecord(MsgDeleteRecordRequest) returns (MsgDeleteRecordResponse);
+
+  // AddScopeSpecification adds a scope specification
+  rpc AddScopeSpecification(MsgAddScopeSpecificationRequest) returns (MsgAddScopeSpecificationResponse);
+  // DeleteScopeSpecification deletes a scope specification
+  rpc DeleteScopeSpecification(MsgDeleteScopeSpecificationRequest) returns (MsgDeleteScopeSpecificationResponse);
+
+  // AddContractSpecification adds a contract specification
+  rpc AddContractSpecification(MsgAddContractSpecificationRequest) returns (MsgAddContractSpecificationResponse);
+  // DeleteContractSpecification deletes a contract specification
+  rpc DeleteContractSpecification(MsgDeleteContractSpecificationRequest)
+      returns (MsgDeleteContractSpecificationResponse);
+
+  // AddRecordSpecification adds a record specification
+  rpc AddRecordSpecification(MsgAddRecordSpecificationRequest) returns (MsgAddRecordSpecificationResponse);
+  // DeleteRecordSpecification deletes a record specification
+  rpc DeleteRecordSpecification(MsgDeleteRecordSpecificationRequest) returns (MsgDeleteRecordSpecificationResponse);
+
+  // AddP8eContractSpec adds a P8e v39 contract spec as a v40 ContractSpecification
+  rpc AddP8eContractSpec(MsgAddP8eContractSpecRequest) returns (MsgAddP8eContractSpecResponse) {
+    option deprecated = true;
+  };
+  // P8EMemorializeContract records the results of a P8e contract execution as a session and set of records in a scope
+  // It only exists to help facilitate the transition. The MemorializeContract is the one to use now.
+  rpc P8eMemorializeContract(MsgP8eMemorializeContractRequest) returns (MsgP8eMemorializeContractResponse) {
+    option deprecated = true;
+  };
+
+  // Os Locator
+  // BindOSLocator binds a owner address to a uri.
+  rpc BindOSLocator(MsgBindOSLocatorRequest) returns (MsgBindOSLocatorResponse);
+  // DeleteOSLocator defines a method to delete existing OSLocator record by the current owner.
+  rpc DeleteOSLocator(MsgDeleteOSLocatorRequest) returns (MsgDeleteOSLocatorResponse);
+  // Modify existing OSLocator record by the current owner
+  rpc ModifyOSLocator(MsgModifyOSLocatorRequest) returns (MsgModifyOSLocatorResponse);
+}
+
+// MsgAddScopeRequest adds a new scope
+message MsgAddScopeRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  Scope           scope   = 1 [(gogoproto.nullable) = false];
+  repeated string signers = 2;
+}
+
+// MsgAddScopeResponse from an add scope request
+message MsgAddScopeResponse {}
+
+// MsgDeleteScopeRequest deletes a scope
+message MsgDeleteScopeRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // Unique ID for the scope to delete
+  bytes scope_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"scope_id\""
+  ];
+  repeated string signers = 2;
+}
+
+// MsgDeleteScopeResponse from a delete scope request
+message MsgDeleteScopeResponse {}
+
+// MsgAddSessionRequest adds a new session
+message MsgAddSessionRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  Session         session = 1;
+  repeated string signers = 2;
+}
+
+// MsgAddSessionResponse from an add session request
+message MsgAddSessionResponse {}
+
+// MsgAddRecordRequest is a request to add a session of records to a scope
+message MsgAddRecordRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  bytes session_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"session_id\""
+  ];
+
+  Record          record  = 2;
+  repeated string signers = 3;
+}
+
+// MsgAddRecordResponse from an add records request
+message MsgAddRecordResponse {}
+
+// MsgDeleteRecordRequest is a request to add a session of records to a scope
+message MsgDeleteRecordRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  bytes record_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"record_id\""
+  ];
+
+  repeated string signers = 2;
+}
+
+// MsgDeleteRecordResponse from a delete record request
+message MsgDeleteRecordResponse {}
+
+// MsgAddScopeSpecificationRequest is a request to add a scope specification
+message MsgAddScopeSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  ScopeSpecification specification = 1 [(gogoproto.nullable) = false];
+  repeated string    signers       = 2;
+}
+
+// MsgAddScopeSpecificationResponse from an add scope specification request
+message MsgAddScopeSpecificationResponse {}
+
+// MsgDeleteScopeSpecificationRequest deletes a scope specification
+message MsgDeleteScopeSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // MetadataAddress for the scope specification to delete.
+  bytes specification_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"specification_id\""
+  ];
+  repeated string signers = 2;
+}
+
+// MsgDeleteScopeSpecificationResponse from a delete scope specification request
+message MsgDeleteScopeSpecificationResponse {}
+
+// MsgAddContractSpecificationRequest is a request to add a contract specification
+message MsgAddContractSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  ContractSpecification specification = 1 [(gogoproto.nullable) = false];
+  repeated string       signers       = 2;
+}
+
+// AddContractSpecificationResponse from an add contract specification request
+message MsgAddContractSpecificationResponse {}
+
+// MsgDeleteContractSpecificationRequest deletes a contract specification
+message MsgDeleteContractSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // MetadataAddress for the contract specification to delete.
+  bytes specification_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"specification_id\""
+  ];
+  repeated string signers = 2;
+}
+
+// MsgDeleteContractSpecificationResponse from a delete contract specification request
+message MsgDeleteContractSpecificationResponse {}
+
+// MsgAddRecordSpecificationRequest is a request to add a record specification
+message MsgAddRecordSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  RecordSpecification specification = 1 [(gogoproto.nullable) = false];
+  repeated string     signers       = 2;
+}
+
+// MsgAddRecordSpecificationResponse from an add record specification request
+message MsgAddRecordSpecificationResponse {}
+
+// MsgDeleteRecordSpecificationRequest deletes a record specification
+message MsgDeleteRecordSpecificationRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // MetadataAddress for the record specification to delete.
+  bytes specification_id = 1 [
+    (gogoproto.nullable)   = false,
+    (gogoproto.customtype) = "MetadataAddress",
+    (gogoproto.moretags)   = "yaml:\"specification_id\""
+  ];
+  repeated string signers = 2;
+}
+
+// MsgDeleteRecordSpecificationResponse from a delete record specification request
+message MsgDeleteRecordSpecificationResponse {}
+
+// MsgAddP8eContractSpecRequest records the result of a change ownership p8e contract execution
+message MsgAddP8eContractSpecRequest {
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // ContractSpec v39 p8e ContractSpect to be converted into a v40
+  p8e.ContractSpec contractspec = 1 [(gogoproto.nullable) = false];
+  repeated string  signers      = 2;
+}
+
+// MsgAddP8eContractSpecResponse returns a successful response
+message MsgAddP8eContractSpecResponse {}
+
+// MsgP8eMemorializeContractRequest is the input for a P8eMemorializeContract call
+message MsgP8eMemorializeContractRequest {
+  option deprecated                   = true;
+  option (gogoproto.equal)            = false;
+  option (gogoproto.goproto_stringer) = false;
+  option (gogoproto.stringer)         = false;
+  option (gogoproto.goproto_getters)  = false;
+
+  // The scope id of the object being add or modified on blockchain.
+  string scope_id = 1;
+  // The uuid of the contract execution.
+  string group_id = 2;
+  // The scope specification id.
+  string scope_specification_id = 3;
+  // The new recitals for the scope.  Used in leu of Contract for direct ownership changes.
+  provenance.metadata.v1.p8e.Recitals recitals = 4;
+  // The executed contract.
+  provenance.metadata.v1.p8e.Contract contract = 5;
+  // The contract signatures
+  provenance.metadata.v1.p8e.SignatureSet signatures = 6;
+  // The bech32 address of the notary (ie the broadcaster of this message).
+  string invoker = 7;
+}
+
+// MsgP8eMemorializeContractResponse is the output for a P8eMemorializeContract call
+message MsgP8eMemorializeContractResponse {
+  option deprecated = true;
+}
+
+// MsgBindOSLocatorRequest defines an sdk.Msg type that is used to add an address of an owner to a particular uri.
+message MsgBindOSLocatorRequest {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+  // The object locator to bind the address to bind to the URI.
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
+
+// MsgModifyOSLocatorRequest defines an sdk.Msg type that is used to modify a uri associated with an owner address.
+message MsgModifyOSLocatorRequest {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+  // The object locator to bind the address to bind to the URI.
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
+
+// MsgBindOSLocatorResponse defines the Msg/BindObjectLocator response type.
+message MsgBindOSLocatorResponse {
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
+
+// MsgModifyOSLocatorResponse defines the Msg/ModifyObjectLocator response type
+message MsgModifyOSLocatorResponse {
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
+
+// MsgDeleteOSLocatorRequest defines an sdk.Msg type that is used to remove an existing OSLocator record binding.
+message MsgDeleteOSLocatorRequest {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  // The record being removed
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
+
+// MsgDeleteNameResponse defines the Msg/DeleteName response type.
+message MsgDeleteOSLocatorResponse {
+  ObjectStoreLocator locator = 1 [(gogoproto.nullable) = false];
+}
