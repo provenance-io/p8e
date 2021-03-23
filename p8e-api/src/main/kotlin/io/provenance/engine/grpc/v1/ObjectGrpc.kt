@@ -15,9 +15,6 @@ import io.p8e.proto.Objects
 import io.p8e.proto.Objects.ObjectLoadRequest
 import io.p8e.proto.Objects.ObjectLoadResponse
 import io.p8e.proto.Objects.ObjectLoadJsonResponse
-import io.p8e.util.NotFoundException
-import io.p8e.util.orThrowNotFound
-import io.p8e.util.toHex
 import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toByteString
 import io.p8e.util.toJsonString
@@ -106,15 +103,15 @@ class ObjectGrpc(
             val signingKeyPair = transaction{ affiliateService.getSigningKeyPair(publicKey()) }
             val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey())
             val spec = DefinitionService(osClient).loadProto(encryptionKeyPair, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signingKeyPair.public) as ContractSpecs.ContractSpec
-            val childSpec = spec.findChildSpec(request.classname).orThrowNotFound("${request.classname} spec not found within contract spec with hash ${request.contractSpecHash} for public key ${publicKey().toHex()}")
 
-            val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}-${childSpec.resourceLocation.ref.hash}"
+            val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}"
             val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
                 MemoryClassLoader("", ByteArrayInputStream(ByteArray(0)))
             }
 
             DefinitionService(osClient, memoryClassLoader).run {
-                addJar(encryptionKeyPair, childSpec)
+                // spec.definition is the contract uberjar
+                addJar(encryptionKeyPair, spec.definition)
 
                 forThread {
                     loadProto(encryptionKeyPair, request.hash, request.classname, signingKeyPair.public)
@@ -127,17 +124,4 @@ class ObjectGrpc(
                 .complete(responseObserver)
         }
     }
-
-    /**
-     * Find a given DefinitionSpec by className within the ContractSpec's definition, inputs, conditions, or considerations.
-     */
-    private fun ContractSpecs.ContractSpec.findChildSpec(
-        className: String
-    ) = listOf(
-        listOf(definition),
-        inputSpecsList,
-        conditionSpecsList.flatMap { it.inputSpecsList + it.outputSpec.spec },
-        considerationSpecsList.flatMap { it.inputSpecsList + it.outputSpec.spec }
-    ).flatten()
-        .firstOrNull { it.resourceLocation.classname == className }
 }
