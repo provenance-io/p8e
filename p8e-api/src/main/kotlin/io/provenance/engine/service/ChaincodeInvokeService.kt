@@ -1,6 +1,8 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
+import cosmos.tx.v1beta1.TxOuterClass.TxBody
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
@@ -10,9 +12,9 @@ import io.p8e.util.configureProvenance
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.domain.TransactionStatusRecord
+import io.provenance.metadata.v1.MsgAddP8eContractSpecRequest
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.pbc.clients.*
-import io.provenance.pbc.clients.p8e.addP8EContractSpec
 import io.provenance.pbc.clients.p8e.changeScopeOwnership
 import io.provenance.pbc.clients.p8e.memorializeP8EContract
 import io.provenance.pbc.clients.tx.BatchTx
@@ -30,7 +32,8 @@ class ChaincodeInvokeService(
     private val accountProvider: Account,
     private val transactionStatusService: TransactionStatusService,
     private val sc: SimpleClient,
-    private val chaincodeProperties: ChaincodeProperties
+    private val chaincodeProperties: ChaincodeProperties,
+    private val provenanceGrpc: ProvenanceGrpcService,
 ) : IChaincodeInvokeService {
     private val log = logger()
 
@@ -285,21 +288,34 @@ class ChaincodeInvokeService(
     fun addContractSpecs(specList: List<ContractSpec>) {
         log.info("received a set of contract specs: ${specList.size}")
         try {
-            synchronized(sc) { // TODO - Replace after service account setup
-                batch {
-                    specList.map {
-                        prepare { sc.contractSpecs.addP8EContractSpec(it) }
+            val txBody = specList.map {
+                MsgAddP8eContractSpecRequest.newBuilder()
+                    .setContractspec(it.toProv())
+                    .addAllSigners(listOf(accountProvider.bech32Address()))
+                    .build()
+            }.toTxBody()
+
+            synchronized(provenanceGrpc) {
+                batchTx(txBody).also {
+                    if (it.txResponse.code != 0) {
+                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                     }
-                }.also {
-                    scBatchTx(it).also {
-                        log.info("batch made it to mempool with txhash = ${it.txhash}")
-                    }
+
+                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
                 }
             }
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
             throw e
         }
+    }
+
+    fun batchTx(body: TxBody): BroadcastTxResponse {
+        val accountInfo = provenanceGrpc.accountInfo()
+
+        val estimate = provenanceGrpc.estimateTx(body, accountInfo)
+
+        return provenanceGrpc.batchTx(body, accountInfo, 0, estimate)
     }
 
     /**

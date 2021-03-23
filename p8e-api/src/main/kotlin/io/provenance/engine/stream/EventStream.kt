@@ -5,7 +5,6 @@ import com.tinder.scarlet.Scarlet
 import com.tinder.scarlet.ShutdownReason
 import com.tinder.scarlet.WebSocket
 import com.tinder.scarlet.lifecycle.LifecycleRegistry
-import io.grpc.netty.NettyChannelBuilder
 import io.p8e.crypto.Hash
 import io.p8e.engine.threadedMap
 import io.p8e.util.ThreadPoolFactory
@@ -14,17 +13,11 @@ import io.p8e.util.timed
 import io.p8e.util.toHexString
 import io.provenance.engine.batch.removeShutdownHook
 import io.provenance.engine.batch.shutdownHook
-import io.provenance.engine.config.EventStreamProperties
-import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.service.TransactionQueryService
 import io.provenance.engine.stream.domain.*
 import io.provenance.p8e.shared.extension.logger
 import io.reactivex.disposables.Disposable
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
-import tendermint.abci.ABCIApplicationGrpc
-import java.net.URI
-import java.time.OffsetDateTime
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -34,30 +27,10 @@ class EventStreamStaleException(message: String) : Throwable(message)
 
 @Component
 class EventStreamFactory(
-    private val eventStreamProperties: EventStreamProperties,
     private val transactionQueryService: TransactionQueryService,
     private val eventStreamBuilder: Scarlet.Builder
 ) {
     private val log = logger()
-
-//    private val abciService = URI(eventStreamProperties.uri).let { uri ->
-//        val channel = NettyChannelBuilder.forAddress(uri.host, uri.port)
-//            // todo: set appropriate options for timeouts and what-not
-//            .also {
-//                if (uri.scheme == "grpcs") {
-//                    it.useTransportSecurity()
-//                } else {
-//                    it.usePlaintext()
-//                }
-//            }
-//            .maxInboundMessageSize(20 * 1024 * 1024) // ~ 20 MB
-//            .idleTimeout(5, TimeUnit.MINUTES)
-//            .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
-//            .keepAliveTimeout(20, TimeUnit.SECONDS)
-//            .build()
-//
-//        ABCIApplicationGrpc.newBlockingStub(channel)
-//    }
 
     fun getStream(eventTypes: List<String>, startHeight: Long, observer: EventStreamResponseObserver<EventBatch>): EventStream {
         val lifecycle = LifecycleRegistry(0L)
@@ -252,27 +225,27 @@ class EventStreamFactory(
 
         fun queryEvents(height: Long): List<StreamEvent> {
             val block = transactionQueryService.block(height)
-            if (block.block.data.txs == null) { // empty block
+            if (block.block.data.txs == null || block.block.data.txs.isEmpty()) { // empty block
                 return listOf()
             }
 
             val results = transactionQueryService.blockResults(height)
 
             return results.txsResults
-                .flatMapIndexed { index, tx ->
+                ?.flatMapIndexed { index, tx ->
                     val txHash = block.block.data.txs[index].hash()
                     tx.events
                         .filter { it.shouldStream() }
                         .map { event ->
                             StreamEvent(
-                                height = results.height,
+                                height = height,
                                 eventType = event.type,
                                 resultIndex = index,
                                 txHash = txHash,
                                 attributes = event.attributes
                             )
                         }
-                }
+                } ?: listOf()
         }
 
         private fun Event.shouldStream(): Boolean = eventTypes.contains(type) // check for simple event type match first
