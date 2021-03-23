@@ -15,6 +15,10 @@ buildscript {
     }
 }
 
+plugins {
+    id 'com.google.protobuf'
+}
+
 apply plugin: 'idea'
 apply plugin: 'eclipse'
 apply plugin: 'kotlin-spring'
@@ -22,6 +26,7 @@ apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
 apply plugin: "com.google.osdetector"
 apply plugin: 'jacoco'
+apply plugin: 'de.undercouch.download'
 
 // In this section you declare where to find the dependencies of your project
 repositories {
@@ -34,10 +39,16 @@ sourceSets {
         java {
             srcDirs += 'src/main/kotlin'
         }
+        proto {
+            srcDir "src/main/proto"
+        }
     }
     test {
         java {
             srcDirs += 'src/test/kotlin'
+        }
+        proto {
+            srcDir "src/main/proto"
         }
     }
 }
@@ -100,6 +111,16 @@ dependencies {
         implementation('io.netty:netty-transport-native-epoll:4.1.50.Final:linux-x86_64')
     }
 
+    // WebSocket
+    implementation "com.tinder.scarlet:scarlet:$scarlet_version"
+    implementation "com.tinder.scarlet:websocket-okhttp:$scarlet_version"
+    implementation "com.tinder.scarlet:stream-adapter-rxjava2:$scarlet_version"
+    implementation "com.tinder.scarlet:message-adapter-moshi:$scarlet_version"
+    implementation 'com.squareup.okhttp3:logging-interceptor:3.14.0'
+    testImplementation "com.tinder.scarlet:websocket-mockwebserver:$scarlet_version"
+    testImplementation "com.tinder.scarlet:test-utils:$scarlet_version"
+    testImplementation "io.reactivex.rxjava2:rxkotlin:2.2.0"
+
     // Spring boot
     implementation "org.springframework.boot:spring-boot-starter-web:$springboot_version"
     implementation "org.springframework.boot:spring-boot-starter-integration:$springboot_version"
@@ -134,6 +155,12 @@ dependencies {
     // Test Things
     testImplementation 'io.grpc:grpc-testing:1.35.0'
     testImplementation 'com.h2database:h2:1.4.200'
+
+    // grpc for provenance proto compilation
+    implementation "com.google.protobuf:protobuf-java:$protobuf_version"
+    implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
+    implementation group: 'io.grpc', name: 'grpc-stub', version: "$grpc_version"
+    implementation group: 'io.grpc', name: 'grpc-protobuf', version: "$grpc_version"
 }
 
 jacocoTestReport {
@@ -155,5 +182,66 @@ springBoot {
 dependencyManagement {
     resolutionStrategy {
         cacheChangingModulesFor 0, 'seconds'
+    }
+}
+
+task downloadCosmosProtos(type: Download) {
+    src "https://github.com/cosmos/cosmos-sdk/tarball/v$cosmos_version"
+    dest new File(buildDir, "${cosmos_version}.tar.gz")
+    onlyIfModified true
+}
+
+task downloadAndUntarCosmosProtos(dependsOn: downloadCosmosProtos, type: Copy) {
+    from(tarTree(downloadCosmosProtos.dest)) {
+        include "**/*.proto"
+        eachFile { fcd ->
+            def relativePath = new RelativePath(true, fcd.relativePath.segments.drop(1))
+            def isThirdParty = relativePath.toString().startsWith("third_party")
+            if (isThirdParty) {
+                relativePath = new RelativePath(true, relativePath.segments.drop(1))
+            }
+            fcd.relativePath = relativePath
+        }
+        includeEmptyDirs = false
+    }
+    into 'src/main'
+}
+
+task downloadProvenanceProtos(type: Download) {
+    src "https://github.com/provenance-io/provenance/releases/download/v${provenance_version}/protos-v${provenance_version}.zip"
+    dest new File(buildDir, "${provenance_version}.zip")
+    onlyIfModified true
+}
+
+task downloadAndUnzipProvenanceProtos(dependsOn: [downloadProvenanceProtos, downloadAndUntarCosmosProtos], type: Copy) {
+    from zipTree(downloadProvenanceProtos.dest)
+    into 'src/main'
+}
+
+task downloadAllExternalProtos(dependsOn: [downloadAndUnzipProvenanceProtos, downloadAndUntarCosmosProtos]) {
+    tasks.findByName('downloadAndUnzipProvenanceProtos').mustRunAfter 'downloadAndUntarCosmosProtos'
+}
+
+protobuf {
+    protoc {
+        // The artifact spec for the Protobuf Compiler
+        artifact = "com.google.protobuf:protoc:$protobuf_version"
+    }
+    plugins {
+        // Optional: an artifact spec for a protoc plugin, with "grpc" as
+        // the identifier, which can be referred to in the "plugins"
+        // container of the "generateProtoTasks" closure.
+        grpc {
+            artifact = 'io.grpc:protoc-gen-grpc-java:1.0.0-pre2'
+        }
+    }
+    generateProtoTasks {
+        ofSourceSet('main')*.plugins {
+            // Apply the "grpc" plugin whose spec is defined above, without
+            // options.  Note the braces cannot be omitted, otherwise the
+            // plugin will not be added. This is because of the implicit way
+            // NamedDomainObjectContainer binds the methods.
+            grpc {}
+        }
     }
 }

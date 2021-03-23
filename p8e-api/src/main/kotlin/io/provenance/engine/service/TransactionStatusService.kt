@@ -62,8 +62,10 @@ class TransactionStatusService(
             envelope.status = Status.SIGNED
             envelope.chaincodeTime = null
 
-            val event = envelope.uuid.value.toProtoUuidProv().toEvent(Event.ENVELOPE_CHAINCODE)
-            eventService.submitEvent(event, envelope.uuid.value)
+            if (envelope.isInvoker ?: false) {
+                val event = envelope.uuid.value.toProtoUuidProv().toEvent(Event.ENVELOPE_CHAINCODE)
+                eventService.submitEvent(event, envelope.uuid.value)
+            }
         }
     }
 }
