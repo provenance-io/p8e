@@ -164,18 +164,16 @@ class ContractManager(
         )
     }
 
-    private fun <T: P8eContract> getContractHash(clazz: Class<T>): String {
+    private fun <T: P8eContract> getContractHash(clazz: Class<T>): ContractHash {
         return contractHashes.find {
             it.getClasses()[clazz.name] == true
         }.orThrow { IllegalStateException("Unable to find ContractHash instance to match ${clazz.name}, please verify you are running a Provenance bootstrapped JAR.") }
-            .getHash()
     }
 
-    private fun getProtoHash(clazz: Class<*>): String {
+    private fun getProtoHash(contractHash: ContractHash, clazz: Class<*>): ProtoHash {
         return protoHashes.find {
-            it.getClasses()[clazz.name] == true
+            it.getUuid() == contractHash.getUuid() && it.getClasses()[clazz.name] == true
         }.orThrow { IllegalStateException("Unable to find ProtoHash instance to match ${clazz.name}, please verify you are running a Provenance bootstrapped JAR.") }
-            .getHash()
     }
 
     private fun <T: P8eContract> newContractProto(contractClazz: Class<T>): Contracts.Contract.Builder =
@@ -185,7 +183,7 @@ class ContractManager(
                     contractClazz.name,
                     ProtoUtil.locationBuilderOf(
                         contractClazz.name,
-                        ProvenanceReference.newBuilder().setHash(getContractHash(contractClazz)).build()
+                        ProvenanceReference.newBuilder().setHash(getContractHash(contractClazz).getHash()).build()
                     ),
                     FACT
                 ).build()
@@ -322,15 +320,16 @@ class ContractManager(
     }
 
     fun <T: P8eContract> dehydrateSpec(clazz: Class<T>): ContractSpec {
+        val contractHash = getContractHash(clazz)
         val protoHash = clazz.methods
             .find { it.returnType != null && Message::class.java.isAssignableFrom(it.returnType) }
             ?.returnType
-            ?.let { getProtoHash(it) }
+            ?.let { getProtoHash(contractHash, it) }
             .orThrow {
                 IllegalStateException("Unable to find hash for proto JAR for return types on ${clazz.name}")
             }
-        val contractRef = ProvenanceReference.newBuilder().setHash(getContractHash(clazz)).build()
-        val protoRef = ProvenanceReference.newBuilder().setHash(protoHash).build()
+        val contractRef = ProvenanceReference.newBuilder().setHash(contractHash.getHash()).build()
+        val protoRef = ProvenanceReference.newBuilder().setHash(protoHash.getHash()).build()
 
         return ContractSpecMapper.dehydrateSpec(clazz.kotlin, contractRef, protoRef)
     }
