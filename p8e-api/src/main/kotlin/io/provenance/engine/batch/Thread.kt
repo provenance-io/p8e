@@ -28,8 +28,14 @@ fun threadFactory(name: String? = null): ThreadFactory = ThreadFactoryBuilder().
 fun fixedSizeThreadPool(name: String? = null, numThreads: Int = defaultThreadCount): ExecutorService =
     threadFactory(name).asFixedPool(numThreads)
 
-fun shutdownHook(fn: () -> Unit) {
-    Runtime.getRuntime().addShutdownHook(thread(start = false, block = fn))
+fun shutdownHook(fn: () -> Unit): Thread {
+    return thread(start = false, block = fn).also {
+        Runtime.getRuntime().addShutdownHook(it)
+    }
+}
+
+fun removeShutdownHook(hook: Thread) {
+    Runtime.getRuntime().removeShutdownHook(hook)
 }
 
 /**
