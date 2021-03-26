@@ -48,10 +48,10 @@ fun P8eError.isContractRetryable(): Boolean = when (this) {
     is P8eError.ContractDefinition -> false
     is P8eError.ContractValidation -> false
     is P8eError.ProtoParse -> false
-    is P8eError.NotFound -> true
-    is P8eError.ExecutionError -> true
-    is P8eError.PreExecutionError -> true
-    is P8eError.Unknown -> true
+    is P8eError.NotFound -> false
+    is P8eError.ExecutionError -> false
+    is P8eError.PreExecutionError -> false
+    is P8eError.Unknown -> false
 }
 
 /**

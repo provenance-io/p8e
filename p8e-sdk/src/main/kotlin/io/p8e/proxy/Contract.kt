@@ -432,7 +432,7 @@ class Contract<T: P8eContract>(
     fun getStagedExecutionUuid() = stagedExecutionUuid
 
     private fun packageContract(): Envelope {
-        if (executed.getAndSet(true))
+        if (executed.get(true))
             return this.executionEnvelope
 
         this.stagedContract = populateContract()
@@ -458,6 +458,8 @@ class Contract<T: P8eContract>(
             }
             .clearSignatures()
             .build()
+
+        executed.set(true)
 
         // Save spec in case its not loaded
         // TODO This probably should be removed since we can't on the fly install specs.
