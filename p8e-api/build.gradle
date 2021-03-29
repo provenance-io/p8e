@@ -11,7 +11,7 @@ buildscript {
     dependencies {
         classpath "org.springframework.boot:spring-boot-gradle-plugin:$springboot_version"
         classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlin_version"
-        classpath 'com.google.gradle:osdetector-gradle-plugin:1.6.2'
+        classpath 'com.google.gradle:osdetector-gradle-plugin:1.7.0'
     }
 }
 
@@ -98,17 +98,13 @@ dependencies {
 
     // GRPC
     implementation "io.grpc:grpc-netty-shaded:$grpc_version"
-    implementation("io.grpc:grpc-netty:$grpc_version") {
-        force true
-    }
-    implementation("io.netty:netty-handler:4.1.48.Final") {
-        force true
-    }
+    implementation("io.grpc:grpc-netty:$grpc_version")
+    implementation("io.netty:netty-handler:$netty_handler_version")
 
     if (osdetector.os == 'macos' || osdetector.os == 'freebsd') {
-        implementation('io.netty:netty-transport-native-kqueue:4.1.50.Final:osx-x86_64')
+        implementation("io.netty:netty-transport-native-kqueue:$netty_transport_version:osx-x86_64")
     } else if (osdetector.os == 'linux') {
-        implementation('io.netty:netty-transport-native-epoll:4.1.50.Final:linux-x86_64')
+        implementation("io.netty:netty-transport-native-epoll:$netty_transport_version:linux-x86_64")
     }
 
     // WebSocket
@@ -127,9 +123,6 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-actuator:$springboot_version"
     implementation 'io.github.lognet:grpc-spring-boot-starter:3.4.3'
     implementation "org.springframework.boot:spring-boot-starter-validation:$springboot_version"
-
-    // This compile is found on compile classpath of this component and consumers.
-    implementation 'com.google.guava:guava:23.0'
 
     // Just SQL Things
     implementation "org.postgresql:postgresql:$postgres_version"
@@ -170,7 +163,7 @@ jacocoTestReport {
     }
 }
 
-def profiles = System.getenv("SPRING_PROFILES_ACTIVE") ?: "development"
+def profiles = System.getenv("SPRING_PROFILES_ACTIVE") ?: "local"
 bootRun {
     args = ["--spring.profiles.active=$profiles"]
 }
