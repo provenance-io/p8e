@@ -4,6 +4,7 @@ import com.google.protobuf.Message
 import io.p8e.ContractManager
 import io.p8e.proto.Contracts.Contract
 import io.p8e.util.ThreadPoolFactory
+import java.io.ByteArrayInputStream
 import java.security.PublicKey
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -17,12 +18,16 @@ class PermissionUpdater(
 ) {
 
     fun saveConstructorArguments() {
+        // TODO this can be optimized by checking the recitals and record groups and determining what subset, if any,
+        // of input facts need to be fetched and stored in order only save the objects that are needed by some of
+        // the recitals
         contract.inputsList.threadedMap(executor) { fact ->
-            val message = contractManager.loadProto(
-                fact.dataLocation.ref.hash,
-                fact.dataLocation.classname
-            )
-            contractManager.saveProto(message, audience = audience)
+            with (contractManager.client) {
+                val obj = this.loadObject(fact.dataLocation.ref.hash)
+                val inputStream = ByteArrayInputStream(obj)
+
+                this.storeObject(inputStream, audience)
+            }
         }
     }
 
