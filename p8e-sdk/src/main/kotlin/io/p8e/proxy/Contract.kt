@@ -432,7 +432,7 @@ class Contract<T: P8eContract>(
     fun getStagedExecutionUuid() = stagedExecutionUuid
 
     private fun packageContract(): Envelope {
-        if (executed.get(true))
+        if (executed.get())
             return this.executionEnvelope
 
         this.stagedContract = populateContract()
@@ -460,10 +460,6 @@ class Contract<T: P8eContract>(
             .build()
 
         executed.set(true)
-
-        // Save spec in case its not loaded
-        // TODO This probably should be removed since we can't on the fly install specs.
-        saveSpec(contractManager)
 
         permissionUpdater.saveProposedFacts(this.stagedExecutionUuid.toUuidProv(), this.stagedProposedProtos)
 
