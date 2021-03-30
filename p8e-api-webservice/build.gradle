@@ -87,8 +87,7 @@ dependencies {
     implementation 'ch.qos.logback:logback-core:1.2.3'
 
     // Test Things
-    testImplementation 'com.h2database:h2:1.0.60'
-    testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.1.0'
+    testImplementation 'com.h2database:h2:1.4.200'
 }
 
 def profiles = System.getenv("SPRING_PROFILES_ACTIVE") ?: "development"

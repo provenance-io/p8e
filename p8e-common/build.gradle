@@ -29,12 +29,12 @@ dependencies {
     implementation "io.github.openfeign:feign-core:10.2.3"
     implementation "com.auth0:java-jwt:$jwt_version"
 
-    implementation "io.netty:netty-handler:4.1.48.Final"
-    implementation 'io.netty:netty-tcnative-boringssl-static:2.0.31.Final'
-    implementation "io.grpc:grpc-api:$grpc_version"
-    implementation "io.grpc:grpc-netty:$grpc_version"
+    implementation("io.netty:netty-handler:$netty_handler_version")
+    implementation("io.netty:netty-tcnative-boringssl-static:$netty_ssl_version")
+    implementation("io.grpc:grpc-api:$grpc_version")
+    implementation("io.grpc:grpc-netty:$grpc_version")
     implementation("io.grpc:grpc-protobuf:$grpc_version")
-    implementation group: 'io.grpc', name: 'grpc-stub', version: grpc_version
+    implementation("io.grpc:grpc-stub:$grpc_version")
 
     implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
 
