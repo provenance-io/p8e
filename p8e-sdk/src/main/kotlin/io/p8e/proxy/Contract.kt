@@ -459,6 +459,10 @@ class Contract<T: P8eContract>(
             .clearSignatures()
             .build()
 
+        // TODO This probably should be removed since we can't on the fly install specs. It would have
+        // to get saved during bootstrap addSpec
+        saveSpec(contractManager)
+
         executed.set(true)
 
         permissionUpdater.saveProposedFacts(this.stagedExecutionUuid.toUuidProv(), this.stagedProposedProtos)
