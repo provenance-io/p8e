@@ -719,7 +719,7 @@ class Contract<T: P8eContract>(
             execute(this.packageContract())
         }
     } catch (t: Throwable) {
-        Either.Left(P8eError.PreExecutionError(t))
+        Either.left(P8eError.PreExecutionError(t))
     }
 
     private fun execute(

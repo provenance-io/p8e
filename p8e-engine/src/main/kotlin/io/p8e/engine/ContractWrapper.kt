@@ -137,7 +137,7 @@ class ContractWrapper(
                     FactInstance(
                         name,
                         message.javaClass,
-                        Either.Left(message)
+                        Either.left(message)
                     )
                 }
             }.toMutableList()
@@ -148,7 +148,7 @@ class ContractWrapper(
                 FactInstance(
                     name,
                     messages.first().javaClass,
-                    Either.Right(messages)
+                    Either.right(messages)
                 )
             }.let(facts::addAll)
         return facts

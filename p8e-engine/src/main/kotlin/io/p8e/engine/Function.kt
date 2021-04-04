@@ -64,7 +64,7 @@ class Function<T: P8eContract>(
                 FactInstance(
                     proposedFact.name,
                     message.javaClass,
-                    Either.Left(message)
+                    Either.left(message)
                 )
             }
         return method.parameters.mapNotNull { parameter ->
@@ -73,7 +73,7 @@ class Function<T: P8eContract>(
                 facts,
                 proposed
             )
-        }.map { (it.messageOrCollection as Either.Left).value }
+        }.map { (it.messageOrCollection as Either.Left).a }
     }
 
     private fun getFunctionParameterFact(

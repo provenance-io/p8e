@@ -1,24 +1,21 @@
 package io.p8e.grpc.observers
 
+import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
 import io.provenance.p8e.shared.extension.logger
+import java.io.Closeable
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
-
-sealed class EndState
-object NullState : EndState()
-data class ExceptionState(val t: Throwable) : EndState()
-object CompleteState : EndState()
 
 class QueueingStreamObserverSender<T>(
     val streamObserver: StreamObserver<T>
-): Runnable {
+): Runnable, Closeable {
     private val queue = ConcurrentLinkedQueue<T>()
     private val errorQueue = ConcurrentLinkedQueue<Throwable>()
-    private val end = AtomicReference<EndState>(NullState)
+    private val end = AtomicBoolean(false)
 
     companion object {
         private val threadsRunning = AtomicInteger(0)
@@ -39,7 +36,7 @@ class QueueingStreamObserverSender<T>(
 
     override fun run() {
         while (true) {
-            if (isClosed()) {
+            if (end.get()) {
                 streamObserver.onCompleted()
                 break
             }
@@ -47,7 +44,6 @@ class QueueingStreamObserverSender<T>(
             if (error != null) {
                 // no conversion is needed for the error type because it already happened upstream
                 streamObserver.onError(error)
-                close(ExceptionState(error))
                 break
             }
             val value = queue.poll()
@@ -68,15 +64,11 @@ class QueueingStreamObserverSender<T>(
         errorQueue.add(sre)
     }
 
-    fun close(state: EndState) {
-        end.set(state)
-    }
-
-    fun lastEndState(): EndState {
-        return end.get()
+    override fun close() {
+        end.set(true)
     }
 
     fun isClosed(): Boolean {
-        return end.get() != NullState
+        return end.get()
     }
 }

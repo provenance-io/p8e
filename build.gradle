@@ -21,7 +21,7 @@ buildscript {
 
 allprojects {
     group = 'io.provenance.p8e'
-    version = project.hasProperty("version") ? (project.property("version") != "unspecified" ? project.property("version") : '1.0-SNAPSHOT') : '1.0-SNAPSHOT'
+    version = project.hasProperty("version") ? project.property("version") : '1.0-SNAPSHOT'
 
     apply plugin: 'idea'
     apply plugin: 'java'
@@ -53,9 +53,13 @@ allprojects {
         testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0'
         testImplementation 'org.mockito:mockito-inline:3.8.0'
 
-        testCompileOnly("junit:junit:$junit_version")
+        testCompileOnly(
+                "junit:junit:$junit_version"
+        )
         testRuntimeOnly "org.junit.vintage:junit-vintage-engine:$jupiter_version"
-        testImplementation("org.junit.jupiter:junit-jupiter-api:$jupiter_version")
+        testImplementation(
+                "org.junit.jupiter:junit-jupiter-api:$jupiter_version"
+        )
         testRuntimeOnly(
                 "org.junit.jupiter:junit-jupiter-engine:$jupiter_version",
                 "org.junit.vintage:junit-vintage-engine:$jupiter_version"
