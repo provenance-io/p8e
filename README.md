@@ -26,6 +26,8 @@
 [loc-badge]: https://tokei.rs/b1/github/provenance-io/p8e
 [loc-report]: https://github.com/provenance-io/p8e
 
+WARNING: Versions prior to `1.0.0` should be considered unstable and API changes expected.
+
 # P8E — Provenance Contract Memorialization on DLT
 
 P8e provides a system for collaborative execution, consensus, and proof recording of business execution on a distributed ledger
