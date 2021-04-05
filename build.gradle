@@ -45,13 +45,13 @@ allprojects {
         implementation "com.fasterxml.jackson.module:jackson-module-kotlin:$jackson_version"
         implementation "com.fasterxml.jackson.core:jackson-annotations:$jackson_version"
 
-        implementation group: 'com.google.guava', name: 'guava', version: '27.1-jre'
+        implementation group: 'com.google.guava', name: 'guava', version: '30.1.1-jre'
         implementation 'org.slf4j:log4j-over-slf4j:1.7.30'
         implementation "javax.inject:javax.inject:1"
 
-        testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.3.3'
+        testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.8.0'
         testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0'
-        testImplementation 'org.mockito:mockito-inline:2.8.9'
+        testImplementation 'org.mockito:mockito-inline:3.8.0'
 
         testCompileOnly(
                 "junit:junit:$junit_version"
