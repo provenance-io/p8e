@@ -10,6 +10,7 @@ import io.p8e.proto.ContractSpecs.ContractSpec as P8EContractSpec
 
 private val log = LoggerFactory.getLogger(ContractSpecs::class.java)
 
+// TODO can this class be removed?
 fun ContractSpecs.addP8EContractSpec(spec: P8EContractSpec): TxPreparer = { base ->
     log.trace("addContractSpec(name:${spec.definition.name})")
     prepareSubmitContractSpec(SubmitContractSpecRequest(base, spec.toPbc()))

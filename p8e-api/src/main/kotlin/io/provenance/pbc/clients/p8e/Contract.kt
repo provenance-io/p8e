@@ -25,6 +25,7 @@ private fun ProtoUUID.toUuidOrNull(): UUID? =
 
 private fun ProtoUUID.toUuid(): UUID = UUID.fromString(value)
 
+// TODO can this class be removed?
 /**
  * Submit a p8e contract to blockchain.
  * @param contract The p8e contract that has been processed and needs memorialized.
