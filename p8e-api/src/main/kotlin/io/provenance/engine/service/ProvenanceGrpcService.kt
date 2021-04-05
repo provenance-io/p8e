@@ -5,10 +5,17 @@ import com.google.protobuf.Message
 import cosmos.auth.v1beta1.Auth
 import cosmos.auth.v1beta1.QueryGrpc
 import cosmos.auth.v1beta1.QueryOuterClass
+import cosmos.base.abci.v1beta1.Abci.TxResponse
+import cosmos.base.tendermint.v1beta1.Query.GetBlockByHeightRequest
+import cosmos.base.tendermint.v1beta1.Query.GetLatestBlockRequest
+import cosmos.base.tendermint.v1beta1.Query.GetLatestBlockResponse
+import cosmos.base.tendermint.v1beta1.Query.GetNodeInfoRequest
+import cosmos.base.tendermint.v1beta1.Query.GetNodeInfoResponse
+import cosmos.base.tendermint.v1beta1.ServiceGrpc as NodeGrpc
 import cosmos.base.v1beta1.CoinOuterClass
 import cosmos.crypto.secp256k1.Keys
 import cosmos.tx.signing.v1beta1.Signing
-import cosmos.tx.v1beta1.ServiceGrpc
+import cosmos.tx.v1beta1.ServiceGrpc as TxGrpc
 import cosmos.tx.v1beta1.ServiceOuterClass.*
 import cosmos.tx.v1beta1.TxOuterClass.*
 import io.grpc.netty.NettyChannelBuilder
@@ -31,8 +38,9 @@ class ProvenanceGrpcService(
     private val accountProvider: Account,
     private val chaincodeProperties: ChaincodeProperties
 ) {
-    private val channel =  URI(chaincodeProperties.url).let { uri ->
+    private val channel =  URI(chaincodeProperties.grpcUrl).let { uri ->
             Logger.getLogger("io.netty").setLevel(Level.ALL)
+                io.provenance.p8e.shared.extension.logger().error("api = ${uri.host} ${uri.port}")
             NettyChannelBuilder.forAddress(uri.host, uri.port)
                 .also {
                     if (uri.scheme == "grpcs") {
@@ -41,6 +49,7 @@ class ProvenanceGrpcService(
                         it.usePlaintext()
                     }
                 }
+                // TODO try default size of 3MB for now
                 .maxInboundMessageSize(40 * 1024 * 1024) // ~ 20 MB
                 .idleTimeout(5, TimeUnit.MINUTES)
                 .keepAliveTime(60, TimeUnit.SECONDS) // ~ 12 pbc block cuts
@@ -48,8 +57,9 @@ class ProvenanceGrpcService(
                 .build()
         }
 
-    private val cosmosService = ServiceGrpc.newBlockingStub(channel)
+    private val txService = TxGrpc.newBlockingStub(channel)
     private val accountService = QueryGrpc.newBlockingStub(channel)
+    private val nodeService = NodeGrpc.newBlockingStub(channel)
 
     private val bech32Address = accountProvider.bech32Address()
     private val keyPair = accountProvider.getKeyPair()
@@ -59,6 +69,16 @@ class ProvenanceGrpcService(
             .setAddress(bech32Address)
             .build()
         ).run { account.unpack(Auth.BaseAccount::class.java) }
+
+    fun nodeInfo(): GetNodeInfoResponse = nodeService.getNodeInfo(GetNodeInfoRequest.getDefaultInstance())
+
+    // fun getLatestBlock(): GetLatestBlockResponse = nodeService.getLatestBlock(GetLatestBlockRequest.getDefaultInstance())
+
+    // fun getLatestBlockHeight() = nodeService.getBlockByHeight(GetBlockByHeightRequest.newBuilder()
+    //     .setHeight(getLatestBlock().)
+    //     .build())
+
+    fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
     fun signTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Int = 0, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
         val authInfo = AuthInfo.newBuilder()
@@ -105,12 +125,11 @@ class ProvenanceGrpcService(
 
     fun estimateTx(body: TxBody, accountInfo: Auth.BaseAccount): GasEstimate =
         signTx(body, accountInfo).let {
-            cosmosService.simulate(SimulateRequest.newBuilder()
+            txService.simulate(SimulateRequest.newBuilder()
                 .setTx(it)
                 .build()
             )
-        }
-        .let { GasEstimate(it.gasInfo.gasUsed) }
+        }.let { GasEstimate(it.gasInfo.gasUsed) }
 
     fun batchTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Int, estimate: GasEstimate): BroadcastTxResponse =
         signTx(body, accountInfo, sequenceNumberOffset, estimate).run {
@@ -120,7 +139,7 @@ class ProvenanceGrpcService(
                 .addAllSignatures(signaturesList)
                 .build()
         }.let {
-            cosmosService.broadcastTx(BroadcastTxRequest.newBuilder()
+            txService.broadcastTx(BroadcastTxRequest.newBuilder()
                 .setTxBytes(it.toByteString())
                 .setMode(BroadcastMode.BROADCAST_MODE_SYNC)
                 .build()
@@ -128,15 +147,13 @@ class ProvenanceGrpcService(
         }
 }
 
-fun List<Message>.toTxBody(): TxBody = TxBody.newBuilder()
+fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()
     .addAllMessages(map { it.toAny() })
     .build()
 
 fun Message.toTxBody(): TxBody = listOf(this).toTxBody()
 
 fun Message.toAny(typeUrlPrefix: String = "") = Any.pack(this, typeUrlPrefix)
-
-fun P8EContractSpec.toProv(): ContractSpec = ContractSpec.parseFrom(toByteArray())
 
 data class GasEstimate(val total: Long) {
     companion object {

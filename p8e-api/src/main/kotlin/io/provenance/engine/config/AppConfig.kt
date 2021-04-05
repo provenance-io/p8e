@@ -8,7 +8,6 @@ import com.tinder.scarlet.messageadapter.moshi.MoshiMessageAdapter
 import com.tinder.scarlet.streamadapter.rxjava2.RxJava2StreamAdapterFactory
 import com.tinder.scarlet.websocket.okhttp.newWebSocketFactory
 import feign.Feign
-import feign.Logger
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
@@ -123,10 +122,7 @@ class AppConfig : WebMvcConfigurer {
         return Feign.builder()
             .encoder(JacksonEncoder(objectMapper))
             .decoder(JacksonDecoder(objectMapper))
-            .target(
-                RPCClient::class.java,
-                eventStreamProperties.rpcUri
-            )
+            .target(RPCClient::class.java, eventStreamProperties.rpcUri)
     }
 
     @Bean

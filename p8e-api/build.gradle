@@ -85,6 +85,8 @@ dependencies {
     implementation "com.github.komputing.kethereum:crypto_api:$kethereum_version"
     implementation "com.github.komputing.kethereum:crypto_impl_bouncycastle:$kethereum_version"
 
+    implementation "org.bouncycastle:bcpkix-jdk15on:$bouncy_castle"
+
     implementation "com.auth0:java-jwt:$jwt_version"
 
     // Elasticsearch Things
