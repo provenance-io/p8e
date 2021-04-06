@@ -8,6 +8,14 @@ option java_outer_classname = "ContractSpecs";
 
 import "p8e/common.proto";
 
+message ScopeSpec {
+    string name = 1;
+    string description = 2;
+    string website_url = 3;
+    string icon_url = 4;
+    repeated PartyType parties_involved = 5;
+}
+
 message ContractSpec {
     DefinitionSpec definition  = 1;
     repeated DefinitionSpec input_specs = 2;
