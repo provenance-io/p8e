@@ -43,7 +43,8 @@ annotation class Participants(val roles: Array<PartyType>)
 
 /**
  * Denotes a String that is used to implement a logical grouping of P8eContracts that operate on the same scope.
- * Can be thought of as a whitelist that specifies which P8eContracts can be executed for a scope.
+ * Can be thought of as a whitelist that specifies which P8eContracts can be executed for a scope. Name elements
+ * must be associated with conrete implementations of P8eScopeSpecification.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.RUNTIME)
