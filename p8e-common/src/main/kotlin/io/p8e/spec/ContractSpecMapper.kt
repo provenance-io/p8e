@@ -101,7 +101,6 @@ object ContractSpecMapper {
                 ),
                 FACT
             )
-                .addAllScopeSpecifications(scopeSpecifications)
                 .build()
         }
 

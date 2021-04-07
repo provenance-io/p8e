@@ -1,28 +1,30 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.protobuf.ByteString
-import cosmos.base.abci.v1beta1.Abci.TxResponse
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
-import io.p8e.crypto.Hash
 import io.p8e.proto.ContractScope.Envelope
+import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
+import io.p8e.util.base64Decode
 import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.p8e.util.configureProvenance
+import io.p8e.util.toByteString
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.Bech32
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.util.toProv
-import io.provenance.metadata.v1.MsgAddP8eContractSpecRequest
+import io.provenance.metadata.v1.Description
 import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
+import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
+import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
+import io.provenance.metadata.v1.ScopeSpecification
+import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
+import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import io.provenance.pbc.clients.*
-import io.provenance.pbc.clients.tx.BatchTx
-import org.bouncycastle.crypto.digests.RIPEMD160Digest
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.util.*
@@ -322,19 +324,48 @@ class ChaincodeInvokeService(
     }
 
     /**
-     * Add a contract spec.
+     * Add contract specs.
      *
-     * @param [specs] the specs to load
+     * @param [scopeSpecs] the scope specs to load
+     * @param [contractSpecs] the contract specs to load
      */
-    fun addContractSpecs(specList: List<ContractSpec>) {
-        log.info("received a set of contract specs: ${specList.size}")
+    fun addContractSpecs(
+        scopeSpecs: Collection<ScopeSpecificationRecord>,
+        historicalContractSpecs: Collection<ContractSpecificationRecord>,
+        contractSpecs: List<ContractSpec>,
+    ) {
+        log.info("received a set of contract specs: ${contractSpecs.size} and scope specs: ${scopeSpecs.size}")
+
+        val owners = listOf(accountProvider.bech32Address())
+        val historicalContractSpecsById = historicalContractSpecs.groupBy { it.scopeSpecificationUuid }
+
         try {
-            val txBody = specList.map {
-                MsgAddP8eContractSpecRequest.newBuilder()
-                    .setContractspec(it.toProv())
-                    .addAllSigners(listOf(accountProvider.bech32Address()))
+            val scopeSpecTx = scopeSpecs.map {
+                MsgWriteScopeSpecificationRequest.newBuilder()
+                    .setSpecUuid(it.id.value.toString())
+                    .setSpecification(ScopeSpecification.newBuilder()
+                        .setDescription(Description.newBuilder()
+                            .setName(it.name)
+                            .setDescription(it.description)
+                            .setWebsiteUrl(it.websiteUrl)
+                            .setIconUrl(it.iconUrl)
+                            .build()
+                        )
+                        .addAllPartiesInvolved(it.partiesInvolved.map { p -> ContractSpecs.PartyType.valueOf(p).toProv() })
+                        .addAllOwnerAddresses(owners)
+                        .addAllContractSpecIds(historicalContractSpecsById.getValue(it.id.value).map { p -> p.provenanceHash.base64Decode().toByteString() })
+                        .build()
+                    )
+                    .addAllSigners(owners)
                     .build()
-            }.toTxBody()
+            }
+            val contractSpecTx = contractSpecs.map {
+                MsgWriteP8eContractSpecRequest.newBuilder()
+                    .setContractspec(it.toProv())
+                    .addAllSigners(owners)
+                    .build()
+            }
+            val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
             synchronized(provenanceGrpc) {
                 batchTx(txBody).also {

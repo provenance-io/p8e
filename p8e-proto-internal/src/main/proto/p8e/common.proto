@@ -35,8 +35,6 @@ message DefinitionSpec {
         FACT = 2;
         FACT_LIST = 3;
     }
-
-    repeated string scope_specifications = 5;
 }
 
 message OutputSpec {
