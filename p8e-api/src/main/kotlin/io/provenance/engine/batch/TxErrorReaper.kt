@@ -90,6 +90,7 @@ class TxErrorReaper(
 
     private fun Event.toScopeEvent(): ScopeEvent = ScopeEvent(findTxHash(), findScope(), type.toEventType())
 
-    private fun Attribute.toScope(): Scope = value.base64Decode().let { Scope.parseFrom(it) }
+    // We only call this after we find a matching "key" so it should be safe to convert to non nullable
+    private fun Attribute.toScope(): Scope = value!!.base64Decode().let { Scope.parseFrom(it) }
         ?: throw IllegalStateException("Event attribute does not contain a scope")
 }
