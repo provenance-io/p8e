@@ -1,6 +1,10 @@
 package io.provenance.engine.grpc.observers
 
 import io.grpc.stub.StreamObserver
+import io.p8e.grpc.observers.CompleteState
+import io.p8e.grpc.observers.EndState
+import io.p8e.grpc.observers.ExceptionState
+import io.p8e.grpc.observers.NullState
 import io.p8e.grpc.observers.QueueingStreamObserverSender
 import io.p8e.proto.ContractScope.EnvelopeError
 import io.p8e.proto.Envelope.EnvelopeEvent
@@ -123,7 +127,7 @@ class EnvelopeEventObserver(
                         queuer.queue(value)
                     } catch (t: Throwable) {
                         queuer.streamObserver.onError(t.statusRuntimeException())
-                        disconnect(t)
+                        disconnect(ExceptionState(t))
                     }
                 }
                 else -> queuer.error(IllegalStateException("Unknown action received by server ${value.action.name}").statusRuntimeException())
@@ -132,18 +136,24 @@ class EnvelopeEventObserver(
     }
 
     override fun onError(t: Throwable) {
-        disconnect(t)
+        disconnect(ExceptionState(t))
     }
 
     override fun onCompleted() {
-        disconnect()
+        disconnect(CompleteState)
     }
 
-    private fun disconnect(t: Throwable? = null) {
-        queuer.close()
+    private fun disconnect(state: EndState) {
+        queuer.close(state)
         connectedKey.set(PK.PublicKey.getDefaultInstance())
         if (queuerKey != null && queuers[queuerKey!!] == queuer) {
-            logger().debug("GRPC Disconnected: Public Key ${queuerKey!!.publicKey.toHex()} Class ${queuerKey!!.classname}", t)
+            when (state) {
+                is ExceptionState ->
+                    logger().debug("GRPC Disconnected: Public Key ${queuerKey!!.publicKey.toHex()} Class ${queuerKey!!.classname}", state.t)
+                is CompleteState ->
+                    logger().debug("GRPC Disconnected: Public Key ${queuerKey!!.publicKey.toHex()} Class ${queuerKey!!.classname}")
+                is NullState -> throw IllegalStateException("Invalid end state of null state.")
+            } as Unit
 
             queuers.remove(queuerKey!!)
             transaction {

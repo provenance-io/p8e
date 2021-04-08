@@ -12,6 +12,9 @@ import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import io.grpc.netty.shaded.io.netty.channel.ChannelOption
 import io.grpc.netty.shaded.io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.p8e.async.EnvelopeEventObserver
+import io.p8e.async.HeartbeatConnectionKey
+import io.p8e.async.HeartbeatManagerRunnable
+import io.p8e.async.HeartbeatRunnable
 import io.p8e.client.FactSnapshot
 import io.p8e.client.P8eClient
 import io.p8e.client.RemoteClient
@@ -22,9 +25,7 @@ import io.p8e.functional.*
 import io.p8e.grpc.Constant
 import io.p8e.grpc.client.AuthenticationClient
 import io.p8e.grpc.client.ChallengeResponseInterceptor
-import io.p8e.grpc.observers.HeartbeatConnectionKey
-import io.p8e.grpc.observers.HeartbeatQueuer
-import io.p8e.grpc.observers.HeartbeatRunnable
+import io.p8e.grpc.observers.CompleteState
 import io.p8e.grpc.observers.QueueingStreamObserverSender
 import io.p8e.index.client.IndexClient
 import io.p8e.proto.*
@@ -54,6 +55,7 @@ import java.net.URI
 import java.security.KeyPair
 import java.security.PrivateKey
 import java.security.PublicKey
+import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.ServiceLoader
 import java.util.UUID
@@ -66,7 +68,8 @@ import java.util.logging.Logger
 class ContractManager(
     val client: P8eClient,
     val indexClient: IndexClient,
-    val keyPair: KeyPair
+    val keyPair: KeyPair,
+    val heartbeatLoggingThreshold: Duration = Duration.ofSeconds(10),
 ): Closeable {
     companion object {
         private val watchLock = Object()
@@ -144,8 +147,10 @@ class ContractManager(
         val errorHandler: ContractErrorHandler<T>
     )
 
-    private val heartbeatConnections = ConcurrentHashMap<HeartbeatConnectionKey, HeartbeatQueuer>()
+    private val desiredHeartbeatConnections = ConcurrentHashMap<HeartbeatConnectionKey, () -> EnvelopeEventObserver<out P8eContract>>()
+    private val actualHeartbeatConnections = ConcurrentHashMap<HeartbeatConnectionKey, EnvelopeEvent>()
     private val heartbeatExecutor = ThreadPoolFactory.newScheduledThreadPool(1, "heartbeat-%d")
+    private val heartbeatManagerExecutor = ThreadPoolFactory.newScheduledThreadPool(1, "heartbeat-manager-%d")
 
     init {
         val logger = LogFactory.getLog("org.apache.http.wire")
@@ -156,8 +161,24 @@ class ContractManager(
         contractHashes.takeIf { it.isEmpty() }?.apply { ContractManager.logger().error("Contract Hashes is empty, this should not happen!!!") }
         protoHashes.takeIf { it.isEmpty() }?.apply { ContractManager.logger().error("Proto Hashes is empty, this should not happen!!!") }
 
+        ContractManager.logger().info("ContractHash interface count = ${contractHashes.size}")
+        ContractManager.logger().info("ProtoHash interface count = ${protoHashes.size}")
+
         heartbeatExecutor.scheduleAtFixedRate(
-            HeartbeatRunnable(heartbeatConnections),
+            HeartbeatRunnable(queuers, actualHeartbeatConnections),
+            1,
+            1,
+            TimeUnit.SECONDS
+        )
+
+        heartbeatManagerExecutor.scheduleAtFixedRate(
+            HeartbeatManagerRunnable(
+                manager = this,
+                queuers = queuers,
+                desired = desiredHeartbeatConnections,
+                actual = actualHeartbeatConnections,
+                loggingIterationThreshold = heartbeatLoggingThreshold.seconds,
+            ),
             1,
             1,
             TimeUnit.SECONDS
@@ -359,7 +380,7 @@ class ContractManager(
         client.reject(executionUuid, message)
     }
 
-    private fun newEventBuilder(className: String, publicKey: PublicKey): EnvelopeEvent.Builder {
+    fun newEventBuilder(className: String, publicKey: PublicKey): EnvelopeEvent.Builder {
         return EnvelopeEvent.newBuilder()
             .setClassname(className)
             .setPublicKey(
@@ -391,10 +412,7 @@ class ContractManager(
         }.toContractErrorHandler()
 
         private var disconnectHandler: DisconnectHandler = { reconnectHandler: ReconnectHandler ->
-            logger().info("Received disconnect for ${getInfo()}. Sleeping for 20 seconds and then reconnecting.")
-
-            Thread.sleep(20_000)
-            reconnectHandler.reconnect()
+            logger().info("Received disconnect for ${getInfo()}. This handler is deprecated.")
         }.toDisconnectHandler()
 
         fun request(requestHandler: ContractEventHandler<T>): WatchBuilder<T> {
@@ -427,13 +445,15 @@ class ContractManager(
             return this
         }
 
+        @Deprecated("This function is currently a noop.")
         fun disconnect(disconnectHandler: DisconnectHandler): WatchBuilder<T> {
-            this.disconnectHandler = disconnectHandler
+            // this.disconnectHandler = disconnectHandler
             return this
         }
 
+        @Deprecated("This function is currently a noop.")
         fun disconnect(disconnectHandler: (ReconnectHandler) -> Unit): WatchBuilder<T> {
-            this.disconnectHandler = disconnectHandler.toDisconnectHandler()
+            // this.disconnectHandler = disconnectHandler.toDisconnectHandler()
             return this
         }
 
@@ -472,9 +492,7 @@ class ContractManager(
     }
 
     fun <T: P8eContract> unwatch(clazz: Class<T>) {
-        queuers[clazz]?.close()
-        queuers.remove(clazz)
-        heartbeatConnections.remove(HeartbeatConnectionKey(publicKey, clazz))
+        desiredHeartbeatConnections.remove(HeartbeatConnectionKey(publicKey, clazz))
         handlers.remove(clazz)
     }
 
@@ -488,34 +506,20 @@ class ContractManager(
         if (queuers.containsKey(clazz) || handlers.containsKey(clazz)) {
             throw IllegalStateException("Unable to watch for class ${clazz.name} more than once.")
         }
+
         client.whitelistClass(clazz.toProto())
 
         handlers.computeIfAbsent(clazz) {
             ContractHandlers(requestHandler, stepCompletionHandler, errorHandler)
         }
 
-        val heartbeatEvent = newEventBuilder(clazz.name, publicKey).setAction(EnvelopeEvent.Action.HEARTBEAT).build()
-        val inObserver = EnvelopeEventObserver(clazz, this::event, disconnectHandler, { unwatch(clazz) }) { inObserver ->
-            client.event(clazz, inObserver)
-                .also { outObserver ->
-                    val queuer = QueueingStreamObserverSender(outObserver)
-                    val envObserver = (inObserver as EnvelopeEventObserver<*>)
-                    envObserver.queuer.getAndSet(queuer).close()
-                    queuers[clazz] = queuer
-                    heartbeatConnections[HeartbeatConnectionKey(publicKey, clazz)] = HeartbeatQueuer(heartbeatEvent, queuer)
-                }
-        }
-        val queuer = queuers.computeIfAbsent(clazz) {
-            QueueingStreamObserverSender(client.event(clazz, inObserver))
-        }
-        inObserver.queuer.set(queuer)
-        heartbeatConnections[HeartbeatConnectionKey(publicKey, clazz)] = HeartbeatQueuer(heartbeatEvent, queuer)
+        desiredHeartbeatConnections[HeartbeatConnectionKey(publicKey, clazz)] = { EnvelopeEventObserver(clazz, this::event) }
 
         // Notify other executions that the watch has executed.
         watchLock.notify()
     }
 
-    private fun <T: P8eContract> event(
+    protected fun <T: P8eContract> event(
         clazz: Class<T>,
         event: EnvelopeEvent
     ) {
@@ -612,18 +616,18 @@ class ContractManager(
             client.execute(request)
                 .let { response ->
                     when (response.event) {
-                        EventType.ENVELOPE_EXECUTION_ERROR, EventType.ENVELOPE_ERROR -> Either.left(response.error.p8eError())
+                        EventType.ENVELOPE_EXECUTION_ERROR, EventType.ENVELOPE_ERROR -> Either.Left(response.error.p8eError())
 
                         EventType.ENVELOPE_ACCEPTED,
                         EventType.ENVELOPE_MAILBOX_OUTBOUND,
                         EventType.ENVELOPE_REQUEST,
-                        EventType.ENVELOPE_RESPONSE -> Either.right(constructContract(clazz, response))
+                        EventType.ENVELOPE_RESPONSE -> Either.Right(constructContract(clazz, response))
 
                         EventType.UNRECOGNIZED, EventType.UNUSED_TYPE, null -> throw IllegalStateException("Invalid EventType of ${response.event}")
                     }
                 }
         } catch (t: Throwable) {
-            Either.left(t.p8eError())
+            Either.Left(t.p8eError())
         }
     }
 
@@ -727,12 +731,16 @@ class ContractManager(
     }
 
     override fun close() {
-        queuers.forEach { (className, _) ->
-            //clean up classname and shutdown a heartbeat thread.
-            unwatch(className)
-        }
         heartbeatExecutor.shutdown()
-        channel?.shutdown() // shutdown netty managed channel.
+        heartbeatManagerExecutor.shutdown()
+
+        queuers.forEach { (className, _) ->
+            unwatch(className)
+            actualHeartbeatConnections.remove(HeartbeatConnectionKey(publicKey, className))
+            queuers.remove(className)?.close(CompleteState)
+        }
+
+        channel?.shutdown()
     }
 }
 
