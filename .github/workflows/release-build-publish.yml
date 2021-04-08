@@ -136,7 +136,7 @@ jobs:
           PRERELEASE=${{ github.event.release.prerelease }}
           echo PRERELEASE=$PRERELEASE
 
-          if [["$PRERELEASE" == "false" ]]; then
+          if [ "$PRERELEASE" == "false" ]; then
               docker tag "${{ matrix.project }}:$VERSION" $IMAGE_ID:latest
               docker push $IMAGE_ID:latest
           fi
