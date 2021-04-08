@@ -6,11 +6,11 @@ import com.google.protobuf.Message
 import com.google.protobuf.Timestamp
 import com.google.protobuf.util.Timestamps
 import io.grpc.ManagedChannel
-import io.grpc.netty.GrpcSslContexts
-import io.grpc.netty.NettyChannelBuilder
-import io.grpc.netty.NettyServerBuilder
-import io.netty.channel.ChannelOption
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
+import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption
+import io.grpc.netty.shaded.io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.p8e.async.EnvelopeEventObserver
 import io.p8e.async.HeartbeatConnectionKey
 import io.p8e.async.HeartbeatManagerRunnable
