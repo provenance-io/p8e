@@ -11,7 +11,6 @@ buildscript {
     dependencies {
         classpath "org.springframework.boot:spring-boot-gradle-plugin:$springboot_version"
         classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlin_version"
-        classpath 'com.google.gradle:osdetector-gradle-plugin:1.7.0'
     }
 }
 
@@ -24,7 +23,6 @@ apply plugin: 'eclipse'
 apply plugin: 'kotlin-spring'
 apply plugin: 'org.springframework.boot'
 apply plugin: 'io.spring.dependency-management'
-apply plugin: "com.google.osdetector"
 apply plugin: 'jacoco'
 apply plugin: 'de.undercouch.download'
 
@@ -100,14 +98,6 @@ dependencies {
 
     // GRPC
     implementation "io.grpc:grpc-netty-shaded:$grpc_version"
-    implementation("io.grpc:grpc-netty:$grpc_version")
-    implementation("io.netty:netty-handler:$netty_handler_version")
-
-    if (osdetector.os == 'macos' || osdetector.os == 'freebsd') {
-        implementation("io.netty:netty-transport-native-kqueue:$netty_transport_version:osx-x86_64")
-    } else if (osdetector.os == 'linux') {
-        implementation("io.netty:netty-transport-native-epoll:$netty_transport_version:linux-x86_64")
-    }
 
     // WebSocket
     implementation "com.tinder.scarlet:scarlet:$scarlet_version"
