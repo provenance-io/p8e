@@ -18,7 +18,7 @@ import cosmos.tx.signing.v1beta1.Signing
 import cosmos.tx.v1beta1.ServiceGrpc as TxGrpc
 import cosmos.tx.v1beta1.ServiceOuterClass.*
 import cosmos.tx.v1beta1.TxOuterClass.*
-import io.grpc.netty.NettyChannelBuilder
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import io.p8e.util.toByteString
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account

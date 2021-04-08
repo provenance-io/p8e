@@ -21,6 +21,7 @@ import io.p8e.client.RemoteClient
 import io.p8e.contracts.ContractHash
 import io.p8e.exception.P8eError
 import io.p8e.exception.p8eError
+import io.p8e.extension.scopeSpecificationNames
 import io.p8e.functional.*
 import io.p8e.grpc.Constant
 import io.p8e.grpc.client.AuthenticationClient
@@ -218,10 +219,12 @@ class ContractManager(
      * @param scopeUuid the scope uuid to set for this contract
      * @param executionUuid the execution uuid to set for this contract execution
      * @param invokerRole the PartyType to satisfy for this ContractManager's public key
+     * @param scopeSpecificationName the name of this scope specification
      */
-    fun <T: P8eContract> newContract(contractClazz: Class<T>, scopeUuid: UUID, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
+    fun <T: P8eContract> newContract(contractClazz: Class<T>, scopeUuid: UUID, executionUuid: UUID? = null, invokerRole: PartyType? = null, scopeSpecificationName: String? = null): Contract<T> {
         val scope = Scope.newBuilder()
             .setUuid(scopeUuid.toProtoUuidProv())
+            .setScopeSpecificationName(scopeSpecificationName ?: contractClazz.scopeSpecificationNames().firstOrNull())
             .build()
 
         return newContract(contractClazz, scope, executionUuid, invokerRole)

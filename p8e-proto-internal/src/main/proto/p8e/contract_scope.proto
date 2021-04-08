@@ -156,6 +156,8 @@ message Scope {
 
     // Last event that resulted in scope changes.
     Event last_event = 4;
+
+    string scope_specification_name = 5;
 }
 
 // A collection wrapper around scopes
