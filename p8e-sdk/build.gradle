@@ -5,13 +5,9 @@ buildscript {
     repositories {
         mavenCentral()
     }
-    dependencies {
-        classpath 'com.google.gradle:osdetector-gradle-plugin:1.7.0'
-    }
 }
 
 apply plugin: 'java'
-apply plugin: "com.google.osdetector"
 
 dependencies {
     api project(":p8e-common")
