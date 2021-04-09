@@ -14,6 +14,7 @@ import io.provenance.p8e.shared.state.EnvelopeStateEngine
 import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.Assert
@@ -509,7 +510,7 @@ class EnvelopeServiceTest {
             .setInput(testEnvelope)
             .setResult(testEnvelope)
             .setIsInvoker(true)
-            .setContractClassname("HellowWorldContract")
+            .setContractClassname("HelloWorldContract")
             .setExecutedTime(OffsetDateTime.now().toProtoTimestampProv())
             .setChaincodeTime(OffsetDateTime.now().plusSeconds(5).toProtoTimestampProv())
             .setInboxTime(OffsetDateTime.now().plusSeconds(10).toProtoTimestampProv())
@@ -533,6 +534,88 @@ class EnvelopeServiceTest {
             val record = EnvelopeTable.selectAll().last()
             Assert.assertNotNull(record[EnvelopeTable.data].errorsList[0])
             Assert.assertEquals(ContractScope.EnvelopeError.Type.CONTRACT_INVOCATION, record[EnvelopeTable.data].errorsList[0].type)
+        }
+    }
+
+    @Test
+    fun `Validate errored envelope is recorded when two affiliates are on same instance and other is already errored`() {
+        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+
+        val errorUuid = UUID.randomUUID()
+        val envelopeError = ContractScope.EnvelopeError.newBuilder()
+            .setUuid(errorUuid.toProtoUuidProv())
+            .setGroupUuid(testEnvelope.ref.groupUuid)
+            .setExecutionUuid(testEnvelope.executionUuid)
+            .setType(ContractScope.EnvelopeError.Type.CONTRACT_REJECTED)
+            .setMessage("some-error")
+            .setReadTime(OffsetDateTime.now().toProtoTimestampProv())
+            .setScopeUuid(testEnvelope.scope.uuid)
+            .setEnvelope(testEnvelope)
+            .auditedProv()
+            .build()
+
+        val envelopeState = ContractScope.EnvelopeState.newBuilder()
+            .setInput(testEnvelope)
+            .setResult(testEnvelope)
+            .setIsInvoker(true)
+            .setContractClassname("HelloWorldContract")
+            .setExecutedTime(OffsetDateTime.now().toProtoTimestampProv())
+            .setChaincodeTime(OffsetDateTime.now().plusSeconds(5).toProtoTimestampProv())
+            .setInboxTime(OffsetDateTime.now().plusSeconds(10).toProtoTimestampProv())
+            .build()
+
+        val secondKeyPair = TestUtils.generateKeyPair()
+
+        transaction {
+            AffiliateTable.insert {
+                it[alias] = "alias2"
+                it[publicKey] = secondKeyPair.public.toHex()
+                it[privateKey] = secondKeyPair.private.toHex()
+                it[whitelistData] = null
+                it[encryptionPublicKey] = secondKeyPair.public.toHex()
+                it[encryptionPrivateKey] = secondKeyPair.private.toHex()
+                it[active] = true
+                it[indexName] = "scopes"
+            }
+
+            val scopeRecord2 = ScopeRecord.new {
+                uuid = EntityID(UUID.randomUUID(), ScopeTable)
+                publicKey = secondKeyPair.public.toHex()
+                scopeUuid = scopeRecord.scopeUuid
+                data = scopeRecord.data
+                lastExecutionUuid = scopeRecord.lastExecutionUuid
+            }
+
+            EnvelopeTable.insert {
+                it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
+                it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
+                it[publicKey] = ecKeys.public.toHex()
+                it[scope] = scopeRecord.uuid
+                it[data] = envelopeState
+                it[status] = ContractScope.Envelope.Status.ERROR
+                it[errorTime] = OffsetDateTime.now()
+            }
+
+            EnvelopeTable.insert {
+                it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
+                it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
+                it[publicKey] = secondKeyPair.public.toHex()
+                it[scope] = scopeRecord2.uuid
+                it[data] = envelopeState
+                it[status] = ContractScope.Envelope.Status.ERROR
+                it[errorTime] = OffsetDateTime.now()
+            }
+
+            //Execute
+            envelopeService.error(secondKeyPair.public, envelopeError)
+            envelopeService.error(ecKeys.public, envelopeError)
+
+            //Validate
+            EnvelopeTable.select { EnvelopeTable.executionUuid eq testEnvelope.executionUuid.toUuidProv() }.forEach {
+                Assert.assertEquals(1, it[EnvelopeTable.data].errorsList.count())
+                Assert.assertNotNull(it[EnvelopeTable.data].errorsList[0])
+                Assert.assertEquals(ContractScope.EnvelopeError.Type.CONTRACT_REJECTED, it[EnvelopeTable.data].errorsList[0].type)
+            }
         }
     }
 }
