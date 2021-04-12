@@ -72,7 +72,7 @@ class ProvenanceGrpcService(
 
     fun nodeInfo(): GetNodeInfoResponse = nodeService.getNodeInfo(GetNodeInfoRequest.getDefaultInstance())
 
-    // fun getLatestBlock(): GetLatestBlockResponse = nodeService.getLatestBlock(GetLatestBlockRequest.getDefaultInstance())
+    fun getLatestBlock(): GetLatestBlockResponse = nodeService.getLatestBlock(GetLatestBlockRequest.getDefaultInstance())
 
     // fun getLatestBlockHeight() = nodeService.getBlockByHeight(GetBlockByHeightRequest.newBuilder()
     //     .setHeight(getLatestBlock().)

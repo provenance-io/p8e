@@ -1,6 +1,7 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import cosmos.auth.v1beta1.Auth
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
 import io.p8e.proto.ContractScope.Envelope
@@ -26,6 +27,7 @@ import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -66,6 +68,7 @@ class ChaincodeInvokeService(
     private val batch = HashSet<ContractRequestWrapper>()
     private val blockScopeIds = HashSet<String>()
     private val priorityScopeBacklog = HashMap<String, LinkedList<ContractRequestWrapper>>()
+    private var currentBlockHeight = 0L
 
     init {
         thread(isDaemon = true, name = "bc-tx-batch") {
@@ -77,6 +80,13 @@ class ChaincodeInvokeService(
         log.info("Starting bc-tx-batch thread")
 
         while(true) {
+            provenanceGrpc.getLatestBlock()
+                .takeIf { it.block.header.height > currentBlockHeight }
+                ?.let {
+                    currentBlockHeight = it.block.header.height
+                    blockScopeIds.clear()
+                }
+            
             // attempt to load the batch with scopes that were previously passed on due to not
                 // wanting to send the same scope in the same block
             while (batch.size < chaincodeProperties.txBatchSize) {
@@ -392,13 +402,11 @@ class ChaincodeInvokeService(
         return provenanceGrpc.batchTx(body, accountInfo, 0, estimate)
     }
 
-    private fun SimpleClient.getAccountInfo(): AccountInfo = fetchAccountDetails(accountProvider.bech32Address()).result.value
+    private fun ProvenanceGrpcService.blockHasBeenCut(): Boolean = provenanceGrpc.accountInfo().blockHasBeenCut()
 
-    private fun SimpleClient.blockHasBeenCut(): Boolean = sc.getAccountInfo().blockHasBeenCut()
+    private var sequenceNumberAndOffset = 0L to 0 // todo: change left back to uint once https://github.com/FasterXML/jackson-module-kotlin/issues/396 fixed
 
-    private var sequenceNumberAndOffset = 0 to 0 // todo: change left back to uint once https://github.com/FasterXML/jackson-module-kotlin/issues/396 fixed
-
-    private fun AccountInfo.getAndIncrementSequenceOffset(): Int {
+    private fun Auth.BaseAccount.getAndIncrementSequenceOffset(): Int {
         if (blockHasBeenCut()) {
             sequenceNumberAndOffset = sequence to 0
         }
@@ -408,7 +416,7 @@ class ChaincodeInvokeService(
         }
     }
 
-    private fun AccountInfo.blockHasBeenCut(): Boolean = (sequence > sequenceNumberAndOffset.first) || sequenceNumberAndOffset.second == 0
+    private fun Auth.BaseAccount.blockHasBeenCut(): Boolean = (sequence > sequenceNumberAndOffset.first) || sequenceNumberAndOffset.second == 0
 
     private fun decrementSequenceNumber() {
         sequenceNumberAndOffset = sequenceNumberAndOffset.first to Math.max(sequenceNumberAndOffset.second - 1, 0)
