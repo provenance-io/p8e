@@ -67,7 +67,7 @@ data class BlockResults(
 data class TxResult(
     val code: Int?,
     val data: String?,
-    val log: String,
+    val log: String?,
     val info: String,
     val gasWanted: Long,
     val gasUsed: Long,

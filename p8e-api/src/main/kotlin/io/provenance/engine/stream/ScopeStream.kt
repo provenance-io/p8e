@@ -102,8 +102,9 @@ class ScopeStream(
             ?: throw IllegalStateException("Event does not contain a scope")
 
     // Parse a scope from an attribute value.
+    // We only call this after we find a matching "key" so it should be safe to convert to non nullable
     private fun Attribute.toScope(): Scope =
-        Scope.parseFrom(this.value.base64Decode())
+        Scope.parseFrom(this.value!!.base64Decode())
 
     // Queue a batch of scopes for indexing.
     fun queueIndexScopes(blockHeight: Long, events: List<ScopeEvent>) = timed("ScopeStream_indexScopes_${events.size}") {
