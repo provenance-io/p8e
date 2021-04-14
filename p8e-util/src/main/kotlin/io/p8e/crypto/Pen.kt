@@ -32,6 +32,10 @@ class Pen: SignerImpl() {
         lens = Lens(keys!!.public)
     }
 
+    override fun setKeyId(uuid: String) {
+        /*no-op*/
+    }
+
     /**
      * Sign protobuf data.
      */

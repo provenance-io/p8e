@@ -4,19 +4,19 @@ import com.google.protobuf.Message
 import io.p8e.proto.Common.Signature
 import java.security.KeyPair
 
-open class SignerImpl {
+abstract class SignerImpl {
 
     //TODO: Need to reference the KeyPair by a UUID
-    open fun setKeyId(keyPair: KeyPair) { /*no-op*/ }
+    abstract fun setKeyId(keyPair: KeyPair)
 
-    open fun setKeyId(uuid: String) { /*no-op*/ }
+    abstract fun setKeyId(uuid: String)
 
     /**
      * sign function implementation will be done by specfic signers.
      */
-    open fun sign(data: String): Signature = Signature.getDefaultInstance()
+    abstract fun sign(data: String): Signature
 
-    open fun sign(data: Message): Signature = Signature.getDefaultInstance()
+    abstract fun sign(data: Message): Signature
 
-    open fun sign(data: ByteArray): Signature = Signature.getDefaultInstance()
+    abstract fun sign(data: ByteArray): Signature
 }
