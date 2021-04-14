@@ -6,12 +6,12 @@ import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
 import io.p8e.util.*
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import java.security.KeyPair
 import java.security.PublicKey
-import java.security.PrivateKey
 import java.security.Security
 import java.security.Signature
 
-class Pen(privateKey: PrivateKey, publicKey: PublicKey) {
+class Pen: SignerImpl() {
 
     companion object {
         // Algo must match Provenance-object-store
@@ -20,40 +20,44 @@ class Pen(privateKey: PrivateKey, publicKey: PublicKey) {
         val PROVIDER = "BC"
     }
 
-    val privateKey: PrivateKey
-    val lens: Lens
     init {
         Security.addProvider(BouncyCastleProvider())
-        this.privateKey = privateKey
-        lens = Lens(publicKey)
+    }
+
+    var keys: KeyPair? = null
+    var lens: Lens? = null
+
+    override fun setKeyId(keyPair: KeyPair) {
+        keys = keyPair
+        lens = Lens(keys!!.public)
     }
 
     /**
      * Sign protobuf data.
      */
-    fun sign(data: Message) = sign(data.toByteArray())
+    override fun sign(data: Message) = sign(data.toByteArray())
 
     /**
      * Sign string data.
      */
-    fun sign(data: String) = sign(data.toByteArray())
+    override fun sign(data: String) = sign(data.toByteArray())
 
     /**
      * Sign byte array.
      */
-    fun sign(data: ByteArray): Common.Signature {
+    override fun sign(data: ByteArray): Common.Signature {
         val s = Signature.getInstance(
             SIGN_ALGO,
             PROVIDER
         )
-        s.initSign(privateKey)
+        s.initSign(keys?.private)
         s.update(data)
 
         return ProtoUtil
             .signatureBuilderOf(String(s.sign().base64Encode()))
-            .setSigner(lens.signer())
+            .setSigner(lens?.signer())
             .build()
-            .takeIf { lens.verify(data, it) }
+            .takeIf { lens!!.verify(data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 }

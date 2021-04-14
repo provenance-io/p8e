@@ -135,3 +135,13 @@ class MetricsProperties {
     var tags: String = ""
     var prefix: String = "p8e_api"
 }
+
+@ConfigurationProperties(prefix = "smartkey")
+class SmartKeyProperties {
+    @NotNull lateinit var apiKey: String
+}
+
+@ConfigurationProperties(prefix = "signer")
+class SignerProperties {
+    @NotNull var type: String = "default" // Pen class default signer
+}

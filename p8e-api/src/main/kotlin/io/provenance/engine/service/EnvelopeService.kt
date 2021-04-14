@@ -1,7 +1,7 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Timestamp
-import io.p8e.crypto.Pen
+import io.p8e.crypto.SignerImpl
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractScope.Envelope.Status
@@ -39,6 +39,7 @@ class EnvelopeService(
     private val envelopeStateEngine: EnvelopeStateEngine,
     private val eventService: EventService,
     private val metricsService: MetricsService,
+    private val signer: SignerImpl
 ) {
     private val log = logger()
 
@@ -58,7 +59,9 @@ class EnvelopeService(
 
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-        val pen = Pen(signingKeyPair.private, signingKeyPair.public)
+
+        //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
+        signer.setKeyId(signingKeyPair)
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
@@ -95,7 +98,7 @@ class EnvelopeService(
                 keyPair = encryptionKeyPair,
                 signingKeyPair = signingKeyPair,
                 envelope = envelope,
-                pen = pen
+                signer = signer
             )
         }
 
@@ -205,14 +208,16 @@ class EnvelopeService(
 
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
-        val pen = Pen(signingKeyPair.private, signingKeyPair.public)
+
+        //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
+        signer.setKeyId(signingKeyPair)
 
         timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
                 encryptionKeyPair,
                 signingKeyPair,
                 envelope = record.data.input,
-                pen = pen
+                signer = signer
             )
         }.also { result ->
             envelopeStateEngine.onHandleExecute(record, result)
