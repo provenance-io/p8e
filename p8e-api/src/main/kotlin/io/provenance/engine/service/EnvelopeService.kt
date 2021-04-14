@@ -468,9 +468,7 @@ class EnvelopeService(
 
         // XXX - We need to verify that the **ENCRYPTION** publicKey
         // matches a participant of the contract for errors received via mailbox..
-        return EnvelopeRecord.find {
-            EnvelopeTable.executionUuid eq error.executionUuid.toUuidProv()
-        }.forUpdate().firstOrNull() { true }
+        return EnvelopeRecord.findForUpdate(publicKey, error.executionUuid.toUuidProv())
             ?.takeIf { it.data.errorsList.none { e -> e.uuid == error.uuid } }
             ?.also { it.data = it.newError(error) }
             ?.also {

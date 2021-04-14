@@ -60,11 +60,11 @@ data class StreamEvent(
 )
 
 class Attribute(
-    key: ByteArray,
-    value: ByteArray
+    key: ByteArray?,
+    value: ByteArray?
 ) {
-    val key = String(key)
-    val value = String(value)
+    val key: String? = key?.let { String(it) }
+    val value: String? = value?.let {String(it) }
 }
 
 class Subscribe(
