@@ -50,12 +50,12 @@ class Pen: SignerImpl() {
             SIGN_ALGO,
             PROVIDER
         )
-        s.initSign(keys?.private)
+        s.initSign(keys!!.private)
         s.update(data)
 
         return ProtoUtil
             .signatureBuilderOf(String(s.sign().base64Encode()))
-            .setSigner(lens?.signer())
+            .setSigner(lens!!.signer())
             .build()
             .takeIf { lens!!.verify(data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
