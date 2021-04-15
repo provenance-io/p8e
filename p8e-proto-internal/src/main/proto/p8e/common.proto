@@ -17,6 +17,8 @@ message Signature {
 
     // Identity of signer
     SigningAndEncryptionPublicKeys signer = 4;
+
+    UUID key_id = 5;
 }
 
 message BooleanResult {

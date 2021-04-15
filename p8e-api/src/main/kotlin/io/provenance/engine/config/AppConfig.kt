@@ -8,9 +8,11 @@ import com.tinder.scarlet.messageadapter.moshi.MoshiMessageAdapter
 import com.tinder.scarlet.streamadapter.rxjava2.RxJava2StreamAdapterFactory
 import com.tinder.scarlet.websocket.okhttp.newWebSocketFactory
 import feign.Feign
-import feign.Logger
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
+import io.p8e.crypto.SignerFactory
+import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
@@ -77,6 +79,7 @@ import java.time.Duration
     ServiceProperties::class,
     ProvenanceKeystoneProperties::class,
     MetricsProperties::class,
+    SmartKeyProperties::class
 ])
 class AppConfig : WebMvcConfigurer {
 
@@ -261,4 +264,12 @@ class AppConfig : WebMvcConfigurer {
                 }.toMap()
             MetricsService(collectors, labels)
         }
+
+    /**
+     * Add support for new key management.
+     */
+    @Bean
+    fun signer(smartKeyProperties: SmartKeyProperties): SignerFactory {
+        return SignerFactory(smartKeyProperties.apiKey)
+    }
 }

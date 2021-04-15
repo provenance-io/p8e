@@ -5,7 +5,7 @@ import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.p8e.classloader.ClassLoaderCache
 import io.p8e.classloader.MemoryClassLoader
-import io.p8e.crypto.Pen
+import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.extension.withoutLogging
 import io.p8e.proto.ContractScope.Envelope
@@ -32,7 +32,7 @@ import java.util.concurrent.ExecutorService
 import kotlin.concurrent.thread
 
 interface P8eContractEngine {
-    fun handle(keyPair: KeyPair, signingKeyPair: KeyPair, envelope: Envelope, pen: Pen): Envelope
+    fun handle(keyPair: KeyPair, signingKeyPair: KeyPair, envelope: Envelope, signer: SignerImpl): Envelope
 }
 
 class ContractEngine(
@@ -48,7 +48,7 @@ class ContractEngine(
         keyPair: KeyPair,
         signingKeyPair: KeyPair,
         envelope: Envelope,
-        pen: Pen
+        signer: SignerImpl
     ): Envelope {
         log.info("Running contract engine")
 
@@ -71,7 +71,7 @@ class ContractEngine(
                 envelope,
                 keyPair,
                 memoryClassLoader,
-                pen,
+                signer,
                 affiliateService.getSharePublicKeys(listOf(keyPair.public)),
                 scope,
                 signingKeyPair,
@@ -85,7 +85,7 @@ class ContractEngine(
         envelope: Envelope,
         keyPair: KeyPair,
         memoryClassLoader: MemoryClassLoader,
-        pen: Pen,
+        signer: SignerImpl,
         shares: AffiliateSharePublicKeys,
         scope: Scope?,
         signingKeyPair: KeyPair,
@@ -168,7 +168,7 @@ class ContractEngine(
                 val contractForSignature = contractBuilder.build()
                 return envelope.toBuilder()
                     .setContract(contractForSignature)
-                    .addSignatures(pen.sign(contractForSignature))
+                    .addSignatures(signer.sign(contractForSignature))
                     .build()
             }
 
@@ -211,7 +211,7 @@ class ContractEngine(
                         val contractForSignature = contractBuilder.build()
                         return envelope.toBuilder()
                             .setContract(contractForSignature)
-                            .addSignatures(pen.sign(contractForSignature))
+                            .addSignatures(signer.sign(contractForSignature))
                             .build()
                     }
                     if (result == null) {
@@ -251,7 +251,7 @@ class ContractEngine(
         val contractForSignature = contractBuilder.build()
         return envelope.toBuilder()
             .setContract(contractForSignature)
-            .addSignatures(pen.sign(contractForSignature))
+            .addSignatures(signer.sign(contractForSignature))
             .build()
     }
 
