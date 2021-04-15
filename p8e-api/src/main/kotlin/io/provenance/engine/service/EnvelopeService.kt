@@ -1,7 +1,7 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Timestamp
-import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.SignerFactory
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractScope.Envelope.Status
@@ -15,7 +15,6 @@ import io.p8e.proto.Events.P8eEvent.Event.ENVELOPE_MAILBOX_OUTBOUND
 import io.p8e.proto.PK
 import io.p8e.util.*
 import io.provenance.p8e.shared.domain.EnvelopeRecord
-import io.provenance.p8e.shared.domain.EnvelopeTable
 import io.provenance.p8e.shared.domain.ScopeRecord
 import io.provenance.engine.extension.*
 import io.provenance.engine.grpc.v1.toEvent
@@ -39,7 +38,7 @@ class EnvelopeService(
     private val envelopeStateEngine: EnvelopeStateEngine,
     private val eventService: EventService,
     private val metricsService: MetricsService,
-    private val signer: SignerImpl
+    private val signerFactory: SignerFactory
 ) {
     private val log = logger()
 
@@ -61,7 +60,7 @@ class EnvelopeService(
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
 
         //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        signer.setKeyId(signingKeyPair)
+        val signer = signerFactory.getSigner(keyPair = signingKeyPair)
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
@@ -210,7 +209,7 @@ class EnvelopeService(
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
 
         //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        signer.setKeyId(signingKeyPair)
+        val signer = signerFactory.getSigner(keyPair = signingKeyPair)
 
         timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(

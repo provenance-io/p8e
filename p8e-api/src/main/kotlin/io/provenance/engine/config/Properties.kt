@@ -140,8 +140,3 @@ class MetricsProperties {
 class SmartKeyProperties {
     @NotNull lateinit var apiKey: String
 }
-
-@ConfigurationProperties(prefix = "signer")
-class SignerProperties {
-    @NotNull var type: String = "default" // Pen class default signer
-}

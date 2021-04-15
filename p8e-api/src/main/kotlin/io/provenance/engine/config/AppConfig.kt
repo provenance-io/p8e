@@ -10,7 +10,8 @@ import com.tinder.scarlet.websocket.okhttp.newWebSocketFactory
 import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
-import io.p8e.crypto.Pen
+import io.p8e.crypto.SignerFactory
+import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
@@ -78,8 +79,7 @@ import java.time.Duration
     ServiceProperties::class,
     ProvenanceKeystoneProperties::class,
     MetricsProperties::class,
-    SmartKeyProperties::class,
-    SignerProperties::class
+    SmartKeyProperties::class
 ])
 class AppConfig : WebMvcConfigurer {
 
@@ -269,10 +269,7 @@ class AppConfig : WebMvcConfigurer {
      * Add support for new key management.
      */
     @Bean
-    fun signer(smartKeyProperties: SmartKeyProperties, signerProperties: SignerProperties) =
-       when(signerProperties.type.toLowerCase()) {
-            "default" -> Pen()
-            "smartkey" -> SmartKeySigner(smartKeyProperties.apiKey)
-            else -> throw UnsupportedOperationException("Unsupported key management type ${signerProperties.type}")
-        }
+    fun signer(smartKeyProperties: SmartKeyProperties): SignerFactory {
+        return SignerFactory(smartKeyProperties.apiKey)
+    }
 }

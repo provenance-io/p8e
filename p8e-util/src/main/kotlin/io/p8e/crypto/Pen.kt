@@ -7,11 +7,12 @@ import io.p8e.proto.ProtoUtil
 import io.p8e.util.*
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.KeyPair
+import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.Security
 import java.security.Signature
 
-class Pen: SignerImpl() {
+class Pen(keyPair: KeyPair): SignerImpl {
 
     companion object {
         // Algo must match Provenance-object-store
@@ -20,20 +21,11 @@ class Pen: SignerImpl() {
         val PROVIDER = "BC"
     }
 
+    val privateKey: PrivateKey = keyPair.private
+    val lens: Lens = Lens(keyPair.public)
+
     init {
         Security.addProvider(BouncyCastleProvider())
-    }
-
-    var keys: KeyPair? = null
-    var lens: Lens? = null
-
-    override fun setKeyId(keyPair: KeyPair) {
-        keys = keyPair
-        lens = Lens(keys!!.public)
-    }
-
-    override fun setKeyId(uuid: String) {
-        /*no-op*/
     }
 
     /**
@@ -54,14 +46,14 @@ class Pen: SignerImpl() {
             SIGN_ALGO,
             PROVIDER
         )
-        s.initSign(keys!!.private)
+        s.initSign(privateKey)
         s.update(data)
 
         return ProtoUtil
             .signatureBuilderOf(String(s.sign().base64Encode()))
-            .setSigner(lens!!.signer())
+            .setSigner(lens.signer())
             .build()
-            .takeIf { lens!!.verify(data, it) }
+            .takeIf { lens.verify(data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 }

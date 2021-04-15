@@ -2,21 +2,15 @@ package io.p8e.crypto
 
 import com.google.protobuf.Message
 import io.p8e.proto.Common.Signature
-import java.security.KeyPair
 
-abstract class SignerImpl {
-
-    //TODO: Need to reference the KeyPair by a UUID
-    abstract fun setKeyId(keyPair: KeyPair)
-
-    abstract fun setKeyId(uuid: String)
+interface SignerImpl {
 
     /**
-     * sign function implementation will be done by specfic signers.
+     * signer function implementation will be done by specific signers.
      */
-    abstract fun sign(data: String): Signature
+    fun sign(data: String): Signature
 
-    abstract fun sign(data: Message): Signature
+    fun sign(data: Message): Signature
 
-    abstract fun sign(data: ByteArray): Signature
+    fun sign(data: ByteArray): Signature
 }

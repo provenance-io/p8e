@@ -13,13 +13,14 @@ import io.p8e.proto.Common.Signature
 import io.p8e.util.orThrow
 import io.p8e.util.toProtoUuidProv
 import java.lang.IllegalStateException
-import java.security.KeyPair
 
 class SmartKeySigner(
-    appApiKey: String
-): SignerImpl() {
-    private var sObjUUID: String = ""
-    private val apiKey = appApiKey
+    appApiKey: String,
+    uuid: String
+): SignerImpl {
+
+    private var sObjUUID: String = uuid
+    private var apiKey: String = appApiKey
 
     init {
         val client = ApiClient()
@@ -30,14 +31,6 @@ class SmartKeySigner(
         val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
         auth.apiKey = authResponse.accessToken
         auth.apiKeyPrefix = "Bearer"
-    }
-
-    override fun setKeyId(keyPair: KeyPair) {
-       /*no-op*/
-    }
-
-    override fun setKeyId(uuid: String) {
-        sObjUUID = uuid
     }
 
     override fun sign(data: String): Signature = sign(data.toByteArray())
