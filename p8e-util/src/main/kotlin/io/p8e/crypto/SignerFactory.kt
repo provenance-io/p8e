@@ -1,20 +1,21 @@
 package io.p8e.crypto
 
-import java.lang.IllegalStateException
+import io.p8e.crypto.SignerFactoryParam.PenParam
+import io.p8e.crypto.SignerFactoryParam.SmartKeyParam
 import java.security.KeyPair
 
-class SignerFactory(
-    smartKeyApiKey: String
-){
+sealed class SignerFactoryParam{
+    data class PenParam(val keyPair: KeyPair): SignerFactoryParam()
+    data class SmartKeyParam(val uuid: String): SignerFactoryParam()
+}
+
+class SignerFactory(smartKeyApiKey: String) {
     private val appApiKey = smartKeyApiKey
 
-    fun getSigner(uuid: String? = null, keyPair: KeyPair? = null): SignerImpl {
-        return if(keyPair != null) {
-            Pen(keyPair)
-        } else if(!uuid.isNullOrEmpty()) {
-            SmartKeySigner(appApiKey, uuid)
-        } else{
-            throw IllegalStateException("Unable to determine which signer to use.")
+    fun getSigner(param: SignerFactoryParam): SignerImpl {
+        return when (param) {
+            is PenParam -> Pen(param.keyPair)
+            is SmartKeyParam -> SmartKeySigner(appApiKey, param.uuid)
         }
     }
 }

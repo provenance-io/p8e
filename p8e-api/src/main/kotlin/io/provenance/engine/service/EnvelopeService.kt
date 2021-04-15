@@ -2,6 +2,7 @@ package io.provenance.engine.service
 
 import com.google.protobuf.Timestamp
 import io.p8e.crypto.SignerFactory
+import io.p8e.crypto.SignerFactoryParam
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractScope.Envelope.Status
@@ -60,7 +61,7 @@ class EnvelopeService(
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
 
         //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        val signer = signerFactory.getSigner(keyPair = signingKeyPair)
+        val signer = signerFactory.getSigner(SignerFactoryParam.PenParam(signingKeyPair))
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
@@ -209,7 +210,7 @@ class EnvelopeService(
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
 
         //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        val signer = signerFactory.getSigner(keyPair = signingKeyPair)
+        val signer = signerFactory.getSigner(SignerFactoryParam.PenParam(signingKeyPair))
 
         timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
