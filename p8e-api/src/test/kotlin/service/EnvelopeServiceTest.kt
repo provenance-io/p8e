@@ -1,6 +1,7 @@
 package service
 
 import helper.TestUtils
+import io.p8e.crypto.SignerFactory
 import io.p8e.crypto.SignerImpl
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope
@@ -49,7 +50,7 @@ class EnvelopeServiceTest {
 
     lateinit var dimeInputStream: DIMEInputStream
 
-    lateinit var signer: SignerImpl
+    lateinit var signerFactory: SignerFactory
 
     val ecKeys: KeyPair = TestUtils.generateKeyPair()
 
@@ -96,7 +97,7 @@ class EnvelopeServiceTest {
 
         envelopeStateEngine = EnvelopeStateEngine()
 
-        signer = Mockito.mock(SignerImpl::class.java)
+        signerFactory = Mockito.mock(SignerFactory::class.java)
 
         envelopeService = EnvelopeService(
             affiliateService = affiliateService,
@@ -105,7 +106,7 @@ class EnvelopeServiceTest {
             envelopeStateEngine = envelopeStateEngine,
             eventService = eventService,
             metricsService = metricService,
-            signer = signer
+            signerFactory = signerFactory
         )
     }
 
