@@ -97,8 +97,7 @@ class SmartKeySigner(
     private fun verify(data: String, signature: Signature): Boolean = verify(data, signature)
 
     private fun verify(data: ByteArray, signature: ByteArray): Boolean {
-        //TODO: Investigate local verification: https://app.clubhouse.io/figure/story/90457/investigate-signature-verification-for-smartkey
-
+        //TODO: Investigate local signature verification verification.
         val sigVerificationRequest = VerifyRequest()
             .hashAlg(DigestAlgorithm.SHA512)
             .data(data)
