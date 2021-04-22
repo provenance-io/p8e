@@ -2,6 +2,8 @@ package io.provenance.p8e.shared.domain
 
 import io.p8e.proto.Affiliate.AffiliateWhitelist
 import io.p8e.util.toHex
+import io.p8e.util.toJavaPublicKey
+import io.p8e.util.toUuidProv
 import io.provenance.p8e.shared.util.proto
 import org.jetbrains.exposed.dao.Entity
 import org.jetbrains.exposed.dao.EntityClass
@@ -23,6 +25,7 @@ object AffiliateTable : IdTable<String>("affiliate") {
     val encryptionPrivateKey = text ("encryption_private_key")
     val indexName = varchar("index_name", 255).default(DEFAULT_INDEX_NAME)
     val active = bool("active").default(true)
+    val keyUuid = uuid("key_uuid")
 
     override val id: Column<EntityID<String>> = publicKey.entityId()
 }
@@ -36,6 +39,8 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
     fun findByPublicKey(publicKey: PublicKey) = find { AffiliateTable.publicKey eq publicKey.toHex() }.firstOrNull()
 
     fun findByEncryptionPublicKey(publicKey: PublicKey) = find { AffiliateTable.encryptionPublicKey eq publicKey.toHex() }.firstOrNull()
+
+    fun findByKeyUuid(uuid: String) = find{ AffiliateTable.keyUuid eq uuid.toUuidProv() }.firstOrNull()
 
     fun findManagedByPublicKey(publicKey: PublicKey, identityUuid: UUID) = AffiliateTable
         .join(AffiliateIdentityTable, JoinType.INNER, AffiliateTable.publicKey, AffiliateIdentityTable.publicKey)
@@ -55,14 +60,31 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
     fun getDistinctIndexNames() = AffiliateTable.slice(AffiliateTable.indexName).selectAll().withDistinct().map { it[AffiliateTable.indexName] };
 
     fun insert(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String?, alias: String? = null) =
-          findForUpdate(signingKeyPair.public)
-              ?: new(signingKeyPair.public.toHex()) {
-                  this.privateKey = signingKeyPair.private.toHex()
-                  this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
-                  this.encryptionPublicKey = encryptionKeyPair.public.toHex()
-                  this.alias = alias
-                  indexName?.takeIf { it.isNotBlank() }?.let { this.indexName = it }
-              }
+        findForUpdate(signingKeyPair.public)
+            ?: new(signingKeyPair.public.toHex()) {
+                this.privateKey = signingKeyPair.private.toHex()
+                this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
+                this.encryptionPublicKey = encryptionKeyPair.public.toHex()
+                this.alias = alias
+                indexName?.takeIf { it.isNotBlank() }?.let { this.indexName = it }
+            }
+
+    /**
+     * Insert for an affiliate with just the signing public key.
+     *
+     * [signingPublicKey] The signing public key provided a key management system
+     * [encryptionKeyPair] The encryptionKey pair of the affiliate
+     * [indexName] Name of index for elasticsearch
+     * [alias] Alias for affiliate
+     */
+    fun insert(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, indexName: String?, alias: String? = null) =
+        findForUpdate(signingPublicKey)
+            ?: new(signingPublicKey.toHex()) {
+                this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
+                this.encryptionPublicKey = encryptionKeyPair.public.toHex()
+                this.alias = alias
+                indexName?.takeIf { it.isNotBlank() }?.let{ this.indexName = it }
+            }
 }
 
 class AffiliateRecord(id: EntityID<String>): Entity<String>(id) {
@@ -78,4 +100,5 @@ class AffiliateRecord(id: EntityID<String>): Entity<String>(id) {
     var active by AffiliateTable.active
     var serviceKeys by ServiceAccountRecord via AffiliateToServiceTable
     val identities by AffiliateIdentityRecord referrersOn AffiliateIdentityTable.publicKey
+    var keyUuid by AffiliateTable.keyUuid
 }
