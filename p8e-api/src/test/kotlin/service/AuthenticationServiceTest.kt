@@ -28,6 +28,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito
 import java.security.KeyPair
+import java.util.UUID
 
 @Suppress("UNCHECKED_CAST")
 class AuthenticationServiceTest {
@@ -70,6 +71,7 @@ class AuthenticationServiceTest {
                     encryptionPrivateKey = keyPair.private.toHex()
                     indexName = "test"
                     alias = "test"
+                    keyUuid = UUID.randomUUID()
                 }
         }
 
