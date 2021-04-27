@@ -45,17 +45,27 @@ class AffiliateService(
         const val AFFILIATE_INDEX_NAMES = "affiliate_index_names"
         const val AFFILIATE_INDEX_NAME = "affiliate_index_name"
         const val AFFILIATE_ENCRYPTION_KEY_PAIR = "affiliate_encryption_key_pair"
+        const val AFFILIATE_SIGNING_KID = "affiliate_signing_key_id"
     }
 
     /**
      * Get affiliate by pk.
      *
-     * @param [uuid] primary key
+     * @param [publicKey] primary key
      * @return the [AffiliateRecord] found or null
      */
     @Cacheable(AFFILIATE)
     fun get(publicKey: PublicKey): AffiliateRecord? = AffiliateRecord.findById(publicKey.toHex())
         ?: AffiliateRecord.findByEncryptionPublicKey(publicKey)
+
+    /**
+     * Get affiliate by UUID.
+     *
+     * @param [uuid] keypair identifier.
+     * @return the [AffiliateRecord] found or null
+     */
+    @Cacheable(AFFILIATE)
+    fun get(uuid: String): AffiliateRecord? = AffiliateRecord.findById(uuid)
 
     /**
      * Get affiliate by pk, not nullable.
@@ -67,6 +77,17 @@ class AffiliateService(
     @Cacheable(AFFILIATE_FIRST)
     internal fun getFirst(publicKey: PublicKey): AffiliateRecord = get(publicKey)
         ?: throw NotFoundException("Public Key is not a valid signing or encryption key: ${publicKey.toHex()}")
+
+    /**
+     * Get affiliate by pk, not nullable.
+     *
+     * @param [uuid] primary key
+     * @throws [NotFoundException] If null, exceptions
+     * @return the [AffiliateRecord] found
+     */
+    @Cacheable(AFFILIATE_FIRST)
+    internal fun getFirst(uuid: String): AffiliateRecord = get(uuid)
+        ?: throw NotFoundException("Key UUID is not found: $uuid")
 
     /**
      * Get encryption key pair for an affiliate.
@@ -86,6 +107,24 @@ class AffiliateService(
     fun getEncryptionKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
         return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey.toJavaPrivateKey())
+    }
+
+    @Cacheable(AFFILIATE_KEY_PAIR)
+    fun getSigningKeyPair(uuid: String): KeyPair{
+        val affiliateRecord = getFirst(uuid)
+        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey.toJavaPrivateKey())
+    }
+
+    /**
+     * Get the public key that matches with the AffiliateRecord.
+     *
+     * @param [publicKey] Public key of the contract being executed.
+     * @return [uuid] the identifier of which that public key belongs to from the affiliate table.
+     */
+    @Cacheable(AFFILIATE_SIGNING_KID)
+    fun getSigningKeyUuid(publicKey: PublicKey): String {
+        val affiliateRecord = getFirst(publicKey)
+        return affiliateRecord.keyUuid.toString()
     }
 
     /**
@@ -115,10 +154,14 @@ class AffiliateService(
     fun getIndexNameByPublicKey(publicKey: PublicKey) = AffiliateRecord.findByPublicKey(publicKey)?.indexName ?: DEFAULT_INDEX_NAME
 
     /**
-     * Save or update an affiliate encryption.
+     * Save or update an affiliate.
      *
-     * @param [affiliateKeyData] to save to an affiliate
-     * @return the [AffiliateRecord] saved or updated.
+     * @param [signingKeyPair] The signing key pair for data signing
+     * @param [encryptionKeyPair] The encryption used for affiliate auth
+     * @param [indexName] Name of index for doc storage.
+     * @param [alias] alias used to describe an affiliate.
+     * @param [jwt] token for webservice authentication.
+     * @return [AffiliateRecord] The affiliate record
      */
     @CacheEvict(cacheNames = [
         AFFILIATE,
@@ -131,7 +174,8 @@ class AffiliateService(
         AFFILIATE_INDEX_NAMES,
         AFFILIATE_INDEX_NAME
     ])
-    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
+    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
@@ -147,6 +191,42 @@ class AffiliateService(
                 if (jwt != null && identityUuid != null) {
                     keystoneService.registerKey(jwt, signingKeyPair.public, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.CONTRACT)
                     registerKeyWithIdentity(it, identityUuid)
+                }
+            }
+
+    /**
+     * Save or update an affiliate with a signing public key from a key management system.
+     *
+     * @param [signingPublicKey] The provided signing public key from the key management system.
+     * @param [encryptionKeyPair] The encryption used for affiliate auth
+     * @param [indexName] Name of index for doc storage.
+     * @param [alias] alias used to describe an affiliate.
+     * @param [jwt] token for webservice authentication.
+     * @return [AffiliateRecord] The affiliate record
+     */
+    @CacheEvict(cacheNames = [
+        AFFILIATE,
+        AFFILIATE_FIRST,
+        AFFILIATE_KEY_PAIR,
+        AFFILIATE_PEN,
+        AFFILIATES,
+        AFFILIATES_ENCRYPTION_KEYS,
+        AFFILIATES_SIGNING_KEYS,
+        AFFILIATE_INDEX_NAMES,
+        AFFILIATE_INDEX_NAME
+    ])
+    fun save(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String?, jwt: String? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingPublicKey, encryptionKeyPair, indexName, alias)
+            .also {
+                // Register the key with object store so that it monitors for replication.
+                osClient.createPublicKey(encryptionKeyPair.public)
+
+                // create index in ES if it doesn't already exist
+                indexName?.let {
+                    if (!esClient.indices().exists(GetIndexRequest(it), RequestOptions.DEFAULT)) {
+                        val response = esClient.indices().create(CreateIndexRequest(it), RequestOptions.DEFAULT)
+                        require (response.isAcknowledged) { "ES index creation of $it was not successful" }
+                    }
                 }
             }
 

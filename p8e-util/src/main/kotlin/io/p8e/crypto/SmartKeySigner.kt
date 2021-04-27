@@ -13,9 +13,7 @@ import com.google.protobuf.Message
 import io.p8e.proto.Common.Signature
 import io.p8e.util.orThrow
 import io.p8e.util.toHex
-import io.p8e.util.toHexString
 import io.p8e.util.toJavaPublicKey
-import io.p8e.util.toProtoUuidProv
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider
 import java.lang.IllegalStateException
@@ -48,16 +46,13 @@ import java.security.spec.X509EncodedKeySpec
  */
 
 class SmartKeySigner(
-    appApiKey: String,
-    keyUuid: String
+    private val appApiKey: String,
+    private val keyUuid: String
 ): SignerImpl {
-
-    private var kid: String = keyUuid
-    private var apiKey: String = appApiKey
 
     init {
         val client = ApiClient()
-        client.setBasicAuthString(apiKey)
+        client.setBasicAuthString(appApiKey)
         Configuration.setDefaultApiClient(client)
 
         val authResponse = AuthenticationApi().authorize()
@@ -76,15 +71,14 @@ class SmartKeySigner(
             .data(data)
             .deterministicSignature(true)
 
-        val signatureResponse = SignAndVerifyApi().sign(kid, signatureRequest)
+        val signatureResponse = SignAndVerifyApi().sign(keyUuid, signatureRequest)
 
         return Signature.newBuilder()
             .setAlgo(DigestAlgorithm.SHA512.value)
             .setProvider("SmartKey")
             .setSignature(signatureResponse.signature.toString())
-            .setKeyId(signatureResponse.kid.toProtoUuidProv())
             .build()
-            .takeIf { verify(data, it) }
+            .takeIf { verify(data, signatureResponse.signature) }
             .orThrow { IllegalStateException("Invalid signature") }
     }
 
@@ -94,7 +88,7 @@ class SmartKeySigner(
      * @return [PublicKey] return the Java security version of the PublicKey.
      */
     fun getPublicKey(): PublicKey {
-        val smPublicKey = SecurityObjectsApi().getSecurityObject(kid).pubKey
+        val smPublicKey = SecurityObjectsApi().getSecurityObject(keyUuid).pubKey
         val x509PublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(smPublicKey))
         val bcPublicKey = BCECPublicKey(x509PublicKey as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION)
         return bcPublicKey.toHex().toJavaPublicKey()
@@ -102,11 +96,12 @@ class SmartKeySigner(
 
     private fun verify(data: String, signature: Signature): Boolean = verify(data, signature)
 
-    private fun verify(data: ByteArray, signature: Signature): Boolean {
+    private fun verify(data: ByteArray, signature: ByteArray): Boolean {
+        //TODO: Investigate local signature verification verification.
         val sigVerificationRequest = VerifyRequest()
             .hashAlg(DigestAlgorithm.SHA512)
             .data(data)
-            .signature(signature.signature.toByteArray())
-        return SignAndVerifyApi().verify(signature.keyId.value, sigVerificationRequest).result
+            .signature(signature)
+        return SignAndVerifyApi().verify(keyUuid, sigVerificationRequest).result
     }
 }
