@@ -6,24 +6,23 @@ import cosmos.auth.v1beta1.Auth
 import cosmos.auth.v1beta1.QueryGrpc
 import cosmos.auth.v1beta1.QueryOuterClass
 import cosmos.base.abci.v1beta1.Abci.TxResponse
-import cosmos.base.tendermint.v1beta1.Query.GetBlockByHeightRequest
-import cosmos.base.tendermint.v1beta1.Query.GetLatestBlockRequest
-import cosmos.base.tendermint.v1beta1.Query.GetLatestBlockResponse
-import cosmos.base.tendermint.v1beta1.Query.GetNodeInfoRequest
-import cosmos.base.tendermint.v1beta1.Query.GetNodeInfoResponse
-import cosmos.base.tendermint.v1beta1.ServiceGrpc as NodeGrpc
+import cosmos.base.tendermint.v1beta1.Query.*
 import cosmos.base.v1beta1.CoinOuterClass
 import cosmos.crypto.secp256k1.Keys
 import cosmos.tx.signing.v1beta1.Signing
-import cosmos.tx.v1beta1.ServiceGrpc as TxGrpc
 import cosmos.tx.v1beta1.ServiceOuterClass.*
 import cosmos.tx.v1beta1.TxOuterClass.*
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
+import io.p8e.engine.threadedMap
+import io.p8e.proto.ContractScope
+import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.toByteString
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
-import io.provenance.metadata.v1.p8e.ContractSpec
+import io.provenance.engine.util.toP8e
+import io.provenance.metadata.v1.ContractSpecificationRequest
+import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.pbc.clients.roundUp
 import org.kethereum.crypto.getCompressedPublicKey
 import org.springframework.stereotype.Service
@@ -31,13 +30,19 @@ import java.net.URI
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
-import io.p8e.proto.ContractSpecs.ContractSpec as P8EContractSpec
+import cosmos.base.tendermint.v1beta1.ServiceGrpc as NodeGrpc
+import cosmos.tx.v1beta1.ServiceGrpc as TxGrpc
+import io.provenance.metadata.v1.QueryGrpc as MetadataQueryGrpc
 
 @Service
 class ProvenanceGrpcService(
     private val accountProvider: Account,
     private val chaincodeProperties: ChaincodeProperties
 ) {
+    companion object {
+        val executor = ThreadPoolFactory.newFixedThreadPool(5, "prov-grpc-%d")
+    }
+
     private val channel =  URI(chaincodeProperties.grpcUrl).let { uri ->
             Logger.getLogger("io.netty").setLevel(Level.ALL)
                 io.provenance.p8e.shared.extension.logger().error("api = ${uri.host} ${uri.port}")
@@ -60,6 +65,7 @@ class ProvenanceGrpcService(
     private val txService = TxGrpc.newBlockingStub(channel)
     private val accountService = QueryGrpc.newBlockingStub(channel)
     private val nodeService = NodeGrpc.newBlockingStub(channel)
+    private val metadataQueryService = MetadataQueryGrpc.newBlockingStub(channel)
 
     private val bech32Address = accountProvider.bech32Address()
     private val keyPair = accountProvider.getKeyPair()
@@ -145,6 +151,28 @@ class ProvenanceGrpcService(
                 .build()
             )
         }
+
+    fun retrieveScope(address: String): ContractScope.Scope {
+        val scopeResponse = metadataQueryService.scope(
+            ScopeRequest.newBuilder()
+                .setScopeId(address)
+                .setIncludeSessions(true)
+                .setIncludeRecords(true)
+                .build()
+        )
+
+        val contractSpecHashLookup = scopeResponse.sessionsList
+            .map { it.contractSpecIdInfo.contractSpecAddr }
+            .toSet()
+            .threadedMap(executor) {
+                it to metadataQueryService.contractSpecification(ContractSpecificationRequest.newBuilder()
+                    .setSpecificationId(it)
+                    .build()
+                ).contractSpecification.specification.hash
+            }.toMap()
+
+        return scopeResponse.toP8e(contractSpecHashLookup)
+    }
 }
 
 fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()

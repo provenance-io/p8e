@@ -303,28 +303,29 @@ class ContractManager(
      * @param executionUuid the execution uuid to set for this contract execution
      * @param invokerRole the PartyType to satisfy for this ContractManager's public key
      */
-    fun <T: P8eContract> changeScopeOwnership(contractClazz: Class<T>, scope: Scope, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
-        val contractProto = newContractProto(contractClazz)
-            .setType(Contracts.ContractType.CHANGE_SCOPE)
-            .build()
-        val env = Envelope.newBuilder()
-            .setContract(contractProto)
-            .setExecutionUuid(executionUuid.or { UUID.randomUUID() }.toProtoUuidProv())
-            .setScope(scope)
-            .setRef(ProvenanceReference.newBuilder().setScopeUuid(scope.uuid).setGroupUuid(randomProtoUuidProv()).build())
-            .build()
-
-            return Contract(
-                this,
-                client,
-                dehydrateSpec(contractClazz),
-                env,
-                contractClazz,
-                contractClassExecutor(contractClazz)
-            ).also { contract ->
-                invokerRole?.let { contract.satisfyParticipant(it, publicKey) }
-            }
-    }
+    // TODO: uncomment once re-implemented on new chain
+//    fun <T: P8eContract> changeScopeOwnership(contractClazz: Class<T>, scope: Scope, executionUuid: UUID? = null, invokerRole: PartyType? = null): Contract<T> {
+//        val contractProto = newContractProto(contractClazz)
+//            .setType(Contracts.ContractType.CHANGE_SCOPE)
+//            .build()
+//        val env = Envelope.newBuilder()
+//            .setContract(contractProto)
+//            .setExecutionUuid(executionUuid.or { UUID.randomUUID() }.toProtoUuidProv())
+//            .setScope(scope)
+//            .setRef(ProvenanceReference.newBuilder().setScopeUuid(scope.uuid).setGroupUuid(randomProtoUuidProv()).build())
+//            .build()
+//
+//            return Contract(
+//                this,
+//                client,
+//                dehydrateSpec(contractClazz),
+//                env,
+//                contractClazz,
+//                contractClassExecutor(contractClazz)
+//            ).also { contract ->
+//                invokerRole?.let { contract.satisfyParticipant(it, publicKey) }
+//            }
+//    }
 
     fun <T: P8eContract> loadContract(
         clazz: Class<T>,

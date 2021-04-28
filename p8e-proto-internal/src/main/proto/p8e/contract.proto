@@ -9,6 +9,7 @@ option java_outer_classname = "Contracts";
 import "p8e/common.proto";
 import "p8e/contract_spec.proto";
 import "p8e/public_key.proto";
+import "p8e/util.proto";
 
 import "google/protobuf/timestamp.proto";
 
@@ -40,6 +41,10 @@ message Contract {
 
     // This is only set once when the contract is initially executed
     google.protobuf.Timestamp start_time = 9;
+}
+
+message ContractState {
+    UUID executionUuid = 1;
 }
 
 message Recital {

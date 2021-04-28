@@ -1,17 +1,21 @@
 package io.provenance.engine.util
 
+import com.google.protobuf.Any
 import io.p8e.proto.Common
+import io.p8e.proto.ContractScope
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.ContractSpecs.PartyType
 import io.p8e.proto.Contracts
-import io.p8e.util.base64Decode
-import io.p8e.util.base64Encode
-import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
+import io.p8e.proto.Util
+import io.p8e.util.*
+import io.provenance.engine.service.toAny
+import io.provenance.metadata.v1.*
 import io.provenance.metadata.v1.PartyType as ProvenancePartyType
 import io.provenance.metadata.v1.p8e.SignatureSet
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import org.jetbrains.exposed.sql.transactions.transaction
+import java.lang.Long.max
 
 const val PROV_METADATA_PREFIX_CONTRACT_SPEC: Byte = 0x03
 
@@ -47,6 +51,8 @@ fun Contracts.Contract.toProv(): io.provenance.metadata.v1.p8e.Contract = io.pro
 
 fun Common.Signature.toProv(): io.provenance.metadata.v1.p8e.Signature = io.provenance.metadata.v1.p8e.Signature.parseFrom(toByteArray())
 
+fun Util.UUID.toProv(): io.provenance.metadata.v1.p8e.UUID = io.provenance.metadata.v1.p8e.UUID.parseFrom(toByteArray())
+
 fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
     MsgP8eMemorializeContractRequest.newBuilder()
         .setScopeId(this.ref.scopeUuid.value)
@@ -54,10 +60,76 @@ fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
         // TODO refactor name fetch to service with caching?
         // Does this need to verify that this scope specification is associated with this contract hash locally in the db as well?
         .setScopeSpecificationId(transaction { ScopeSpecificationRecord.findByName(scope.scopeSpecificationName)?.id?.value?.toString() })
-        .setContract(this.contract.toProv())
+        .setContract(this.contract.toProv().toBuilder()
+            .setContext(Contracts.ContractState.newBuilder()
+                .setExecutionUuid(this.executionUuid)
+                .build().toByteString()
+            )
+            .build()
+        )
         .setSignatures(SignatureSet.newBuilder()
             .addAllSignatures(this.signaturesList.map { it.toProv() })
             .build()
         )
         .setInvoker(invokerAddress)
         .build()
+
+// Extensions for marshalling data back to P8e
+
+fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>): ContractScope.Scope = ContractScope.Scope.newBuilder()
+    .setUuid(scope.scopeIdInfo.scopeUuid.toProtoUuidProv())
+    .addAllParties(scope.scope.ownersList.map { it.toP8e() })
+    .addAllRecordGroup(sessionsList.map { session ->
+        ContractScope.RecordGroup.newBuilder()
+            .setSpecification(contractSpecHashLookup.getOrDefault(session.contractSpecIdInfo.contractSpecAddr, session.contractSpecIdInfo.contractSpecAddr))
+            .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
+//            .setExecutor() // TODO: not sure if this is available, no keys appear to be readily accessible
+            .addAllParties(session.session.partiesList.map { it.toP8e() })
+            .addAllRecords(recordsList
+                .filter { record -> record.record.sessionId == session.session.sessionId }
+                .map { record -> record.toP8e() }
+            )
+            .setClassname(session.session.name)
+            .setAudit(session.session.audit.toP8e())
+            .build()
+    })
+    .setLastEvent(sessionsList.lastSession()?.let { session ->
+        ContractScope.Event.newBuilder()
+            .setExecutionUuid(Contracts.ContractState.parseFrom(session.session.context).executionUuid)
+            .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
+    })
+    .build()
+
+fun List<SessionWrapper>.lastSession(): SessionWrapper? = sortedByDescending {
+    max(it.session.audit.createdDate.toOffsetDateTimeProv().toEpochSecond(), it.session.audit.updatedDate.toOffsetDateTimeProv().toEpochSecond())
+}.firstOrNull()
+
+fun AuditFields.toP8e(): Util.AuditFields = Util.AuditFields.parseFrom(toByteArray())
+
+fun RecordWrapper.toP8e(): ContractScope.Record = with (record) {
+    ContractScope.Record.newBuilder()
+        .setName(name)
+        .setHash(process.hash)
+        .setClassname(process.name)
+        .addAllInputs(inputsList.map { it.toP8e() }).apply {
+            outputsList.firstOrNull()?.let { output ->
+                setResultValue(output.statusValue)
+                    .setResultName(name) // todo: could maybe be different than the function (record) name, does the output struct need a name field?
+                    .setResultHash(output.hash)
+            }
+        }
+        .build()
+}
+
+fun RecordInput.toP8e(): ContractScope.RecordInput = ContractScope.RecordInput.newBuilder()
+    .setName(name)
+    .setHash(hash)
+    .setClassname(typeName) // yes, the typename is the classname
+    .setTypeValue(statusValue) // yes, type is now status
+    .build()
+
+fun Party.toP8e(): Contracts.Recital = Contracts.Recital.newBuilder()
+    .setAddress(addressBytes)
+    .setSignerRoleValue(roleValue)
+//  .setSigner() // TODO: No signer in new Party message
+    .build()
