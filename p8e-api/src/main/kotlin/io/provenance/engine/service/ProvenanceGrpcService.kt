@@ -86,7 +86,7 @@ class ProvenanceGrpcService(
 
     fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
-    fun signTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Int = 0, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
+    fun signTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long = 0, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
         val authInfo = AuthInfo.newBuilder()
             .setFee(Fee.newBuilder()
                 .addAllAmount(listOf(
@@ -137,7 +137,7 @@ class ProvenanceGrpcService(
             )
         }.let { GasEstimate(it.gasInfo.gasUsed) }
 
-    fun batchTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Int, estimate: GasEstimate): BroadcastTxResponse =
+    fun batchTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long, estimate: GasEstimate): BroadcastTxResponse =
         signTx(body, accountInfo, sequenceNumberOffset, estimate).run {
             TxRaw.newBuilder()
                 .setBodyBytes(body.toByteString())
