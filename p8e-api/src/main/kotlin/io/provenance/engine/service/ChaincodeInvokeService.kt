@@ -116,6 +116,7 @@ class ChaincodeInvokeService(
                             priorityScopeBacklog.remove(key)
                         }
 
+                        log.debug("adding ${message.request.scopeId} to batch")
                         blockScopeIds.add(message.request.scopeId)
                         batch.add(message)
                     } ?: break
