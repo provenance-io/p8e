@@ -110,15 +110,20 @@ class EventStreamFactory(
         fun streamEvents() {
             // todo: concurrency - need to limit how many times this function is called??? Used to limit based on consumer id... probably need to use redis to do this... and ensure cleaned up when shutting down if do
 
-            // start event loop to start listening for events
-            startEventLoop()
-            shutdownHook = shutdownHook { shutdown(false) } // ensure we close socket gracefully when shutting down
+            try {
+                // start event loop to start listening for events
+                startEventLoop()
+                shutdownHook = shutdownHook { shutdown(false) } // ensure we close socket gracefully when shutting down
 
-            timed("EventStream:streamHistory") {
-                streamHistory()
+                timed("EventStream:streamHistory") {
+                    streamHistory()
+                }
+
+                eventMonitor.start()
+            } catch (t: Throwable) {
+                log.error("Error starting up EventStream: ${t.message}")
+                handleError(t)
             }
-
-            eventMonitor.start()
         }
 
         private fun streamHistory() {
