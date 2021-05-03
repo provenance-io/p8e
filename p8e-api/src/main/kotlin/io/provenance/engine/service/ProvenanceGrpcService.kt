@@ -45,7 +45,6 @@ class ProvenanceGrpcService(
 
     private val channel =  URI(chaincodeProperties.grpcUrl).let { uri ->
             Logger.getLogger("io.netty").setLevel(Level.ALL)
-                io.provenance.p8e.shared.extension.logger().error("api = ${uri.host} ${uri.port}")
             NettyChannelBuilder.forAddress(uri.host, uri.port)
                 .also {
                     if (uri.scheme == "grpcs") {
