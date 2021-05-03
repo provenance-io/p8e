@@ -31,19 +31,18 @@ fun PartyType.toProv() = when (this) {
     PartyType.MARKER, PartyType.NONE, PartyType.UNRECOGNIZED -> throw IllegalStateException("Invalid PartyType of ${this}.")
 }
 
-fun ContractSpec.toProvHash(): String = this.definition.resourceLocation.ref.hash
-    .let { sha512 ->
-        val provHash = sha512.base64Decode().copyOfRange(0, 17)
+fun ContractSpec.toProvHash(): String {
+    val provHash = this.toByteArray().sha512().copyOfRange(0, 17)
 
-        // implements the provenance 16 byte hash to metadata address format
-        // shift all bytes over 1 and insert a static prefix at index 0
-        for (i in 0 until (provHash.size - 1)) {
-            provHash[provHash.size - 1 - i] = provHash[provHash.size - 2 - i]
-        }
-        provHash[0] = PROV_METADATA_PREFIX_CONTRACT_SPEC
-
-        String(provHash.base64Encode())
+    // implements the provenance 16 byte hash to metadata address format
+    // shift all bytes over 1 and insert a static prefix at index 0
+    for (i in 0 until (provHash.size - 1)) {
+        provHash[provHash.size - 1 - i] = provHash[provHash.size - 2 - i]
     }
+    provHash[0] = PROV_METADATA_PREFIX_CONTRACT_SPEC
+
+    return String(provHash.base64Encode())
+}
 
 fun ContractSpec.toProv(): io.provenance.metadata.v1.p8e.ContractSpec = io.provenance.metadata.v1.p8e.ContractSpec.parseFrom(toByteArray())
 
