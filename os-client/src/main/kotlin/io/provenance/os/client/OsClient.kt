@@ -5,6 +5,7 @@ import com.google.protobuf.Message
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.p8e.util.toByteString
+import io.p8e.util.toPublicKeyProto
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
@@ -15,6 +16,7 @@ import io.provenance.os.proto.*
 import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
 import io.provenance.os.util.base64Decode
+import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -72,7 +74,7 @@ open class OsClient(uri: URI) {
 
         objectAsyncClient.get(
             Objects.Sha512Request.newBuilder()
-                .setSha512(sha512.toByteString())
+                .setHash(sha512.toByteString())
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
                 .build(),
             BufferedStreamObserver(errorHandler = { error = it; finishLatch.countDown() }) { buffer, startTimeMs ->
@@ -137,7 +139,7 @@ open class OsClient(uri: URI) {
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
-    ): ObjectWithItem {
+    ): Objects.ObjectResponse {
         val bytes = message.toByteArray()
 
         return put(
@@ -160,7 +162,7 @@ open class OsClient(uri: URI) {
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
         deadlineSeconds: Long = 60L
-    ): ObjectWithItem {
+    ): Objects.ObjectResponse {
         val signatureInputStream = inputStream.sign(signingKeyPair.private)
         val signingPublicKey = CertificateUtil.publicKeyToPem(signingKeyPair.public)
         val dime = ProvenanceDIME.createDIME(
@@ -211,28 +213,15 @@ open class OsClient(uri: URI) {
             throw responseObserver.error!!
         }
 
-        return responseObserver.get().toDomain()
+        return responseObserver.get()
     }
 
-    fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
-        publicKeyBlockingClient.create(
+    fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
+        publicKeyBlockingClient.add(
             PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        ).toDomain()
-
-    fun deletePublicKey(publicKey: PublicKey) {
-        publicKeyBlockingClient.delete(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                .setPublicKey(publicKey.toPublicKeyProtoOS())
                 .build()
         )
-    }
-
-    fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
-        publicKeyBlockingClient.getAll(Empty.getDefaultInstance())
-            .keyList
-            .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

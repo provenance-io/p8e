@@ -1,9 +1,9 @@
 syntax = "proto3";
 
-package os;
+package objectstore;
 
 import "google/protobuf/timestamp.proto";
-import "p8e/util.proto";
+import "util.proto";
 
 option java_package = "io.provenance.os.proto";
 option java_outer_classname = "Objects";
@@ -13,7 +13,7 @@ service ObjectService {
 
     rpc Get(Sha512Request) returns (stream ChunkBidi) {};
 
-    rpc GetByUuid(p8e.UUID) returns (stream ChunkBidi) {};
+    // rpc GetByUuid(UUID) returns (stream ChunkBidi) {};
 }
 
 message ChunkBidi {
@@ -24,13 +24,8 @@ message ChunkBidi {
 }
 
 message Sha512Request {
-    bytes sha_512 = 1;
+    bytes hash = 1;
     bytes public_key = 2;
-}
-
-message ObjectResponse {
-    Object object = 1;
-    Item item = 2;
 }
 
 message Chunk {
@@ -54,40 +49,27 @@ message StreamHeader {
     int64 content_length = 2;
 }
 
-message Item {
-    string bucket = 1;
-    string name = 2;
-    int32 contentLength = 3;
-    map<string, string> metadata = 4;
-}
+message ObjectResponse {
+    reserved 2, 9, 10, 12, 13, 14;
+    reserved "object_uuid", "effective_start_date", "effective_end_date", "created_by", "updated", "updated_by";
 
-message Object {
-    p8e.UUID uuid = 1;
-    p8e.UUID object_uuid = 2;
-    bytes unencrypted_sha_512 = 3;
+    UUID uuid = 1;
+    bytes hash = 3;
     repeated Signature signatures = 4;
     string uri = 5;
     string bucket = 6;
     string name = 7;
     ObjectMetadata metadata = 8;
-    google.protobuf.Timestamp effective_start_date = 9;
-    google.protobuf.Timestamp effective_end_date = 10;
     google.protobuf.Timestamp created = 11;
-    string created_by = 12;
-    google.protobuf.Timestamp updated = 13;
-    string updated_by = 14;
 }
 
 message ObjectMetadata {
-    p8e.UUID uuid = 1;
-    p8e.UUID document_uuid = 2;
-    bytes sha_512 = 3;
-    int32 length = 4;
-    string connector_class = 5;
-    google.protobuf.Timestamp created = 6;
-    string created_by = 7;
-    google.protobuf.Timestamp updated = 8;
-    string updated_by = 9;
+    reserved 1, 2, 5, 6, 7, 8, 9;
+    reserved "uuid", "document_uuid", "connector_class", "created", "created_by", "updated", "updated_by";
+
+    bytes sha512 = 3;
+    int64 length = 4;
+    int64 content_length = 10;
 }
 
 message Signature {
