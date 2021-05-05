@@ -6,7 +6,6 @@ import io.p8e.util.orThrowNotFound
 import io.p8e.util.toJavaPublicKey
 import io.provenance.p8e.shared.domain.AffiliateRecord
 import io.provenance.p8e.shared.service.AffiliateService
-import io.provenance.p8e.webservice.interceptors.provenanceIdentityUuid
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.web.bind.annotation.*
 import java.util.*
@@ -22,9 +21,9 @@ open class ObjectController(private val affiliateService: AffiliateService) {
         @RequestParam("contractSpecHash") contractSpecHash: String,
         @RequestParam("publicKey") publicKey: String
     ): Any {
-        val affiliate = transaction { affiliateService.getAffiliateByPublicKeyAndIdentityUuid(publicKey.toJavaPublicKey(), provenanceIdentityUuid()) }
+        val affiliate = transaction { affiliateService.get(publicKey.toJavaPublicKey()) }
 
-        requireNotNull(affiliate) { "Identity ${provenanceIdentityUuid()} is unable to fetch objects for public key $publicKey" }
+        requireNotNull(affiliate) { "Affiliate not found with public key $publicKey" }
 
         return ContractManager.create(affiliate.privateKey).let { cm ->
             cm.client.loadProtoJson(hash, className, contractSpecHash)
