@@ -10,6 +10,7 @@ import io.p8e.proto.AffiliateServiceGrpc.AffiliateServiceImplBase
 import io.p8e.util.computePublicKey
 import io.p8e.util.toHex
 import io.p8e.util.toPrivateKey
+import io.p8e.util.toPublicKey
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
@@ -40,6 +41,8 @@ class AffiliateGrpc(
         val ecPrivateKey = if(request.encryptionPrivateKey.isInitialized) request.encryptionPrivateKey.toPrivateKey() else privateKey
         val ecPublicKey = ecPrivateKey.computePublicKey()
 
+        val authPublicKey = request.authPublicKey.toPublicKey()
+
         log.info("Saving affiliate encryption key: ${ecPublicKey.toHex()}")
 
         if (mailboxService.encryptionPublicKeyExists(ecPublicKey)) {
@@ -49,7 +52,8 @@ class AffiliateGrpc(
         transaction {
             affiliateService.save(
                 signingKeyPair = KeyPair(publicKey, privateKey),
-                encryptionKeyPair = KeyPair(ecPublicKey, ecPrivateKey)
+                encryptionKeyPair = KeyPair(ecPublicKey, ecPrivateKey),
+                authPublicKey = authPublicKey
             )
         }
         responseObserver.complete()

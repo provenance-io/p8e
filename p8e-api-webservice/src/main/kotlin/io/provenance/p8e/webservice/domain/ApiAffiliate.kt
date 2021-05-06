@@ -43,9 +43,10 @@ fun AffiliateShareRecord.toApi(): ApiAffiliateShare =
         created
     )
 
-data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val useSigningKeyForEncryption: Boolean, val indexName: String, val alias: String?) {
+data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val authKeyPair: String?, val useSigningKeyForEncryption: Boolean, val indexName: String, val alias: String?) {
     val signingKeyPair: KeyPair = signingPrivateKey.toOrGenerateKeyPair()
     val encryptionKeyPair: KeyPair = signingKeyPair.takeIf { useSigningKeyForEncryption }.or { encryptionPrivateKey.toOrGenerateKeyPair() }
+    val authPublicKey: PublicKey = authKeyPair.toOrGenerateKeyPair().public
 
     private fun String?.toOrGenerateKeyPair() = this?.takeIf { it.isNotBlank() }?.toJavaPrivateKey()?.let {
         KeyPair(it.computePublicKey(), it)
