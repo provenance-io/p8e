@@ -220,6 +220,7 @@ open class OsClient(uri: URI) {
         publicKeyBlockingClient.add(
             PublicKeys.PublicKeyRequest.newBuilder()
                 .setPublicKey(publicKey.toPublicKeyProtoOS())
+                .setUrl("http://localhost") // todo: what is this supposed to be?
                 .build()
         )
 }
