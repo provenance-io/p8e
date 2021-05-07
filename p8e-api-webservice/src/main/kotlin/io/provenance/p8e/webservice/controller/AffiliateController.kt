@@ -21,7 +21,7 @@ open class AffiliateController(private val affiliateRepository: AffiliateReposit
 
     @PostMapping("")
     fun add(@RequestBody body: RegisterAffiliateKey) = affiliateRepository
-        .create(body.signingKeyPair, body.encryptionKeyPair, body.indexName, body.alias)
+        .create(body.signingKeyPair, body.encryptionKeyPair, body.authKeyPair, body.indexName, body.alias)
 
     @GetMapping("{affiliatePublicKey}/shares")
     fun getShares(@PathVariable("affiliatePublicKey") affiliatePublicKey: String) = affiliatePublicKey.toJavaPublicKey()

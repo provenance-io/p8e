@@ -18,6 +18,7 @@ service AffiliateService {
 message AffiliateRegisterRequest {
     PrivateKey signing_private_key = 1;
     PrivateKey encryption_private_key = 2;
+    PublicKey auth_public_key = 3;
 }
 
 message AffiliateContractWhitelist {
