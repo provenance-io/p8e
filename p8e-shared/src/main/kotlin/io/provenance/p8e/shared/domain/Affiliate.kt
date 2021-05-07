@@ -26,6 +26,7 @@ object AffiliateTable : IdTable<String>("affiliate") {
     val indexName = varchar("index_name", 255).default(DEFAULT_INDEX_NAME)
     val active = bool("active").default(true)
     val keyUuid = uuid("key_uuid")
+    val authPublicKey = text("auth_public_key")
 
     override val id: Column<EntityID<String>> = publicKey.entityId()
 }
@@ -59,12 +60,13 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
 
     fun getDistinctIndexNames() = AffiliateTable.slice(AffiliateTable.indexName).selectAll().withDistinct().map { it[AffiliateTable.indexName] };
 
-    fun insert(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String?, alias: String? = null) =
+    fun insert(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
         findForUpdate(signingKeyPair.public)
             ?: new(signingKeyPair.public.toHex()) {
                 this.privateKey = signingKeyPair.private.toHex()
                 this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
                 this.encryptionPublicKey = encryptionKeyPair.public.toHex()
+                this.authPublicKey = authPublicKey.toHex()
                 this.alias = alias
                 indexName?.takeIf { it.isNotBlank() }?.let { this.indexName = it }
             }
@@ -77,11 +79,12 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
      * [indexName] Name of index for elasticsearch
      * [alias] Alias for affiliate
      */
-    fun insert(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, indexName: String?, alias: String? = null) =
+    fun insert(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
         findForUpdate(signingPublicKey)
             ?: new(signingPublicKey.toHex()) {
                 this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
                 this.encryptionPublicKey = encryptionKeyPair.public.toHex()
+                this.authPublicKey = authPublicKey.toHex()
                 this.alias = alias
                 indexName?.takeIf { it.isNotBlank() }?.let{ this.indexName = it }
             }
@@ -101,4 +104,5 @@ class AffiliateRecord(id: EntityID<String>): Entity<String>(id) {
     var serviceKeys by ServiceAccountRecord via AffiliateToServiceTable
     val identities by AffiliateIdentityRecord referrersOn AffiliateIdentityTable.publicKey
     var keyUuid by AffiliateTable.keyUuid
+    var authPublicKey by AffiliateTable.authPublicKey
 }

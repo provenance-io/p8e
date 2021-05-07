@@ -72,6 +72,7 @@ class AuthenticationServiceTest {
                     indexName = "test"
                     alias = "test"
                     keyUuid = UUID.randomUUID()
+                    authPublicKey = keyPair.public.toHex()
                 }
         }
 

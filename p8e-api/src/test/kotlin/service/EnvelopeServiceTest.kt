@@ -83,6 +83,7 @@ class EnvelopeServiceTest {
                 it[active] = true
                 it[indexName] = "scopes"
                 it[keyUuid] = UUID.randomUUID()
+                it[authPublicKey] = ecKeys.public.toHex()
             }
         }
 
@@ -580,6 +581,7 @@ class EnvelopeServiceTest {
                 it[active] = true
                 it[indexName] = "scopes"
                 it[keyUuid] = UUID.randomUUID()
+                it[authPublicKey] = secondKeyPair.public.toHex()
             }
 
             val scopeRecord2 = ScopeRecord.new {

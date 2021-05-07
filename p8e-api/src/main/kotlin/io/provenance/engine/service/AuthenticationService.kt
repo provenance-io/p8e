@@ -3,6 +3,7 @@ package io.provenance.engine.service
 import io.p8e.grpc.Constant
 import io.p8e.proto.Authentication
 import io.p8e.util.toHex
+import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKey
 import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toOffsetDateTimeProv
@@ -50,8 +51,9 @@ class AuthenticationService(
             return null
         }
 
+        // Verify signature against the auth public key we have on record.
         val verified = Signature.getInstance(Constant.JWT_ALGORITHM).apply {
-            initVerify(publicKey)
+            initVerify(affiliate.authPublicKey.toJavaPublicKey())
             update(request.token.toByteArray())
         }.verify(request.signature.toByteArray())
 
