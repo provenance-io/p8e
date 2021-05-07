@@ -26,11 +26,11 @@ class AffiliateRepository(private val affiliateService: AffiliateService) {
             .map { it.toApi() }
     }
 
-    fun create(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String?, alias: String?): ApiAffiliateKey = transaction {
+    fun create(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authKeyPair: KeyPair, indexName: String?, alias: String?): ApiAffiliateKey = transaction {
         affiliateService.save(
             signingKeyPair,
             encryptionKeyPair,
-            authPublicKey,
+            authKeyPair.public,
             indexName,
             alias,
             provenanceJwt(),
