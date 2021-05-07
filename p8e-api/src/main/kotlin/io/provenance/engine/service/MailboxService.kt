@@ -16,6 +16,7 @@ import io.provenance.os.baseclient.client.http.ApiException
 import io.provenance.os.mailbox.client.MailboxClient
 import io.provenance.os.mailbox.client.iterator.DIMEInputStreamResponse
 import io.provenance.p8e.shared.service.AffiliateService
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
 import java.security.KeyPair
 import java.security.PublicKey
@@ -144,7 +145,7 @@ class MailboxService(
     fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+        val signingKeyPair = transaction { affiliateService.getSigningKeyPair(publicKey) }
 
         mailboxClient.put(
             uuid = UUID.randomUUID(),
