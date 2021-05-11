@@ -61,14 +61,14 @@ class ChaincodeInvokeService(
     private val queue = LinkedBlockingQueue<ContractRequestWrapper>(1_000)
 
     // non-thread safe data structures that are only used within the worker thread
-    private val batch = HashSet<ContractRequestWrapper>()
+    private val batch = mutableListOf<ContractRequestWrapper>()
     private val blockScopeIds = HashSet<String>()
     private val priorityScopeBacklog = HashMap<String, LinkedList<ContractRequestWrapper>>()
     private var currentBlockHeight = 0L
 
     // helper extensions for batch management
-    private val HashSet<ContractRequestWrapper>.executionUuids: List<UUID> get() = map { it.executionUuid }
-    private fun HashSet<ContractRequestWrapper>.removeContract(contract: ContractRequestWrapper) {
+    private val MutableList<ContractRequestWrapper>.executionUuids: List<UUID> get() = map { it.executionUuid }
+    private fun MutableList<ContractRequestWrapper>.removeContract(contract: ContractRequestWrapper) {
         remove(contract)
         attemptTracker.remove(contract)
     }
@@ -151,28 +151,11 @@ class ChaincodeInvokeService(
             log.info("Sending batch with size: ${batch.size} ${batch.map { it.request.scopeId }} total backlog queue size: ${priorityScopeBacklog.values.fold(0) { acc, list ->  acc + list.size }}")
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
-            // Create a new batch of transactions.
-            // val tx = batch {
-            //     var index = 0;
-            //     batch.map {
-            //         batchIndex.put(index++, it.key)
-
-            //         // Note that we've attempted this transaction before.
-            //         // TODO add attempts
-            //         it.value.attempts++
-
-            //         prepare { it.value.txPreparer }
-            //     }
-            // }
-            // TODO clear batch and populate next pre-batch
-
             try {
-                val (txBody, batchIndex) = batch.mapIndexed { index, requestWrapper ->
-                    requestWrapper.attempts++
-                    requestWrapper.request to (index to requestWrapper)
-                }.unzip().let { (msgs, batchIndex) ->
-                    msgs.toTxBody() to batchIndex.toMap()
-                }
+                val txBody = batch.map {
+                    it.attempts++
+                    it.request
+                }.toTxBody()
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
@@ -182,7 +165,7 @@ class ChaincodeInvokeService(
                     log.info("Abci.TxResponse from chain ${resp.txResponse}")
 
                     try {
-                        handleTransactionException(resp.txResponse, batchIndex)
+                        handleTransactionException(resp.txResponse)
                     } catch (e: Exception) {
                         log.error("Handle typed transaction error - ${batch.executionUuids} need _manual_ intervention", e)
 //                            log.error("Handle typed transaction error - ${batch.map { resp.uuid }} need _manual_ intervention")
@@ -195,6 +178,8 @@ class ChaincodeInvokeService(
                         it.future.complete(ContractTxResult(it.request.scopeId))
                     }
                     log.info("batch made it to mempool with txhash = ${resp.txResponse.txhash}")
+
+                    batch.clear()
                 }
             } catch (t: Throwable) {
                 // TODO I'm pretty sure since this is now grpc the only things that would be caught in here
@@ -204,20 +189,35 @@ class ChaincodeInvokeService(
                     // TODO rework this
                     decrementSequenceNumber()
                     log.warn("Unexpected chain execution error", t)
+                    val errorMessage = t.message ?: "Unexpected chain execution error"
 
-                    val executionUuidsToFail = handleBatchRetry(t.message ?: "Unexpected chain execution error")
+                    val retryable = t.message?.contains("account sequence mismatch") == true
+                    val matchIndex = t.message?.matchIndex()
+
+                    val executionUuidsToFail = when {
+                        matchIndex != null -> {
+                            listOf(rejectContractByIndex(matchIndex, errorMessage))
+                        }
+                        retryable -> {
+                            handleBatchRetry(errorMessage)
+                        }
+                        else -> { // fail the whole batch
+                            batch.map {
+                                it.future.completeExceptionally(t)
+                                it.executionUuid
+                            }
+                        }
+                    }
 
                     transaction { transactionStatusService.setEnvelopeErrors(t.toString(), executionUuidsToFail) }
                 } catch (e: Exception) {
                     log.error("Handle generic transaction error - ${batch.executionUuids} need _manual_ intervention", e)
                 }
             }
-
-            batch.clear()
         }
     }
 
-     private fun handleTransactionException(response: Abci.TxResponse, batchIndex: Map<Int, ContractRequestWrapper>) {
+     private fun handleTransactionException(response: Abci.TxResponse) {
          decrementSequenceNumber()
 
          // default to failing all envelopes, unless a specific envelope can be identified or certain envelopes can be retried
@@ -225,19 +225,13 @@ class ChaincodeInvokeService(
 
          val retryable = response.code == SIGNATURE_VERIFICATION_FAILED ||
              response.rawLog.contains("txn invalid: rmi submit") // can be false negative due to timeout... I don't think we are actually catching this as it is a PBTransactionException, not PBTransactionResultException
-         // todo: what is the new way of specifying the rmi submit thing? Is that now equivalent to a grpc network error?
 
-         val match = indexRegex.find(response.rawLog)?.let {
-             if (it.groupValues.size == 2)
-                 it.groupValues[1]
-             else
-                 null
-         }
-         log.info("Found index ${match}")
+         val matchIndex = response.rawLog.matchIndex()
+         log.info("Found index ${matchIndex}")
 
          val errorMessage = "${response.code} - ${response.rawLog}"
 
-         if (match == null) {
+         if (matchIndex == null) {
              if (retryable) {
                  executionUuidsToFail = handleBatchRetry(errorMessage)
              } else {
@@ -247,15 +241,7 @@ class ChaincodeInvokeService(
              }
          } else {
              // Ship the error back for the bad index.
-             val erroredContract = batchIndex[match!!.toInt()]!!
-             batch.removeContract(erroredContract)
-             executionUuidsToFail = listOf(erroredContract.executionUuid)
-             erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
-
-             // Resend the rest of the contracts for execution.
-             batch.forEach {
-                 queue.put(it)
-             }
+             executionUuidsToFail = listOf(rejectContractByIndex(matchIndex, errorMessage))
          }
 
          transaction {
@@ -265,6 +251,35 @@ class ChaincodeInvokeService(
          }
      }
 
+    /**
+     * Parse an error message to identify the index of the contract that caused the error
+     * @return the match index, or null if no specific match is found
+     */
+    private fun String.matchIndex(): Int? = indexRegex.find(this)?.let {
+        if (it.groupValues.size == 2)
+            it.groupValues[1].toInt()
+        else
+            null
+    }
+
+    /**
+     * Reject a specific contract within the batch based on its index in the list
+     * @param index: the index to reject
+     * @param errorMessage: the error message to supply for the rejected contract
+     * @return the execution uuid of the rejected contract, should be shipped as a failure
+     */
+    private fun rejectContractByIndex(index: Int, errorMessage: String): UUID {
+        val erroredContract = batch[index]
+        batch.removeContract(erroredContract)
+        erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
+        return erroredContract.executionUuid
+    }
+
+    /**
+     * Reject any contracts from batch which have been retried at least 4 times
+     * @param errorMessage: the error message to supply for rejected contracts in batch
+     * @return the execution uuids that were rejected and should be shipped as failures
+      */
     private fun handleBatchRetry(errorMessage: String): List<UUID> {
         var printedException = false
         val executionUuidsToFail = batch.filter { it.attempts > 4 }
@@ -294,9 +309,6 @@ class ChaincodeInvokeService(
 
         if (batch.isNotEmpty()) {
             log.warn("Retrying due to ${errorMessage}")
-            batch.forEach {
-                queue.put(it)
-            }
         }
 
         return executionUuidsToFail
