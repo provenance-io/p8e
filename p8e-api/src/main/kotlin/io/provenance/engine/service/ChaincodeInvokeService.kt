@@ -205,8 +205,9 @@ class ChaincodeInvokeService(
                     decrementSequenceNumber()
                     log.warn("Unexpected chain execution error", t)
 
-                    transaction { transactionStatusService.setEnvelopeErrors(t.toString(), batch.executionUuids) }
-                    batch.map { it.future.completeExceptionally(t) }
+                    val executionUuidsToFail = handleBatchRetry(t.message ?: "Unexpected chain execution error")
+
+                    transaction { transactionStatusService.setEnvelopeErrors(t.toString(), executionUuidsToFail) }
                 } catch (e: Exception) {
                     log.error("Handle generic transaction error - ${batch.executionUuids} need _manual_ intervention", e)
                 }
@@ -237,39 +238,8 @@ class ChaincodeInvokeService(
          val errorMessage = "${response.code} - ${response.rawLog}"
 
          if (match == null) {
-             var printedException = false
              if (retryable) {
-                 executionUuidsToFail = batch.filter { it.attempts > 4 }
-                     .map {
-                         if (!printedException) {
-                             log.warn("Exception couldn't be resolved: $errorMessage")
-                             printedException = true
-                         }
-
-                         log.warn("Exceeded max retry attempts for execution: ${it.executionUuid}")
-                         batch.removeContract(it)
-                         it.future.completeExceptionally(IllegalStateException(errorMessage))
-
-                         it.executionUuid
-                     }
-
-                 // Because this could be a sequencing issue, let's wait a full block cut cycle before we retry.
-                 log.info("Waiting for block cut...")
-                 for (i in 1..100) {
-                     Thread.sleep(2500)
-                     val blockHasBeenCut = synchronized(sc) { provenanceGrpc.blockHasBeenCut() }
-                     if (blockHasBeenCut) {
-                         log.info("block cut detected")
-                         break
-                     }
-                 }
-
-                 if (batch.isNotEmpty()) {
-                     log.warn("Retrying due to ${response.rawLog}")
-                     batch.forEach {
-                         queue.put(it)
-                     }
-                 }
+                 executionUuidsToFail = handleBatchRetry(errorMessage)
              } else {
                  batch.forEach {
                      it.future.completeExceptionally(IllegalStateException(errorMessage))
@@ -294,6 +264,43 @@ class ChaincodeInvokeService(
              }
          }
      }
+
+    private fun handleBatchRetry(errorMessage: String): List<UUID> {
+        var printedException = false
+        val executionUuidsToFail = batch.filter { it.attempts > 4 }
+            .map {
+                if (!printedException) {
+                    log.warn("Exception couldn't be resolved: $errorMessage")
+                    printedException = true
+                }
+
+                log.warn("Exceeded max retry attempts for execution: ${it.executionUuid}")
+                batch.removeContract(it)
+                it.future.completeExceptionally(IllegalStateException(errorMessage))
+
+                it.executionUuid
+            }
+
+        // Because this could be a sequencing issue, let's wait a full block cut cycle before we retry.
+        log.info("Waiting for block cut...")
+        for (i in 1..100) {
+            Thread.sleep(2500)
+            val blockHasBeenCut = synchronized(sc) { provenanceGrpc.blockHasBeenCut() }
+            if (blockHasBeenCut) {
+                log.info("block cut detected")
+                break
+            }
+        }
+
+        if (batch.isNotEmpty()) {
+            log.warn("Retrying due to ${errorMessage}")
+            batch.forEach {
+                queue.put(it)
+            }
+        }
+
+        return executionUuidsToFail
+    }
 
     // TODO refactor these functions
 
