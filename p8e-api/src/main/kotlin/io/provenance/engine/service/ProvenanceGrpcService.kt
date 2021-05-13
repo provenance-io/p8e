@@ -91,9 +91,9 @@ class ProvenanceGrpcService(
                 .addAllAmount(listOf(
                     CoinOuterClass.Coin.newBuilder()
                         .setDenom("nhash")
-                        .setAmount(gasEstimate.fees.toString())
+                        .setAmount((gasEstimate.fees).toString())
                         .build()
-                )).setGasLimit((gasEstimate.total * 1.4).toLong())
+                )).setGasLimit((gasEstimate.limit).toLong())
             )
             .addAllSignerInfos(listOf(
                 SignerInfo.newBuilder()
@@ -128,8 +128,8 @@ class ProvenanceGrpcService(
             .build()
     }
 
-    fun estimateTx(body: TxBody, accountInfo: Auth.BaseAccount): GasEstimate =
-        signTx(body, accountInfo).let {
+    fun estimateTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long): GasEstimate =
+        signTx(body, accountInfo, sequenceNumberOffset).let {
             txService.simulate(SimulateRequest.newBuilder()
                 .setTx(it)
                 .build()
@@ -182,10 +182,14 @@ fun Message.toTxBody(): TxBody = listOf(this).toTxBody()
 
 fun Message.toAny(typeUrlPrefix: String = "") = Any.pack(this, typeUrlPrefix)
 
-data class GasEstimate(val total: Long) {
+data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_FEE_ADJUSTMENT) {
     companion object {
-        private const val feeAdjustment = 0.025
+        private const val DEFAULT_FEE_ADJUSTMENT = 1.25
+        private const val DEFAULT_GAS_PRICE = 1905.00
     }
 
-    val fees = (total * feeAdjustment).roundUp()
+    private val adjustment = feeAdjustment ?: DEFAULT_FEE_ADJUSTMENT
+
+    val limit = (estimate * adjustment).roundUp()
+    val fees = (limit * DEFAULT_GAS_PRICE).roundUp()
 }

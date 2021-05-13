@@ -100,7 +100,7 @@ class ChaincodeInvokeService(
                 // wanting to send the same scope in the same block
             while (batch.size < chaincodeProperties.txBatchSize) {
                 // filter the backlog for scopes that aren't in the block and then pick a random
-                    // scope and insert it into the block
+                // scope and insert it into the block
                 priorityScopeBacklog.filterKeys { !blockScopeIds.contains(it) }
                     .keys
                     .toList()
@@ -123,7 +123,9 @@ class ChaincodeInvokeService(
             }
 
             while (batch.size < chaincodeProperties.txBatchSize) {
-                queue.poll(chaincodeProperties.maxTxFlushDelay.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
+                // TODO wrap poll in catch since there's cases where it can throw and if that happens
+                // this thread would currently be lost
+                queue.poll(chaincodeProperties.emptyIterationBackoffMS.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
                     if (!blockScopeIds.contains(message.request.scopeId)) {
                         log.debug("adding ${message.request.scopeId} to batch")
 
@@ -393,12 +395,10 @@ class ChaincodeInvokeService(
 
     fun batchTx(body: TxBody): BroadcastTxResponse {
         val accountInfo = provenanceGrpc.accountInfo()
-        log.warn("account info = $accountInfo")
+        val number = accountInfo.getAndIncrementSequenceOffset()
+        val estimate = provenanceGrpc.estimateTx(body, accountInfo, number)
 
-        val estimate = provenanceGrpc.estimateTx(body, accountInfo)
-        log.warn("estimate = $estimate")
-
-        return provenanceGrpc.batchTx(body, accountInfo, accountInfo.getAndIncrementSequenceOffset(), estimate)
+        return provenanceGrpc.batchTx(body, accountInfo, number, estimate)
     }
 
     private fun ProvenanceGrpcService.blockHasBeenCut(): Boolean = provenanceGrpc.accountInfo().blockHasBeenCut()
