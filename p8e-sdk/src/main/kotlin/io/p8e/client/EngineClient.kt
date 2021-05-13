@@ -14,6 +14,8 @@ import io.p8e.proto.Affiliate.AffiliateContractWhitelist
 import io.p8e.proto.Common.Location
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractSpecs.ContractSpec
+import io.p8e.proto.ContractSpecs.ScopeSpec
+import io.p8e.proto.Domain.SpecMapping
 import io.p8e.proto.Domain.SpecRequest
 import io.p8e.proto.Envelope.EnvelopeEvent
 import io.p8e.proto.Envelope.EnvelopeEvent.Action
@@ -37,7 +39,7 @@ import java.util.concurrent.TimeUnit
 
 interface P8eClient {
 
-    fun addSpec(spec: List<ContractSpec>)
+    fun addSpec(contractSpec: List<ContractSpec>, specMapping: List<SpecMapping>, scopeSpec: List<ScopeSpec>)
 
     fun register(enc: Affiliate.AffiliateRegisterRequest)
 
@@ -102,11 +104,15 @@ abstract class EventMonitorClient(
 ): P8eClient {
 
     override fun addSpec(
-        spec: List<ContractSpec>
+        contractSpec: List<ContractSpec>,
+        specMapping: List<SpecMapping>,
+        scopeSpec: List<ScopeSpec>,
     ) {
         chaincodeClient.addSpec(
             SpecRequest.newBuilder()
-                .addAllSpec(spec)
+                .addAllContractSpec(contractSpec)
+                .addAllSpecMapping(specMapping)
+                .addAllScopeSpec(scopeSpec)
                 .build()
         )
     }

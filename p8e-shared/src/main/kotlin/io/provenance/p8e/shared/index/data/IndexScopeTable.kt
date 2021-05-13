@@ -115,5 +115,5 @@ class IndexScopeRecord(uuid: EntityID<UUID>) : UUIDEntity(uuid) {
     fun isIndexed(): Boolean = this.indexed
 }
 
-data class IndexScopeUuids(val indexScopeUuid: UUID, val groupUuid: UUID, val executionUuid: UUID)
-fun IndexScopeRecord.toUuids() = IndexScopeUuids(id.value, scope.lastEvent.groupUuid.toUuidProv(), scope.lastEvent.executionUuid.toUuidProv())
+data class IndexScopeUuids(val indexScopeUuid: UUID, val executionUuid: UUID)
+fun IndexScopeRecord.toUuids() = IndexScopeUuids(id.value, scope.lastEvent.executionUuid.toUuidProv())

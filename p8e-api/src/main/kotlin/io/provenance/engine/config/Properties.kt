@@ -54,12 +54,13 @@ class ServiceProperties {
 
 @ConfigurationProperties(prefix = "chaincode")
 class ChaincodeProperties {
+    @NotNull lateinit var grpcUrl: String
     @NotNull lateinit var url: String
     @NotNull lateinit var apiKey: String
     @NotNull lateinit var mnemonic: String
     @NotNull lateinit var chainId: String
     @NotNull var mainNet: Boolean = false
-    @NotNull var emptyIterationBackoffMS: Int = 750
+    @NotNull var maxTxFlushDelay: Int = 1_000
     @NotNull var txBatchSize: Int = 25
 }
 

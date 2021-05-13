@@ -40,3 +40,28 @@ annotation class Input(val name: String)
 @Retention(AnnotationRetention.RUNTIME)
 @MustBeDocumented
 annotation class Participants(val roles: Array<PartyType>)
+
+/**
+ * Denotes a String that is used to implement a logical grouping of P8eContracts that operate on the same scope.
+ * Can be thought of as a whitelist that specifies which P8eContracts can be executed for a scope. Name elements
+ * must be associated with declarations of ScopeSpecificationDefinition.
+ */
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+annotation class ScopeSpecification(val names: Array<String>)
+
+/**
+ * Declaritively specifies a scope specification definition. This must be associated with a subclass of
+ * P8eScopeSpecification.
+ */
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+@MustBeDocumented
+annotation class ScopeSpecificationDefinition(
+    val name: String,
+    val description: String,
+    val partiesInvolved: Array<PartyType>,
+    val websiteUrl: String = "",
+    val iconUrl: String = "",
+)
