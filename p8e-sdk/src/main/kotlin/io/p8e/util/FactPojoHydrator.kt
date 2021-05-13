@@ -6,7 +6,6 @@ import io.p8e.client.P8eClient
 import io.p8e.proto.ContractScope.Scope
 import io.p8e.proto.ContractScope.Record
 import io.p8e.util.CompletableFutureUtil.completableFuture
-import kotlin.streams.toList
 
 class FactPojoHydrator(
     private val client: P8eClient
@@ -68,10 +67,10 @@ class FactPojoHydrator(
                 }
             }
 
-        return clazz.cast(constructor.newInstance(*params.parallelStream().map { it?.get() }.toList().toTypedArray()))
+        return clazz.cast(constructor.newInstance(*params.map { it?.get() }.toList().toTypedArray()))
     }
 
     companion object {
-        val executor = ThreadPoolFactory.newFixedThreadPool(8, "fact-hydrator-%d")
+        val executor = ThreadPoolFactory.newFixedThreadPool(20, "fact-hydrator-%d")
     }
 }
