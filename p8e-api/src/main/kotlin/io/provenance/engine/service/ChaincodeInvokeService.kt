@@ -55,6 +55,8 @@ class ChaincodeInvokeService(
     private val objectMapper = ObjectMapper().configureProvenance()
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
 
+    private val accountInfo = provenanceGrpc.accountInfo()
+
     // private val queue = ConcurrentHashMap<UUID, BlockchainTransaction>()
 
     // thread safe queue because this spans the worker thread and the enqueue
@@ -225,8 +227,7 @@ class ChaincodeInvokeService(
          // default to failing all envelopes, unless a specific envelope can be identified or certain envelopes can be retried
          var executionUuidsToFail = batch.executionUuids
 
-         val retryable = response.code == SIGNATURE_VERIFICATION_FAILED ||
-             response.rawLog.contains("txn invalid: rmi submit") // can be false negative due to timeout... I don't think we are actually catching this as it is a PBTransactionException, not PBTransactionResultException
+         val retryable = response.code == SIGNATURE_VERIFICATION_FAILED
 
          val matchIndex = response.rawLog.matchIndex()
          log.info("Found index ${matchIndex}")
@@ -299,15 +300,7 @@ class ChaincodeInvokeService(
             }
 
         // Because this could be a sequencing issue, let's wait a full block cut cycle before we retry.
-        log.info("Waiting for block cut...")
-        for (i in 1..100) {
-            Thread.sleep(2500)
-            val blockHasBeenCut = synchronized(sc) { provenanceGrpc.blockHasBeenCut() }
-            if (blockHasBeenCut) {
-                log.info("block cut detected")
-                break
-            }
-        }
+        waitForBlockCut()
 
         if (batch.isNotEmpty()) {
             log.warn("Retrying due to ${errorMessage}")
@@ -394,30 +387,50 @@ class ChaincodeInvokeService(
     }
 
     fun batchTx(body: TxBody): BroadcastTxResponse {
-        val accountInfo = provenanceGrpc.accountInfo()
-        val number = accountInfo.getAndIncrementSequenceOffset()
-        val estimate = provenanceGrpc.estimateTx(body, accountInfo, number)
+        val accountNumber = accountInfo.accountNumber
+        val sequenceNumber = getAndIncrementSequenceNumber()
 
-        return provenanceGrpc.batchTx(body, accountInfo, number, estimate)
+
+        val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
+
+        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
-    private fun ProvenanceGrpcService.blockHasBeenCut(): Boolean = provenanceGrpc.accountInfo().blockHasBeenCut()
+    /**
+     * Sequence Number Tracking
+     */
+    private var sequenceNumberAndOffset = accountInfo.sequence to 0L
 
-    private var sequenceNumberAndOffset = 0L to 0L
-
-    private fun Auth.BaseAccount.getAndIncrementSequenceOffset(): Long {
-        if (blockHasBeenCut()) {
-            sequenceNumberAndOffset = sequence to 0
-        }
-
-        return sequenceNumberAndOffset.second.also {
-            sequenceNumberAndOffset = sequence to it + 1
+    private fun getAndIncrementSequenceNumber(): Long {
+        return sequenceNumberAndOffset.let { (sequence, offset) ->
+            sequence + offset
+        }.also {
+            sequenceNumberAndOffset = sequenceNumberAndOffset.first to sequenceNumberAndOffset.second + 1
         }
     }
-
-    private fun Auth.BaseAccount.blockHasBeenCut(): Boolean = (sequence > sequenceNumberAndOffset.first) || sequenceNumberAndOffset.second == 0L
 
     private fun decrementSequenceNumber() {
         sequenceNumberAndOffset = sequenceNumberAndOffset.first to Math.max(sequenceNumberAndOffset.second - 1, 0)
+        log.info("Decremented sequence number to ${sequenceNumberAndOffset.first + sequenceNumberAndOffset.second}")
+    }
+
+    private fun resetSequenceNumber() {
+        log.info("Resetting sequence number")
+        sequenceNumberAndOffset = provenanceGrpc.accountInfo().sequence to 0L
+        log.info("Sequence number reset to ${sequenceNumberAndOffset.first}")
+    }
+
+    private fun waitForBlockCut() {
+        val currentHeight = provenanceGrpc.getLatestBlock().block.header.height
+        log.info("Waiting for block cut...")
+        for (i in 1..100) {
+            Thread.sleep(2500)
+            val newHeight = provenanceGrpc.getLatestBlock().block.header.height
+            if (newHeight > currentHeight) {
+                log.info("block cut detected")
+                break
+            }
+        }
+        resetSequenceNumber()
     }
 }

@@ -79,13 +79,9 @@ class ProvenanceGrpcService(
 
     fun getLatestBlock(): GetLatestBlockResponse = nodeService.getLatestBlock(GetLatestBlockRequest.getDefaultInstance())
 
-    // fun getLatestBlockHeight() = nodeService.getBlockByHeight(GetBlockByHeightRequest.newBuilder()
-    //     .setHeight(getLatestBlock().)
-    //     .build())
-
     fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
-    fun signTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long = 0, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
+    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
         val authInfo = AuthInfo.newBuilder()
             .setFee(Fee.newBuilder()
                 .addAllAmount(listOf(
@@ -107,7 +103,7 @@ class ProvenanceGrpcService(
                             ModeInfo.Single.newBuilder()
                                 .setModeValue(Signing.SignMode.SIGN_MODE_DIRECT_VALUE)
                         ))
-                    .setSequence(accountInfo.sequence + sequenceNumberOffset)
+                    .setSequence(sequenceNumber)
                     .build()
             )).build()
 
@@ -115,7 +111,7 @@ class ProvenanceGrpcService(
             .setBodyBytes(body.toByteString())
             .setAuthInfoBytes(authInfo.toByteString())
             .setChainId(chaincodeProperties.chainId)
-            .setAccountNumber(accountInfo.accountNumber)
+            .setAccountNumber(accountNumber)
             .build()
             .toByteArray()
             .let { signer(it) }
@@ -128,16 +124,16 @@ class ProvenanceGrpcService(
             .build()
     }
 
-    fun estimateTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long): GasEstimate =
-        signTx(body, accountInfo, sequenceNumberOffset).let {
+    fun estimateTx(body: TxBody, accountNumber: Long, sequenceNumber: Long): GasEstimate =
+        signTx(body, accountNumber, sequenceNumber).let {
             txService.simulate(SimulateRequest.newBuilder()
                 .setTx(it)
                 .build()
             )
         }.let { GasEstimate(it.gasInfo.gasUsed) }
 
-    fun batchTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long, estimate: GasEstimate): BroadcastTxResponse =
-        signTx(body, accountInfo, sequenceNumberOffset, estimate).run {
+    fun batchTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, estimate: GasEstimate): BroadcastTxResponse =
+        signTx(body, accountNumber, sequenceNumber, estimate).run {
             TxRaw.newBuilder()
                 .setBodyBytes(body.toByteString())
                 .setAuthInfoBytes(authInfo.toByteString())
