@@ -1,21 +1,25 @@
 package io.provenance.engine.util
 
 import com.google.protobuf.Any
-import io.p8e.proto.Common
-import io.p8e.proto.ContractScope
+import io.p8e.proto.*
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.ContractSpecs.PartyType
-import io.p8e.proto.Contracts
 import io.p8e.proto.Util
 import io.p8e.util.*
+import io.provenance.engine.crypto.Account
+import io.provenance.engine.crypto.asBech32PublicKey
+import io.provenance.engine.crypto.toBech32Data
 import io.provenance.engine.service.toAny
 import io.provenance.metadata.v1.*
 import io.provenance.metadata.v1.PartyType as ProvenancePartyType
 import io.provenance.metadata.v1.p8e.SignatureSet
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.kethereum.crypto.decompressKey
+import org.kethereum.model.PublicKey
 import java.lang.Long.max
+import java.math.BigInteger
 
 const val PROV_METADATA_PREFIX_CONTRACT_SPEC: Byte = 0x03
 
@@ -46,7 +50,15 @@ fun ContractSpec.toProvHash(): String {
 
 fun ContractSpec.toProv(): io.provenance.metadata.v1.p8e.ContractSpec = io.provenance.metadata.v1.p8e.ContractSpec.parseFrom(toByteArray())
 
-fun Contracts.Contract.toProv(): io.provenance.metadata.v1.p8e.Contract = io.provenance.metadata.v1.p8e.Contract.parseFrom(toByteArray())
+fun Contracts.Contract.toProv(): io.provenance.metadata.v1.p8e.Contract = io.provenance.metadata.v1.p8e.Contract.parseFrom(toByteArray()).run {
+    toBuilder()
+        .clearConsiderations()
+        .addAllConsiderations(considerationsList.map { consideration ->
+            consideration.toBuilder()
+                .setConsiderationName(consideration.result.output.name)
+                .build()
+        }).build()
+}
 
 fun Common.Signature.toProv(): io.provenance.metadata.v1.p8e.Signature = io.provenance.metadata.v1.p8e.Signature.parseFrom(toByteArray())
 
@@ -92,6 +104,7 @@ fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>): ContractSc
             .setAudit(session.session.audit.toP8e())
             .build()
     })
+    .setScopeSpecificationName(transaction { ScopeSpecificationRecord.findById(scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv())!!.name })
     .setLastEvent(sessionsList.lastSession()?.let { session ->
         ContractScope.Event.newBuilder()
             .setExecutionUuid(Contracts.ContractState.parseFrom(session.session.context).executionUuid)
@@ -113,6 +126,7 @@ fun RecordWrapper.toP8e(): ContractScope.Record = with (record) {
         .addAllInputs(inputsList.map { it.toP8e() }).apply {
             outputsList.firstOrNull()?.let { output ->
                 setResultValue(output.statusValue)
+                    .setName(name)
                     .setResultName(name) // todo: could maybe be different than the function (record) name, does the output struct need a name field?
                     .setResultHash(output.hash)
             }
@@ -130,5 +144,12 @@ fun RecordInput.toP8e(): ContractScope.RecordInput = ContractScope.RecordInput.n
 fun Party.toP8e(): Contracts.Recital = Contracts.Recital.newBuilder()
     .setAddress(addressBytes)
     .setSignerRoleValue(roleValue)
-//  .setSigner() // TODO: No signer in new Party message
+//    .setSigner(PK.SigningAndEncryptionPublicKeys.newBuilder()
+//        .setSigningPublicKey(PK.PublicKey.newBuilder()
+//            .setCurve(PK.KeyCurve.SECP256K1)
+//            .setType(PK.KeyType.ELLIPTIC)
+//            .setCompressed(false)
+////            .setPublicKeyBytes(PublicKey(BigInteger(1, decompressKey(addressBytes.toStringUtf8().toBech32Data().data))).key.toByteArray().toByteString())
+//        )
+//    )
     .build()
