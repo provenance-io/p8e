@@ -157,7 +157,8 @@ class AffiliateService(
         AFFILIATES_ENCRYPTION_KEYS,
         AFFILIATES_SIGNING_KEYS,
         AFFILIATE_INDEX_NAMES,
-        AFFILIATE_INDEX_NAME
+        AFFILIATE_INDEX_NAME,
+        AFFILIATE_BECH32_LOOKUP,
     ])
     fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
             .also {
