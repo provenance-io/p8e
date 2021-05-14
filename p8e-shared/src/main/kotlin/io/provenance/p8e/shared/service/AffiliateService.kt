@@ -1,14 +1,20 @@
 package io.provenance.p8e.shared.service
 
+import io.p8e.crypto.Hash
+import io.p8e.crypto.proto.CryptoProtos
 import io.p8e.proto.Affiliate.AffiliateContractWhitelist
 import io.p8e.proto.Affiliate.AffiliateWhitelist
+import io.p8e.proto.PK
 import io.p8e.util.*
 import io.p8e.util.auditedProv
 import io.p8e.util.toProtoTimestampProv
+import io.provenance.engine.crypto.Bech32
+import io.provenance.engine.crypto.toBech32Data
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.shared.extension.isActive
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.domain.*
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
 import org.elasticsearch.client.RequestOptions
@@ -30,7 +36,7 @@ class AffiliateService(
     private val cacheManager: CacheManager,
     private val osClient: OsClient,
     private val keystoneService: KeystoneService,
-    private val esClient: RestHighLevelClient
+    private val esClient: RestHighLevelClient,
 ) {
 
     companion object {
@@ -45,6 +51,8 @@ class AffiliateService(
         const val AFFILIATE_INDEX_NAMES = "affiliate_index_names"
         const val AFFILIATE_INDEX_NAME = "affiliate_index_name"
         const val AFFILIATE_ENCRYPTION_KEY_PAIR = "affiliate_encryption_key_pair"
+        const val AFFILIATE_BECH32_LOOKUP = "affiliate_bech32_lookup"
+        const val PUBLIC_KEY_TO_ADDRESS = "public_key_to_address"
     }
 
     /**
@@ -88,6 +96,26 @@ class AffiliateService(
         return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey.toJavaPrivateKey())
     }
 
+    @Cacheable(AFFILIATE_BECH32_LOOKUP)
+    fun getAffiliateFromBech32Address(bech32Address: String): AffiliateRecord? {
+        val mainNet = bech32Address.startsWith(Bech32.PROVENANCE_MAINNET_ACCOUNT_PREFIX)
+        return getAll()
+            .find { affiliate ->
+                getAddress(affiliate.publicKey.value.toJavaPublicKey(), mainNet) == bech32Address || getAddress(affiliate.encryptionPublicKey.toJavaPublicKey(), mainNet) == bech32Address
+            }
+    }
+
+    @Cacheable(PUBLIC_KEY_TO_ADDRESS)
+    private fun getAddress(publicKey: PublicKey, mainNet: Boolean): String =
+        publicKey.let {
+            (it as BCECPublicKey).q.getEncoded(true)
+        }.let {
+            Hash.sha256hash160(it)
+        }.let {
+            val prefix = if (mainNet) Bech32.PROVENANCE_MAINNET_ACCOUNT_PREFIX else Bech32.PROVENANCE_TESTNET_ACCOUNT_PREFIX
+            it.toBech32Data(prefix).address
+        }
+
     /**
      * Get all affiliates.
      *
@@ -129,7 +157,8 @@ class AffiliateService(
         AFFILIATES_ENCRYPTION_KEYS,
         AFFILIATES_SIGNING_KEYS,
         AFFILIATE_INDEX_NAMES,
-        AFFILIATE_INDEX_NAME
+        AFFILIATE_INDEX_NAME,
+        AFFILIATE_BECH32_LOOKUP,
     ])
     fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
             .also {

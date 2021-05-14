@@ -15,6 +15,8 @@ import io.provenance.metadata.v1.*
 import io.provenance.metadata.v1.PartyType as ProvenancePartyType
 import io.provenance.metadata.v1.p8e.SignatureSet
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
+import io.provenance.p8e.shared.service.AffiliateService
+import org.bouncycastle.util.encoders.Hex
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.kethereum.crypto.decompressKey
 import org.kethereum.model.PublicKey
@@ -87,15 +89,15 @@ fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
 
 // Extensions for marshalling data back to P8e
 
-fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>): ContractScope.Scope = ContractScope.Scope.newBuilder()
+fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, affiliateService: AffiliateService): ContractScope.Scope = ContractScope.Scope.newBuilder()
     .setUuid(scope.scopeIdInfo.scopeUuid.toProtoUuidProv())
-    .addAllParties(scope.scope.ownersList.map { it.toP8e() })
+    .addAllParties(scope.scope.ownersList.map { it.toP8e(affiliateService) })
     .addAllRecordGroup(sessionsList.map { session ->
         ContractScope.RecordGroup.newBuilder()
             .setSpecification(contractSpecHashLookup.getOrDefault(session.contractSpecIdInfo.contractSpecAddr, session.contractSpecIdInfo.contractSpecAddr))
             .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
 //            .setExecutor() // TODO: not sure if this is available, no keys appear to be readily accessible
-            .addAllParties(session.session.partiesList.map { it.toP8e() })
+            .addAllParties(session.session.partiesList.map { it.toP8e(affiliateService) })
             .addAllRecords(recordsList
                 .filter { record -> record.record.sessionId == session.session.sessionId }
                 .map { record -> record.toP8e() }
@@ -141,15 +143,16 @@ fun RecordInput.toP8e(): ContractScope.RecordInput = ContractScope.RecordInput.n
     .setTypeValue(statusValue) // yes, type is now status
     .build()
 
-fun Party.toP8e(): Contracts.Recital = Contracts.Recital.newBuilder()
+fun Party.toP8e(affiliateService: AffiliateService): Contracts.Recital = Contracts.Recital.newBuilder()
     .setAddress(addressBytes)
     .setSignerRoleValue(roleValue)
-//    .setSigner(PK.SigningAndEncryptionPublicKeys.newBuilder()
-//        .setSigningPublicKey(PK.PublicKey.newBuilder()
-//            .setCurve(PK.KeyCurve.SECP256K1)
-//            .setType(PK.KeyType.ELLIPTIC)
-//            .setCompressed(false)
-////            .setPublicKeyBytes(PublicKey(BigInteger(1, decompressKey(addressBytes.toStringUtf8().toBech32Data().data))).key.toByteArray().toByteString())
-//        )
-//    )
+    .apply {
+        val bech32 = addressBytes.toStringUtf8()
+        transaction { affiliateService.getAffiliateFromBech32Address(bech32) }?.let { affiliate ->
+            setSigner(PK.SigningAndEncryptionPublicKeys.newBuilder()
+                .setSigningPublicKey(affiliate.publicKey.value.toPublicKeyProto())
+                .setEncryptionPublicKey(affiliate.encryptionPublicKey.toPublicKeyProto())
+            )
+        }
+    }
     .build()
