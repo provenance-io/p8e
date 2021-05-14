@@ -23,6 +23,7 @@ import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
+import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
 import org.kethereum.crypto.getCompressedPublicKey
 import org.springframework.stereotype.Service
@@ -37,7 +38,8 @@ import io.provenance.metadata.v1.QueryGrpc as MetadataQueryGrpc
 @Service
 class ProvenanceGrpcService(
     private val accountProvider: Account,
-    private val chaincodeProperties: ChaincodeProperties
+    private val chaincodeProperties: ChaincodeProperties,
+    private val affiliateService: AffiliateService,
 ) {
     companion object {
         val executor = ThreadPoolFactory.newFixedThreadPool(5, "prov-grpc-%d")
@@ -166,7 +168,7 @@ class ProvenanceGrpcService(
                 ).contractSpecification.specification.hash
             }.toMap()
 
-        return scopeResponse.toP8e(contractSpecHashLookup)
+        return scopeResponse.toP8e(contractSpecHashLookup, affiliateService)
     }
 }
 
