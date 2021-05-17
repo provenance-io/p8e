@@ -93,15 +93,6 @@ class SmartKeySigner: SignerImpl {
         if(!verifying) {
             signatureRequest?.data(data.copyOfRange(off, off+len))
         } else {
-            /**
-             * Large data dump from the InputStream drops in here, we only care about
-             * the last piece of data to verify against. If we continue to update the
-             * signature object with every single data that pass through the verification
-             * returns a false negative.
-             *
-             * Signature.getInstance is a 1:1 - meaning new instance for each piece of data.
-             */
-
             cachedData.add(data.copyOfRange(off, off+len))
         }
     }
