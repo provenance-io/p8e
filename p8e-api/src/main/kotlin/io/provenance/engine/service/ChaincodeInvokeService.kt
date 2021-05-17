@@ -219,6 +219,8 @@ class ChaincodeInvokeService(
                             batch.map {
                                 it.future.completeExceptionally(t)
                                 it.executionUuid
+                            }.also {
+                                batch.clear()
                             }
                         }
                     }
