@@ -82,7 +82,8 @@ class ObjectGrpc(
                 encryptionKeyPair,
                 request.uri,
                 "<raw fetch - classname not included>",
-                signer = signer
+                signer = signer,
+                signaturePublicKey = signer.getPublicKey()
             ).readAllBytes()
         }?.let { bytes ->
             ObjectLoadResponse.newBuilder()
