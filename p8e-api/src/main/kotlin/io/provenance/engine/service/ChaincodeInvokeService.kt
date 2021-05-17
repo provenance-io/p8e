@@ -82,7 +82,13 @@ class ChaincodeInvokeService(
 
     init {
         thread(isDaemon = true, name = "bc-tx-batch") {
-            memorializeBatchTx()
+            while (true) {
+                try {
+                    memorializeBatchTx()
+                } catch (t: Throwable) {
+                    log.error("Unexpected error in memorializeBatchTx, restarting...")
+                }
+            }
         }
     }
 
@@ -90,13 +96,19 @@ class ChaincodeInvokeService(
         log.info("Starting bc-tx-batch thread")
 
         while(true) {
-            provenanceGrpc.getLatestBlock()
-                .takeIf { it.block.header.height > currentBlockHeight }
-                ?.let {
-                    log.info("Clearing blockScopeIds")
-                    currentBlockHeight = it.block.header.height
-                    blockScopeIds.clear()
-                }
+            try {
+                provenanceGrpc.getLatestBlock()
+                    .takeIf { it.block.header.height > currentBlockHeight }
+                    ?.let {
+                        log.info("Clearing blockScopeIds")
+                        currentBlockHeight = it.block.header.height
+                        blockScopeIds.clear()
+                    }
+            } catch (t: Throwable) {
+                log.error("Received error when fetching latest block, waiting 1s before trying again", t)
+                Thread.sleep(1000);
+                continue;
+            }
 
             // attempt to load the batch with scopes that were previously passed on due to not
                 // wanting to send the same scope in the same block
