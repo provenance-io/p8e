@@ -127,7 +127,7 @@ class AffiliateService(
         return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
     }
 
-    @Cacheable(AFFILIATE_ENCRYPTION_PUBLIC_KEY)
+    @Cacheable(AFFILIATE_ENCRYPTION_KEY_PAIR)
     fun getEncryptionKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
         return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey.toJavaPrivateKey())
