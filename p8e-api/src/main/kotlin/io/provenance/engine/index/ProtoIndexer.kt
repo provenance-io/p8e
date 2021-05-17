@@ -6,6 +6,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor.JavaType.*
 import com.google.protobuf.Message
 import io.p8e.classloader.ClassLoaderCache
 import io.p8e.classloader.MemoryClassLoader
+import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.proto.ContractScope.Record
 import io.p8e.proto.ContractScope.Scope
@@ -16,6 +17,8 @@ import io.p8e.proto.IndexProto.Index
 import io.p8e.proto.IndexProto.Index.Behavior
 import io.p8e.proto.IndexProto.Index.Behavior.*
 import io.provenance.p8e.shared.extension.logger
+import io.provenance.p8e.shared.service.AffiliateService
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.security.KeyPair
@@ -29,7 +32,7 @@ class ProtoIndexer(
     private val messageIndexDescriptor = Index.getDefaultInstance().descriptorForType.file.findExtensionByName("message_index")
     private val _definitionService = DefinitionService(osClient)
 
-    fun indexFields(scope: Scope, keyPairs: Map<String, KeyPair>): Map<String, Any> =
+    fun indexFields(scope: Scope, keyPairs: Map<String, KeyPair>, affiliateService: AffiliateService): Map<String, Any> =
         scope.recordGroupList
             // find all record groups where there's at least one party member that's an affiliate on this p8e instance
             .filter { group -> group.partiesList.any { keyPairs.containsKey(it.signer.encryptionPublicKey.toHex()) } }
@@ -41,8 +44,11 @@ class ProtoIndexer(
                             .first { keyPairs.containsKey(it.encryptionPublicKey.toHex()) }
                             .let { keyPairs.getValue(it.encryptionPublicKey.toHex()) }
 
+                        // Need a reference of the signer that is used to verify signatures.
+                        val signer = transaction { affiliateService.getSigner(keyPair.public) }
+
                         // Try to re-use MemoryClassLoader if possible for caching reasons
-                        val spec = _definitionService.loadProto(keyPair, group.specification, ContractSpec::class.java.name) as ContractSpec
+                        val spec = _definitionService.loadProto(keyPair, group.specification, ContractSpec::class.java.name, signer) as ContractSpec
 
                         val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}-${spec.considerationSpecsList.first().outputSpec.spec.resourceLocation.ref.hash}"
                         val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -50,12 +56,13 @@ class ProtoIndexer(
                         }
 
                         val definitionService = DefinitionService(osClient, memoryClassLoader)
-                        loadAllJars(keyPair, definitionService, spec)
+                        loadAllJars(keyPair, definitionService, spec, signer)
 
                         fact.resultName to indexFields(
                             definitionService,
                             keyPair,
-                            fact
+                            fact,
+                            signer
                         )
                     }
             }.filter { it.second != null }
@@ -67,6 +74,7 @@ class ProtoIndexer(
         definitionService: DefinitionService,
         keyPair: KeyPair,
         t: T,
+        signer: SignerImpl,
         indexParent: Boolean? = null
     ): Map<String, Any>? {
         val message = when(t) {
@@ -78,7 +86,8 @@ class ProtoIndexer(
                         definitionService.loadProto(
                             keyPair,
                             t.resultHash,
-                            t.classname
+                            t.classname,
+                            signer
                         )
                     }
                 }
@@ -105,7 +114,8 @@ class ProtoIndexer(
                                     keyPair,
                                     fieldDescriptor,
                                     doIndex,
-                                    list[i]
+                                    list[i],
+                                    signer
                                 )?.let(resultList::add)
                         }
                         fieldDescriptor.jsonName to resultList.takeIf { it.isNotEmpty() }
@@ -117,7 +127,8 @@ class ProtoIndexer(
                                 keyPair,
                                 fieldDescriptor,
                                 doIndex,
-                                message.getField(fieldDescriptor)
+                                message.getField(fieldDescriptor),
+                                signer
                             )
                         }.takeIf { it.entries.any { it.value != null } }
                     else -> fieldDescriptor.jsonName to getValue(
@@ -125,7 +136,8 @@ class ProtoIndexer(
                         keyPair,
                         fieldDescriptor,
                         doIndex,
-                        message.getField(fieldDescriptor)
+                        message.getField(fieldDescriptor),
+                        signer
                     )
                 }
             }.filter { it.second != null }
@@ -139,7 +151,8 @@ class ProtoIndexer(
         keyPair: KeyPair,
         fieldDescriptor: FieldDescriptor,
         doIndex: Boolean,
-        value: Any
+        value: Any,
+        signer: SignerImpl
     ): Any? {
         // Get value for primitive types, on MESSAGE recurse, else empty list
         return when (fieldDescriptor.javaType) {
@@ -156,6 +169,7 @@ class ProtoIndexer(
                     definitionService,
                     keyPair,
                     value as Message,
+                    signer,
                     doIndex
                 )
             }
@@ -200,7 +214,8 @@ class ProtoIndexer(
     private fun loadAllJars(
         keyPair: KeyPair,
         definitionService: DefinitionService,
-        spec: ContractSpec
+        spec: ContractSpec,
+        signer: SignerImpl
     ) {
         mutableListOf(spec.definition)
             .apply {
@@ -216,7 +231,8 @@ class ProtoIndexer(
             }.forEach {
                 definitionService.addJar(
                     keyPair,
-                    it
+                    it,
+                    signer
                 )
             }
     }

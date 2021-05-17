@@ -3,6 +3,7 @@ package io.p8e.engine
 import arrow.core.Either
 import arrow.core.identity
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.proto.Contracts.*
 import io.p8e.spec.P8eContract
@@ -12,6 +13,7 @@ import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.lang.reflect.Parameter
 import java.security.KeyPair
+import java.security.PublicKey
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import kotlin.concurrent.thread
@@ -23,7 +25,7 @@ class ContractWrapper(
     private val keyPair: KeyPair,
     private val definitionService: DefinitionService,
     private val contractBuilder: Contract.Builder,
-    private val signingKeyPair: KeyPair
+    private val signer: SignerImpl
 ) {
     private val facts = buildFacts()
 
@@ -49,7 +51,7 @@ class ContractWrapper(
     val functions = contractBuilder.considerationsBuilderList
         .filter { it.result == ExecutionResult.getDefaultInstance() }
         .map { consideration -> consideration to getConsiderationMethod(contract.javaClass, consideration.considerationName) }
-        .map { (consideration, method) -> Function(keyPair, signingKeyPair.public, definitionService, contract, consideration, method, facts) }
+        .map { (consideration, method) -> Function(keyPair, signer, definitionService, contract, consideration, method, facts) }
 
     private fun getConstructor(
         clazz: Class<*>
@@ -117,7 +119,8 @@ class ContractWrapper(
                         completableFuture.complete(
                             definitionService.loadProto(
                                 keyPair,
-                                fact
+                                fact,
+                                signer
                             )
                         )
                     } catch (t: Throwable) {

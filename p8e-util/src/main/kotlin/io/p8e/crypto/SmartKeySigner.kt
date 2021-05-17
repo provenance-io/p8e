@@ -1,25 +1,26 @@
 package io.p8e.crypto
 
-import com.fortanix.sdkms.v1.ApiClient
-import com.fortanix.sdkms.v1.Configuration
-import com.fortanix.sdkms.v1.api.AuthenticationApi
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
-import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
-import com.fortanix.sdkms.v1.model.VerifyKcvRequest
-import com.fortanix.sdkms.v1.model.VerifyRequest
 import com.google.protobuf.Message
 import io.p8e.proto.Common
+import io.p8e.proto.PK
+import io.p8e.proto.ProtoUtil
+import io.p8e.util.base64Decode
+import io.p8e.util.base64Encode
 import io.p8e.util.orThrow
 import io.p8e.util.toHex
 import io.p8e.util.toJavaPublicKey
+import io.p8e.util.toPublicKeyProto
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider
 import java.lang.IllegalStateException
 import java.security.KeyFactory
 import java.security.PublicKey
+import java.security.Security
 import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.X509EncodedKeySpec
@@ -47,21 +48,72 @@ import java.security.spec.X509EncodedKeySpec
  * operating in a public, private, or hybrid cloud.
  */
 
-class SmartKeySigner(
-    private val appApiKey: String,
-    private val keyUuid: String
-): SignerImpl {
+class SmartKeySigner: SignerImpl {
 
     init {
-        val client = ApiClient()
-        client.setBasicAuthString(appApiKey)
-        Configuration.setDefaultApiClient(client)
-
-        val authResponse = AuthenticationApi().authorize()
-        val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
-        auth.apiKey = authResponse.accessToken
-        auth.apiKeyPrefix = "Bearer"
+        Security.addProvider(BouncyCastleProvider())
     }
+
+    companion object {
+        // Algo must match Provenance-object-store
+        val SIGN_ALGO = "SHA512withECDSA"
+        val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
+    }
+
+    var signature: Signature? = null
+
+    private var signatureRequest: SignRequest? = null
+    private var verifying: Boolean = false
+    private var keyUuid: String? = null
+
+    private val cachedData = mutableListOf<ByteArray>()
+
+    fun instance(keyUuid: String): SmartKeySigner {
+        this.keyUuid = keyUuid
+        return this
+    }
+
+    /**
+     * Using the local java security signature instance to verify data.
+     */
+    override fun initVerify(publicKey: PublicKey) {
+        signature = Signature.getInstance(SIGN_ALGO, PROVIDER).apply { initVerify(publicKey) }
+        verifying = true
+    }
+
+    /**
+     * Using SmartKey to sign data.
+     */
+    override fun initSign() {
+        signatureRequest = SignRequest().hashAlg(DigestAlgorithm.SHA512).deterministicSignature(true)
+        verifying = false
+    }
+
+    override fun update(data: ByteArray, off: Int, len: Int) {
+        if(!verifying) {
+            signatureRequest?.data(data.copyOfRange(off, off+len))
+        } else {
+            /**
+             * Large data dump from the InputStream drops in here, we only care about
+             * the last piece of data to verify against. If we continue to update the
+             * signature object with every single data that pass through the verification
+             * returns a false negative.
+             *
+             * Signature.getInstance is a 1:1 - meaning new instance for each piece of data.
+             */
+
+            cachedData.add(data.copyOfRange(off, off+len))
+        }
+    }
+
+    override fun verify(signatureBytes: ByteArray): Boolean {
+        // take the last piece of data cached to verify against.
+        signature?.update(cachedData.last())
+
+        return signature?.verify(signatureBytes)!!
+    }
+
+    override fun sign(): ByteArray = SignAndVerifyApi().sign(keyUuid, signatureRequest).signature
 
     override fun sign(data: String): Common.Signature = sign(data.toByteArray())
 
@@ -70,41 +122,34 @@ class SmartKeySigner(
     override fun sign(data: ByteArray): Common.Signature {
         val signatureRequest = SignRequest()
             .hashAlg(DigestAlgorithm.SHA512)
-            .hash(data)
+            .data(data)
             .deterministicSignature(true)
 
         val signatureResponse = SignAndVerifyApi().sign(keyUuid, signatureRequest)
 
-        return Common.Signature.newBuilder()
-            .setAlgo(DigestAlgorithm.SHA512.value)
-            .setProvider("SmartKey")
-            .setSignature(signatureResponse.signature.toString())
+        return ProtoUtil
+            .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
+            .setSigner(signer())
             .build()
-            .takeIf { verify(data, signatureResponse.signature) }
-            .orThrow { IllegalStateException("Invalid signature") }
+            .takeIf { verify(data, it) }
+            .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
-    override fun sign(): ByteArray {
-        TODO("Not yet implemented")
-    }
+    override fun signer(): PK.SigningAndEncryptionPublicKeys =
+        PK.SigningAndEncryptionPublicKeys.newBuilder()
+            .setSigningPublicKey(
+                getPublicKey().toPublicKeyProto()
+            ).build()
 
-    override fun update(data: Byte) {
-        // Not needed for SmartKey
-    }
+    override fun update(data: ByteArray) { signature?.update(data) }
 
-    override fun update(data: ByteArray, off: Int, len: Int) {
-        // Not needed for SmartKey
-    }
-
-//    override fun verify(data: ByteArray): Boolean {
-//        val sigVerificationRequest = VerifyRequest()
-//            .hashAlg(DigestAlgorithm.SHA512)
-//            .hash(data)
-//            .signature(data)
-//    }
+    override fun update(data: Byte) { signature?.update(data) }
 
     override fun verify(data: ByteArray, signature: Common.Signature): Boolean {
-        TODO("Not yet implemented")
+        val s = Signature.getInstance(signature.algo, signature.provider)
+        s.initVerify(getPublicKey())
+        s.update(data)
+        return s.verify(signature.signature.base64Decode())
     }
 
     /**
@@ -117,19 +162,5 @@ class SmartKeySigner(
         val x509PublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(smPublicKey))
         val bcPublicKey = BCECPublicKey(x509PublicKey as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION)
         return bcPublicKey.toHex().toJavaPublicKey()
-    }
-
-   // override fun verify(data: ByteArray, signature: Signature): Boolean = verify(data, signature)
-
-    private fun verify(data: String, signature: Signature): Boolean = verify(data, signature)
-
-    override fun verify(data: ByteArray, signature: ByteArray): Boolean {
-        //TODO: Investigate local signature verification verification.
-        val sigVerificationRequest = VerifyRequest()
-            .hashAlg(DigestAlgorithm.SHA512)
-            .hash(data)
-            .signature(signature)
-
-        return SignAndVerifyApi().verify(keyUuid, sigVerificationRequest).result
     }
 }

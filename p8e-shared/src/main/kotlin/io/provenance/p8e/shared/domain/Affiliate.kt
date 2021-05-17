@@ -19,7 +19,7 @@ const val DEFAULT_INDEX_NAME = "scopes"
 object AffiliateTable : IdTable<String>("affiliate") {
     val alias = varchar("alias", 255).nullable()
     val publicKey = text("public_key")
-    val privateKey = text("private_key")
+    val privateKey = text("private_key").nullable()
     val whitelistData = proto("whitelist_data", AffiliateWhitelist.getDefaultInstance()).nullable()
     val encryptionPublicKey = text("encryption_public_key")
     val encryptionPrivateKey = text ("encryption_private_key")

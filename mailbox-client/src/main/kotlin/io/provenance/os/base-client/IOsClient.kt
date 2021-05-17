@@ -1,6 +1,7 @@
 package io.provenance.os.baseclient.client
 
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.domain.ObjectWithItem
 import java.io.InputStream
@@ -22,7 +23,7 @@ interface IOsClient {
     fun put(
         message: Message,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
@@ -31,7 +32,7 @@ interface IOsClient {
     fun put(
         inputStream: InputStream,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),

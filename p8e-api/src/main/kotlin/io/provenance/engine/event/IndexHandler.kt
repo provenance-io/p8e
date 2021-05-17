@@ -77,7 +77,7 @@ class IndexHandler(
         } else {
             log.info("Starting index scope ${indexScope.eventType}")
 
-            protoIndexer.indexFields(scope, keyPairs)
+            protoIndexer.indexFields(scope, keyPairs, affiliateService)
                 .toMutableMap()
                 .also { entries ->
                     val recordGroup = when (indexScope.eventType) {

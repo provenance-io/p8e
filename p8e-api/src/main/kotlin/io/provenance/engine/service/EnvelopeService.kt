@@ -1,8 +1,6 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Timestamp
-import io.p8e.crypto.SignerFactory
-import io.p8e.crypto.SignerFactoryParam
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractScope.Envelope.Status
@@ -38,8 +36,7 @@ class EnvelopeService(
     private val mailboxService: MailboxService,
     private val envelopeStateEngine: EnvelopeStateEngine,
     private val eventService: EventService,
-    private val metricsService: MetricsService,
-    private val signerFactory: SignerFactory
+    private val metricsService: MetricsService
 ) {
     private val log = logger()
 
@@ -58,10 +55,7 @@ class EnvelopeService(
         log.info("Handling envelope")
 
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-
-        //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        val signer = signerFactory.getSigner(SignerFactoryParam.PenParam(signingKeyPair))
+        val signer = affiliateService.getSigner(publicKey)
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
@@ -96,7 +90,6 @@ class EnvelopeService(
         val result = timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
                 keyPair = encryptionKeyPair,
-                signingKeyPair = signingKeyPair,
                 envelope = envelope,
                 signer = signer
             )
@@ -206,16 +199,12 @@ class EnvelopeService(
         if (record.data.hasExecutedTime())
             return record
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
-
-        //TODO: Move to a full UUID base key reference instead of passing sensitive key information freely.
-        val signer = signerFactory.getSigner(SignerFactoryParam.PenParam(signingKeyPair))
+        val signer = affiliateService.getSigner(publicKey)
 
         timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
                 encryptionKeyPair,
-                signingKeyPair,
                 envelope = record.data.input,
                 signer = signer
             )

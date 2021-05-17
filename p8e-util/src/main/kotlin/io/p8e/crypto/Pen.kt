@@ -12,21 +12,32 @@ import java.security.PublicKey
 import java.security.Security
 import java.security.Signature
 
-class Pen(keyPair: KeyPair): SignerImpl {
+class Pen(
+    private val keyPair: KeyPair
+): SignerImpl {
 
     companion object {
         // Algo must match Provenance-object-store
         val SIGN_ALGO = "SHA512withECDSA"
         val KEY_TYPE = "ECDSA"
-        val PROVIDER = "BC"
+        val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
     }
 
     val privateKey: PrivateKey = keyPair.private
-    val lens: Lens = Lens(keyPair.public)
+
+    val signature: Signature = Signature.getInstance(
+        SIGN_ALGO,
+        PROVIDER
+    )
 
     init {
         Security.addProvider(BouncyCastleProvider())
     }
+
+    /**
+     * Return the signing public key.
+     */
+    override fun getPublicKey(): PublicKey = keyPair.public
 
     /**
      * Sign protobuf data.
@@ -42,42 +53,40 @@ class Pen(keyPair: KeyPair): SignerImpl {
      * Sign byte array.
      */
     override fun sign(data: ByteArray): Common.Signature {
-        val s = Signature.getInstance(
-            SIGN_ALGO,
-            PROVIDER
-        )
-        s.initSign(privateKey)
-        s.update(data)
+        signature.initSign(privateKey)
+        signature.update(data)
 
         return ProtoUtil
-            .signatureBuilderOf(String(s.sign().base64Encode()))
-            .setSigner(lens.signer())
+            .signatureBuilderOf(String(signature.sign().base64Encode()))
+            .setSigner(signer())
             .build()
-            .takeIf { lens.verify(data, it) }
+            .takeIf { verify(data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
-}
 
-/**
- * Allows inspection of data that is signed by a Provenance Member Certificate
- *
- * @param pubKey The public key to be used for examination.
- */
-class Lens(val publicKey: PublicKey) {
-    // TODO - Verify data hash... ???
-    fun verify(data: String, signature: Common.Signature) = verify(data.base64Decode(), signature)
+    override fun sign(): ByteArray = signature.sign()
 
-    fun verify(data: ByteArray, signature: Common.Signature): Boolean {
-        val s = Signature.getInstance(signature.algo, signature.provider)
-        s.initVerify(publicKey)
-        s.update(data)
-        return s.verify(signature.signature.base64Decode())
-    }
+    override fun update(data: ByteArray) { signature.update(data) }
 
-    fun signer(): PK.SigningAndEncryptionPublicKeys =
+    override fun update(data: ByteArray, off: Int, len: Int) { signature.update(data, off, len) }
+
+    override fun update(data: Byte) { signature.update(data) }
+
+    override fun verify(signatureBytes: ByteArray): Boolean = signature.verify(signatureBytes)
+
+    override fun initVerify(publicKey: PublicKey) { signature.apply { initVerify(publicKey) } }
+
+    override fun initSign() { signature.apply { initSign(keyPair.private) } }
+
+    override fun verify(data: ByteArray, signature: Common.Signature): Boolean =
+        Signature.getInstance(signature.algo, signature.provider)
+            .apply {
+                initVerify(keyPair.public)
+                update(data)
+            }.verify(signature.signature.base64Decode())
+
+    override fun signer(): PK.SigningAndEncryptionPublicKeys =
         PK.SigningAndEncryptionPublicKeys.newBuilder()
-            .setSigningPublicKey(
-                publicKey.toPublicKeyProto()
-            ).build()
-
+            .setSigningPublicKey(keyPair.public.toPublicKeyProto())
+            .build()
 }

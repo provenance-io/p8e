@@ -61,12 +61,12 @@ class AffiliateService(
      */
     fun getSigner(publicKey: PublicKey): SignerImpl {
         val affiliateRecord = get(publicKey)
-        return if(affiliateRecord?.privateKey.isNullOrEmpty()){
+        return if(affiliateRecord?.privateKey == null) {
             signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord?.keyUuid.toString()))
         } else {
             signerFactory.getSigner(
                 SignerFactoryParam.PenParam(
-                    KeyPair(affiliateRecord?.publicKey?.value?.toJavaPublicKey(), affiliateRecord?.privateKey?.toJavaPrivateKey())
+                    KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
                 )
             )
         }
@@ -124,7 +124,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_KEY_PAIR)
     fun getSigningKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
-        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
     }
 
     @Cacheable(AFFILIATE_ENCRYPTION_PUBLIC_KEY)
@@ -136,7 +136,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_KEY_PAIR)
     fun getSigningKeyPair(uuid: String): KeyPair{
         val affiliateRecord = getFirst(uuid)
-        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
     }
 
     fun getSigningPublicKey(publicKey: PublicKey): PublicKey = getFirst(publicKey).publicKey.value.toJavaPublicKey()
@@ -300,7 +300,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_SIGNING_KEY_PAIR)
     fun getSigningKeyPairs(): List<KeyPair> = getAll()
         .map {
-            KeyPair(it.publicKey.value.toJavaPublicKey(), it.privateKey.toJavaPrivateKey())
+            KeyPair(it.publicKey.value.toJavaPublicKey(), it.privateKey?.toJavaPrivateKey())
         }
 
     /**

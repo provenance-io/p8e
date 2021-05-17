@@ -9,13 +9,11 @@ sealed class SignerFactoryParam{
     data class SmartKeyParam(val uuid: String): SignerFactoryParam()
 }
 
-class SignerFactory(smartKeyApiKey: String) {
-    private val appApiKey = smartKeyApiKey
-
+class SignerFactory(private val smartKeySigner: SmartKeySigner) {
     fun getSigner(param: SignerFactoryParam): SignerImpl {
         return when (param) {
             is PenParam -> Pen(param.keyPair)
-            is SmartKeyParam -> SmartKeySigner(appApiKey, param.uuid)
+            is SmartKeyParam -> smartKeySigner.instance(param.uuid)
         }
     }
 }

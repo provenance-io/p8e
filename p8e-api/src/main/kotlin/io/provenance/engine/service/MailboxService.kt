@@ -16,7 +16,9 @@ import io.provenance.os.baseclient.client.http.ApiException
 import io.provenance.os.mailbox.client.MailboxClient
 import io.provenance.os.mailbox.client.iterator.DIMEInputStreamResponse
 import io.provenance.p8e.shared.service.AffiliateService
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
+import java.nio.file.Files.readAllBytes
 import java.security.KeyPair
 import java.security.PublicKey
 import java.util.UUID
@@ -43,14 +45,13 @@ class MailboxService(
         log.debug("Polling mailbox client")
 
         val results = mutableListOf<Pair<DIMEInputStreamResponse, ByteArray>>()
-
+        val signer = transaction { affiliateService.getSigner(keyPair.public) }
         mailboxClient.poll(keyPair.public, limit = limit).use { iterator ->
             while (iterator.hasNext()) {
                 iterator.next().let { dimeInputStreamResponse ->
-                    dimeInputStreamResponse.dimeInputStream.getDecryptedPayload(keyPair).use {
+                    dimeInputStreamResponse.dimeInputStream.getDecryptedPayload(keyPair, signer).use {
                         // TODO - double check readAllBytes is safe for our use case
                         val bytes = it.readAllBytes()
-
                         if (!it.verify()) {
                             throw NotFoundException(
                                 """
@@ -60,7 +61,6 @@ class MailboxService(
                                 """.trimIndent()
                             )
                         }
-
                         results.add(Pair(dimeInputStreamResponse, bytes))
                     }
 
@@ -83,13 +83,13 @@ class MailboxService(
     fun fragment(publicKey: PublicKey, env: Envelope) {
         log.info("Fragmenting env:{}", env.getUuid())
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
 
         val invokerPublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
 
         // if the invoker public key does not match the encryption or signing public key, then error.
-        if (invokerPublicKey != encryptionKeyPair.public && invokerPublicKey != signingKeyPair.public ) {
+        if (invokerPublicKey != encryptionKeyPair.public && invokerPublicKey != signer.getPublicKey()) {
             log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionKeyPair.public.toHex()}")
             return
         }
@@ -111,7 +111,7 @@ class MailboxService(
             uuid = UUID.randomUUID(),
             message = env,
             ownerPublicKey = encryptionKeyPair.public,
-            signingKeyPair = signingKeyPair,
+            signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_REQUEST
         )
@@ -144,13 +144,13 @@ class MailboxService(
     fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
 
         mailboxClient.put(
             uuid = UUID.randomUUID(),
             message = error,
             ownerPublicKey = publicKey,
-            signingKeyPair = signingKeyPair,
+            signer = signer,
             additionalAudiences = audiencesPublicKey.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
         )
@@ -166,14 +166,14 @@ class MailboxService(
         log.info("Returning fragment result env:{}", env.getUuid())
 
         val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
 
         mailboxClient.put(
             uuid = UUID.randomUUID(),
             message = env,
             ownerPublicKey = encryptionKeyPair.public,
-            signingKeyPair = signingKeyPair,
+            signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_RESPONSE
         )
@@ -189,6 +189,10 @@ class MailboxService(
     ): Boolean {
         val publicKeyBytes = ECUtils.convertPublicKeyToBytes(publicKey)
         val completableFuture = CompletableFuture<Boolean>()
+
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
+
         try {
             MailboxReaper.publicKeyCheckCallbacks[publicKeyBytes.base64encodeBytes().toString(Charsets.UTF_8)] = {
                 completableFuture.complete(it)
@@ -201,8 +205,8 @@ class MailboxService(
                         publicKeyBytes
                             .toByteString()
                     ).build(),
-                ownerPublicKey = systemKeyPair.public,
-                signingKeyPair = systemKeyPair,
+                ownerPublicKey = encryptionPublicKey,
+                signer = signer,
                 additionalAudiences = setOf(publicKey),
                 metadata = MailboxMeta.MAILBOX_PUBLIC_KEY_ALLOWED
             )
@@ -226,12 +230,13 @@ class MailboxService(
         receiverPublicKey: PublicKey,
         publicKeyAllowed: PublicKeyAllowed
     ) {
+        val signer = affiliateService.getSigner(ownerKeyPair.public)
         try {
             mailboxClient.put(
                 uuid = UUID.randomUUID(),
                 message = publicKeyAllowed,
                 ownerPublicKey = ownerKeyPair.public,
-                signingKeyPair = ownerKeyPair,
+                signer = signer,
                 additionalAudiences = setOf(receiverPublicKey),
                 metadata = MailboxMeta.MAILBOX_PUBLIC_KEY_ALLOWED_RESPONSE
             )

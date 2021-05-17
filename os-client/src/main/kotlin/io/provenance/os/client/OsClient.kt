@@ -4,13 +4,14 @@ import com.google.protobuf.Empty
 import com.google.protobuf.Message
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
+import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.sign
 import io.p8e.util.toByteString
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.domain.*
 import io.provenance.os.domain.inputstream.DIMEInputStream
-import io.provenance.os.domain.inputstream.sign
 import io.provenance.os.proto.*
 import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
@@ -20,7 +21,6 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.URI
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -133,7 +133,7 @@ open class OsClient(uri: URI) {
     fun put(
         message: Message,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
@@ -143,7 +143,7 @@ open class OsClient(uri: URI) {
         return put(
             ByteArrayInputStream(bytes),
             ownerPublicKey,
-            signingKeyPair,
+            signer,
             bytes.size.toLong(),
             additionalAudiences,
             metadata,
@@ -154,15 +154,16 @@ open class OsClient(uri: URI) {
     fun put(
         inputStream: InputStream,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
         deadlineSeconds: Long = 60L
     ): ObjectWithItem {
-        val signatureInputStream = inputStream.sign(signingKeyPair.private)
-        val signingPublicKey = CertificateUtil.publicKeyToPem(signingKeyPair.public)
+        val signerPublicKey = signer.getPublicKey()
+        val signatureInputStream = inputStream.sign(signer)
+        val signingPublicKey = CertificateUtil.publicKeyToPem(signerPublicKey)
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
             ownerTransactionCert = ownerPublicKey,
@@ -173,7 +174,7 @@ open class OsClient(uri: URI) {
             dime.dime,
             dime.encryptedPayload,
             uuid = uuid,
-            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signingKeyPair.public)),
+            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signerPublicKey)),
             internalHash = true,
             externalHash = false
         )

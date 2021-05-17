@@ -107,8 +107,7 @@ class EnvelopeServiceTest {
             mailboxService = mailboxService,
             envelopeStateEngine = envelopeStateEngine,
             eventService = eventService,
-            metricsService = metricService,
-            signerFactory = signerFactory
+            metricsService = metricService
         )
     }
 
