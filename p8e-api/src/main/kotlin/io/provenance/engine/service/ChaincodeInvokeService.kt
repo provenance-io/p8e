@@ -105,7 +105,7 @@ class ChaincodeInvokeService(
                         blockScopeIds.clear()
                     }
             } catch (t: Throwable) {
-                log.error("Received error when fetching latest block, waiting 1s before trying again", t)
+                log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
                 Thread.sleep(1000);
                 continue;
             }
@@ -137,8 +137,6 @@ class ChaincodeInvokeService(
             }
 
             while (batch.size < chaincodeProperties.txBatchSize) {
-                // TODO wrap poll in catch since there's cases where it can throw and if that happens
-                // this thread would currently be lost
                 queue.poll(chaincodeProperties.emptyIterationBackoffMS.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
                     if (!blockScopeIds.contains(message.request.scopeId)) {
                         log.debug("adding ${message.request.scopeId} to batch")
