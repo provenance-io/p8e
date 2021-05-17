@@ -72,7 +72,11 @@ fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
         .setGroupId(this.ref.groupUuid.value)
         // TODO refactor name fetch to service with caching?
         // Does this need to verify that this scope specification is associated with this contract hash locally in the db as well?
-        .setScopeSpecificationId(transaction { ScopeSpecificationRecord.findByName(scope.scopeSpecificationName)?.id?.value?.toString() })
+        .apply {
+            transaction { ScopeSpecificationRecord.findByName(scope.scopeSpecificationName)?.id?.value?.toString() }?.let { scopeSpecificationId ->
+                setScopeSpecificationId(scopeSpecificationId)
+            }
+        }
         .setContract(this.contract.toProv().toBuilder()
             .setContext(Contracts.ContractState.newBuilder()
                 .setExecutionUuid(this.executionUuid)
