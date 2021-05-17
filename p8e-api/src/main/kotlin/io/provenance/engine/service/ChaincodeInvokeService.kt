@@ -86,7 +86,7 @@ class ChaincodeInvokeService(
                 try {
                     memorializeBatchTx()
                 } catch (t: Throwable) {
-                    log.error("Unexpected error in memorializeBatchTx, restarting...")
+                    log.error("Unexpected error in memorializeBatchTx, restarting...", t)
                 }
             }
         }
