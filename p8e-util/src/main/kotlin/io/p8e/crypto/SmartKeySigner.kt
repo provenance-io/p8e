@@ -58,15 +58,20 @@ class SmartKeySigner: SignerImpl {
         // Algo must match Provenance-object-store
         val SIGN_ALGO = "SHA512withECDSA"
         val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
+
+        //The size of the object bytes that are signed at bootstrap time is 32768.
+        //The data pulled from the dime input stream breaks the data into chunks of 8192.
+        val OBJECT_SIZE_BYTES = 8192 * 4
     }
 
-    var signature: Signature? = null
-
+    private var signature: Signature? = null
     private var signatureRequest: SignRequest? = null
+
     private var verifying: Boolean = false
     private var keyUuid: String? = null
 
-    private val cachedData = mutableListOf<ByteArray>()
+    private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
+    private var aggregatedData: ByteArray? = null
 
     fun instance(keyUuid: String): SmartKeySigner {
         this.keyUuid = keyUuid
@@ -89,17 +94,39 @@ class SmartKeySigner: SignerImpl {
         verifying = false
     }
 
-    override fun update(data: ByteArray, off: Int, len: Int) {
-        if(!verifying) {
-            signatureRequest?.data(data.copyOfRange(off, off+len))
-        } else {
-            cachedData.add(data.copyOfRange(off, off+len))
+    override fun update(data: ByteArray, off: Int, res: Int) {
+        // If off is less then res, these are the data that we care about.
+        if(off < res) {
+            if(!verifying) {
+                val dataSample = data.copyOfRange(off, off+res)
+                signatureRequest?.data = dataSample
+            } else {
+                /**
+                 * The downstream (data verification) chunks the data into data size of 8192.
+                 * The data needs to be aggregated to its signing size of 32768 before the
+                 * data can be validated.
+                 */
+                if(objSizeIndexer == OBJECT_SIZE_BYTES) {
+                    objSizeIndexer = (off + res)
+                    aggregatedData = null
+                    aggregatedData = if (aggregatedData == null) {
+                        data.copyOfRange(off, off + res)
+                    } else {
+                        aggregatedData?.plus(data.copyOfRange(off, off + res))
+                    }
+                } else {
+                    objSizeIndexer += (off + res)
+                    aggregatedData = aggregatedData?.plus(data.copyOfRange(off, off + res))
+                }
+            }
         }
     }
 
     override fun verify(signatureBytes: ByteArray): Boolean {
-        // take the last piece of data cached to verify against.
-        signature?.update(cachedData.last())
+        signature?.update(aggregatedData)
+
+        // Rest the Object size indexer.
+        objSizeIndexer = OBJECT_SIZE_BYTES
 
         return signature?.verify(signatureBytes)!!
     }
@@ -132,9 +159,22 @@ class SmartKeySigner: SignerImpl {
                 getPublicKey().toPublicKeyProto()
             ).build()
 
-    override fun update(data: ByteArray) { signature?.update(data) }
+    override fun update(data: ByteArray) {
+        if(!verifying) {
+            signatureRequest?.data(data)
+        } else {
+            signature?.update(data)
+        }
+    }
 
-    override fun update(data: Byte) { signature?.update(data) }
+    override fun update(data: Byte) {
+        val dataByteArray = mutableListOf(data)
+        if(!verifying) {
+            signatureRequest?.data(dataByteArray.toByteArray())
+        } else {
+            signature?.update(data)
+        }
+    }
 
     override fun verify(data: ByteArray, signature: Common.Signature): Boolean {
         val s = Signature.getInstance(signature.algo, signature.provider)
