@@ -62,9 +62,9 @@ object P8eMDC {
     }
 }
 
-data class TransactionHashes(val hashes: List<String>)
+data class TransactionHashes(val hashes: Collection<String>)
 fun String.toTransactionHashes() = TransactionHashes(listOf(this))
-fun List<String>.toTransactionHashes() = TransactionHashes(this)
+fun List<String>.toTransactionHashes() = TransactionHashes(this.toSet())
 
 data class BlockHeight(val height: Long)
 fun Long.toBlockHeight() = BlockHeight(this)

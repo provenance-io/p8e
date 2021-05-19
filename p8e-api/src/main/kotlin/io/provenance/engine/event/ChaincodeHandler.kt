@@ -93,7 +93,7 @@ class ChaincodeHandler(
             }
 
             try {
-                val result = chaincodeInvokeService.memorializeContract(envelope.data.result).get()
+                val result = chaincodeInvokeService.offer(envelope.data.result).get()
 
                 // Grab the timestamp now so that the logs appear linear for research... There is a case where an envelope
                 // completes but has not chaincode_time or chaincodeTransaction data. This will happen if the system restarts

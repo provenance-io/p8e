@@ -1,10 +1,10 @@
 ```
-                            ______  _____  _____ 
+                            ______  _____  _____
                             | ___ \|  _  ||  ___|
-                            | |_/ / \ V / | |__  
-                            |  __/  / _ \ |  __| 
-                            | |    | |_| || |___ 
-                            \_|    \_____/\____/ 
+                            | |_/ / \ V / | |__
+                            |  __/  / _ \ |  __|
+                            | |    | |_| || |___
+                            \_|    \_____/\____/
 
 ```
 ## Status
@@ -26,26 +26,23 @@
 [loc-badge]: https://tokei.rs/b1/github/provenance-io/p8e
 [loc-report]: https://github.com/provenance-io/p8e
 
-# P8E — Provenance Contract Memorialization on DLT
+# P8E — Provenance Contract Execution Environment
 
-P8e provides a system for collaborative execution, consensus, and proof recording of business execution on a distributed ledger
-without revealing the contents of transactions.
+The Provenance Contact Execution Environment (nicknamed “P8e”) is an optional layer on top of the Provenance Blockchain
+to allow single and multi-party client-side contract execution while preserving data privacy.
+Provenance client-side contracts take encrypted data from the user (client) and transform the information into
+encrypted data in the user’s own private object store with object hashes recorded on the blockchain.
 
-## P8E-PROTO
-
-Specifically the `contract_scope` (blockchain transaction block format), and `contract_spec` (contract execution requirements)
-proto sets distill the core requirements for contract memorialization.  The Provenance SDK provides one implementation to satisfy
-the requirements of completing these structures.  Alternate implements would be responsible for providing the required information
-and submitting to the blockchain for validation/recording.
+Further documentation is provided [here](https://docs.provenance.io/p8e/overview).
 
 ## Provenance Blockchain
 
-All of the contract memorialization artifacts are stored within [Provenance](https://github.com/provenance-io/provenance) DLT 
-on blockchain. Submitted contract memorialization requests are evaluated against the known global provenance state.  Chain 
-of custody and control is enforced for all state transitions to ensure provenance of data is maintained. 
+All of the contract memorialization artifacts are stored within the [Provenance](https://github.com/provenance-io/provenance)
+open source blockchain. Submitted contract memorialization requests are evaluated against the known global provenance state.
+Chain of custody and control is enforced for all state transitions to ensure provenance of data is maintained.
 
-## Contract
-
-Contract provides an implementation of the contract ledger rules. A contract for memorialization is submitted
-in an `envelope` protobuf that contains a reference to the existing contract specification, parties involved with the request,
-and references to any existing resources on-chain that are involved in the request.
+## Links
+- [docs](https://docs.provenance.io/)
+- [provenance github](https://github.com/provenance-io/provenance)
+- [p8e-gradle-plugin github](https://github.com/provenance-io/p8e-gradle-plugin)
+- [object-store github](https://github.com/provenance-io/object-store)
