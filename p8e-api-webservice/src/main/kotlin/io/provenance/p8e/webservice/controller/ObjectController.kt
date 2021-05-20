@@ -26,7 +26,8 @@ open class ObjectController(private val affiliateService: AffiliateService) {
 
         requireNotNull(affiliate) { "Identity ${provenanceIdentityUuid()} is unable to fetch objects for public key $publicKey" }
 
-        return ContractManager.create(affiliate.privateKey).let { cm ->
+        // todo: figure out how to properly authenticate to fetch object json now
+        return ContractManager.create(affiliate.privateKey!!).let { cm ->
             cm.client.loadProtoJson(hash, className, contractSpecHash)
         }
     }

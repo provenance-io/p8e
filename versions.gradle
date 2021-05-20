@@ -26,7 +26,6 @@ ext {
     javax_annotation_version = '1.3.2'
 
     gradle_download = '4.1.1'
-    provenance_version = '0.3.0'
+    provenance_version = '1.3.0'
     cosmos_version = '0.42.2'
 }
-

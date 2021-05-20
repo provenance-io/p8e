@@ -72,6 +72,10 @@ open class EnvelopeEntityClass : UUIDEntityClass<EnvelopeRecord>(
         EnvelopeTable.groupUuid eq groupUuid and (EnvelopeTable.executionUuid eq executionUuid)
     }.toList()
 
+    fun findByExecutionUuid(executionUuid: UUID) = find {
+        EnvelopeTable.executionUuid eq executionUuid
+    }.toList()
+
     fun findByPublicKeyAndExecutionUuid(publicKey: PublicKey, executionUuid: UUID) =
         find { EnvelopeTable.executionUuid eq executionUuid }.toList()
             .firstOrNull { it.scope.publicKey.toPublicKeyProto() == publicKey.toPublicKeyProto() }

@@ -129,10 +129,7 @@ class AppConfig : WebMvcConfigurer {
         return Feign.builder()
             .encoder(JacksonEncoder(objectMapper))
             .decoder(JacksonDecoder(objectMapper))
-            .target(
-                RPCClient::class.java,
-                eventStreamProperties.rpcUri
-            )
+            .target(RPCClient::class.java, eventStreamProperties.rpcUri)
     }
 
     @Bean

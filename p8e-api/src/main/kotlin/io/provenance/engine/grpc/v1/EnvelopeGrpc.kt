@@ -218,7 +218,6 @@ class EnvelopeGrpc(
             event.envelope
         )
 
-        // TODO remove pushing this to the client once we know all users are on the non accepted handler version
         val event = EnvelopeEvent.newBuilder()
             .setEvent(ENVELOPE_ACCEPTED)
             .setClassname(envRecord.data.contractClassname)
@@ -229,12 +228,6 @@ class EnvelopeGrpc(
             )
             .setEnvelope(envRecord.data.result)
             .build()
-
-        val observerKey = event.toEnvelopeObserverKey()
-        queuers[observerKey]?.also {
-            log.debug("Queuing ${event.event.name} for observer key ${observerKey.description()}")
-            it.queue(event)
-        } ?: log.debug("Observer not available ${observerKey.description()}")
 
         return event
     }

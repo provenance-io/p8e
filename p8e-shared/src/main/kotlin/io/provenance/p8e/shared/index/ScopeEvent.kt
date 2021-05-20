@@ -3,9 +3,9 @@ package io.provenance.p8e.shared.index
 import io.p8e.proto.ContractScope.Scope
 
 enum class ScopeEventType(val value: String) {
-    CREATED("scope_created"),
-    UPDATED("scope_updated"),
-    OWNERSHIP("scope_ownership")
+    CREATED("provenance.metadata.v1.EventScopeCreated"),
+    UPDATED("provenance.metadata.v1.EventScopeUpdated"),
+    OWNERSHIP("scope_ownership") // TODO change to correct name after supported
 }
 
 fun String.toEventType() : ScopeEventType = when (this) {
