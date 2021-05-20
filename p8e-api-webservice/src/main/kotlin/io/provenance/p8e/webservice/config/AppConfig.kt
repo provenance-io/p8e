@@ -2,19 +2,26 @@ package io.provenance.p8e.webservice.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
+import com.fortanix.sdkms.v1.ApiClient
+import com.fortanix.sdkms.v1.api.AuthenticationApi
+import com.fortanix.sdkms.v1.api.SecurityObjectsApi
+import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
+import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
+import io.provenance.p8e.shared.config.SmartKeyProperties
 import io.provenance.p8e.shared.service.KeystoneService
 import io.provenance.p8e.shared.util.IdentityClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.webservice.identity.ExternalIdentityClient
 import io.provenance.p8e.webservice.identity.IdentityDecoder
 import io.provenance.p8e.webservice.interceptors.JWTInterceptor
+import io.provenance.p8e.webservice.service.KeyManagementService
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -43,7 +50,8 @@ import java.net.URI
     ServiceProperties::class,
     ProvenanceOAuthProperties::class,
     JwtProperties::class,
-    ProvenanceKeystoneProperties::class
+    ProvenanceKeystoneProperties::class,
+    SmartKeyProperties::class,
 ])
 class AppConfig : WebMvcConfigurer {
 
@@ -127,5 +135,18 @@ class AppConfig : WebMvcConfigurer {
                 }
             )
         }
+    }
+
+    @Bean
+    fun securityObjectsApi(smartKeyProperties: SmartKeyProperties): SecurityObjectsApi {
+        val client = ApiClient().apply { setBasicAuthString(smartKeyProperties.apiKey) }
+        com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(client)
+
+        val authResponse = AuthenticationApi().authorize()
+        val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
+        auth.apiKey = authResponse.accessToken
+        auth.apiKeyPrefix = "Bearer"
+
+        return SecurityObjectsApi()
     }
 }

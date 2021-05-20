@@ -1,5 +1,6 @@
 package io.provenance.p8e.webservice.domain
 
+import com.fasterxml.jackson.annotation.JsonCreator
 import io.p8e.util.*
 import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
 import io.provenance.p8e.shared.domain.AffiliateRecord
@@ -14,17 +15,19 @@ data class ApiAffiliateKey(
         val alias: String?,
         val signingKey: ApiPublicKey,
         val encryptionKey: ApiPublicKey,
+        val authKey: ApiPublicKey,
         val indexName: String,
         val serviceKeys: List<ApiServiceKey>
 ) {
     val keyUsage = "CONTRACT"
 }
 
-fun AffiliateRecord.toApi(includePrivateKey: Boolean = false): ApiAffiliateKey {
+fun AffiliateRecord.toApi(authPrivateKey: String? = null): ApiAffiliateKey {
     return ApiAffiliateKey(
         alias,
-        ApiPublicKey(publicKey.value, hexPrivateKey = privateKey.takeIf { includePrivateKey }),
-        ApiPublicKey(encryptionPublicKey, hexPrivateKey = encryptionPrivateKey.takeIf { includePrivateKey }),
+        ApiPublicKey(publicKey.value),
+        ApiPublicKey(encryptionPublicKey),
+        ApiPublicKey(authPublicKey, hexPrivateKey = authPrivateKey),
         indexName,
         serviceKeys.map { it.toApi() }
     )
@@ -43,15 +46,16 @@ fun AffiliateShareRecord.toApi(): ApiAffiliateShare =
         created
     )
 
-data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val authPrivateKey: String?, val useSigningKeyForEncryption: Boolean, val indexName: String, val alias: String?) {
-    val signingKeyPair: KeyPair = signingPrivateKey.toOrGenerateKeyPair()
-    val encryptionKeyPair: KeyPair = signingKeyPair.takeIf { useSigningKeyForEncryption }.or { encryptionPrivateKey.toOrGenerateKeyPair() }
-    val authKeyPair: KeyPair = authPrivateKey.toOrGenerateKeyPair()
+enum class KeyProviders(val key: String) {
+    DATABASE("database"),
+    SMART_KEY("smartKey");
 
-    private fun String?.toOrGenerateKeyPair() = this?.takeIf { it.isNotBlank() }?.toJavaPrivateKey()?.let {
-        KeyPair(it.computePublicKey(), it)
-    } ?: ProvenanceKeyGenerator.generateKeyPair()
+    @JsonCreator
+    fun fromText(text: String): KeyProviders = values().find { it.key == text }
+        .orThrow { IllegalArgumentException("Key Provider $text does not exist") }
 }
+
+data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val useSigningKeyForEncryption: Boolean, val keyProvider: KeyProviders, val indexName: String, val alias: String?)
 
 data class UpdateAffiliateKey(val alias: String?)
 data class AddShare(val publicKey: String)

@@ -188,10 +188,5 @@ class SmartKeySigner: SignerImpl {
      *
      * @return [PublicKey] return the Java security version of the PublicKey.
      */
-    override fun getPublicKey(): PublicKey {
-        val smPublicKey = SecurityObjectsApi().getSecurityObject(keyUuid).pubKey
-        val x509PublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(smPublicKey))
-        val bcPublicKey = BCECPublicKey(x509PublicKey as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION)
-        return bcPublicKey.toHex().toJavaPublicKey()
-    }
+    override fun getPublicKey(): PublicKey = SecurityObjectsApi().getSecurityObject(keyUuid).toJavaPublicKey()
 }

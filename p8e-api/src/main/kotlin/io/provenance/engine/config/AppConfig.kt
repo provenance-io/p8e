@@ -35,6 +35,7 @@ import io.provenance.os.mailbox.client.MailboxClient
 import io.provenance.os.mailbox.client.MailboxClientProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
+import io.provenance.p8e.shared.config.SmartKeyProperties
 import io.provenance.p8e.shared.service.KeystoneService
 import io.provenance.pbc.clients.Denom
 import io.provenance.pbc.clients.SimpleClient

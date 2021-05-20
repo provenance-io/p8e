@@ -138,7 +138,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_ENCRYPTION_KEY_PAIR)
     fun getEncryptionKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
-        return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey?.toJavaPrivateKey())
     }
     
     @Cacheable(AFFILIATE_KEY_PAIR)
@@ -283,11 +283,11 @@ class AffiliateService(
         AFFILIATE_INDEX_NAME
     ])
 
-    fun save(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null): AffiliateRecord =
-        AffiliateRecord.insert(signingPublicKey, encryptionKeyPair, authPublicKey, indexName, alias)
+    fun save(signingPublicKey: ExternalKeyRef, encryptionPublicKey: ExternalKeyRef, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingPublicKey, encryptionPublicKey, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public)
+                osClient.createPublicKey(encryptionPublicKey.publicKey)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
@@ -322,7 +322,7 @@ class AffiliateService(
         .map {
             // We need to handle nullable keys
             it.encryptionPublicKey to
-                    KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey.toJavaPrivateKey())
+                    KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey?.toJavaPrivateKey())
         }.toMap()
 
 
