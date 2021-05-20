@@ -1,6 +1,7 @@
 package io.provenance.os.mailbox.client
 
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl
 import io.provenance.os.mailbox.client.iterator.MultiDIMEIterator
 import io.provenance.os.domain.ObjectWithItem
 import io.provenance.os.domain.Scope
@@ -21,7 +22,7 @@ interface IMailboxClient {
     fun put(
         message: Message,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
@@ -30,7 +31,7 @@ interface IMailboxClient {
     fun put(
         inputStream: InputStream,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),

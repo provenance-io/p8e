@@ -4,6 +4,7 @@ import com.google.protobuf.Message
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.p8e.classloader.MemoryClassLoader
+import io.p8e.crypto.SignerImpl
 import io.p8e.proto.Common.DefinitionSpec
 import io.p8e.proto.Common.Location
 import io.p8e.proto.Contracts.Fact
@@ -46,12 +47,14 @@ class DefinitionService(
     fun addJar(
         keyPair: KeyPair,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ) {
         return get(
             keyPair,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
     }
@@ -64,12 +67,14 @@ class DefinitionService(
     fun loadClass(
         keyPair: KeyPair,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Class<*> {
         return get(
             keyPair,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
             .let {
@@ -86,12 +91,14 @@ class DefinitionService(
     fun loadProto(
         keyPair: KeyPair,
         location: Location,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             keyPair,
             location.ref.hash,
             location.classname,
+            signer,
             signaturePublicKey
         )
     }
@@ -99,12 +106,14 @@ class DefinitionService(
     fun loadProto(
         keyPair: KeyPair,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             keyPair,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         )
     }
@@ -112,12 +121,14 @@ class DefinitionService(
     fun loadProto(
         keyPair: KeyPair,
         fact: Fact,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             keyPair,
             fact.dataLocation.ref.hash,
             fact.dataLocation.classname,
+            signer,
             signaturePublicKey
         )
     }
@@ -126,6 +137,7 @@ class DefinitionService(
         keyPair: KeyPair,
         hash: String,
         classname: String,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
@@ -133,6 +145,7 @@ class DefinitionService(
                 keyPair,
                 hash,
                 classname,
+                signer,
                 signaturePublicKey
             ),
             classname
@@ -166,6 +179,7 @@ class DefinitionService(
         encryptionKeyPair: KeyPair,
         hash: String,
         classname: String,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): InputStream {
 
@@ -198,9 +212,9 @@ class DefinitionService(
                             .map { it.publicKey.toString(Charsets.UTF_8) }
                             .contains(publicKeyToPem(publicKey))
                     }?.let { publicKey ->
-                        dimeInputStream.getDecryptedPayload(encryptionKeyPair, publicKey)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyPair, publicKey, signer)
                     }.or {
-                        dimeInputStream.getDecryptedPayload(encryptionKeyPair)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyPair, signer)
                     }.use { signatureInputStream ->
                         signatureInputStream.readAllBytes()
                             .also {
@@ -209,7 +223,7 @@ class DefinitionService(
                                         """
                                             Object was fetched but we're unable to verify item signature
                                             [classname: $classname]
-                                            [public key: ${encryptionKeyPair.public.toHex()}]
+                                            [encryption public key: ${encryptionKeyPair.public.toHex()}]
                                             [signing public key: ${signaturePublicKey?.toHex()}]
                                             [hash: $hash]
                                         """.trimIndent()
@@ -246,7 +260,7 @@ class DefinitionService(
     fun save(
         keyPair: KeyPair,
         msg: ByteArray,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         audience: Set<PublicKey> = setOf()
     ): ByteArray {
         val putCacheKey = PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.base64Sha512())
@@ -256,7 +270,7 @@ class DefinitionService(
         return osClient.put(
             ByteArrayInputStream(msg),
             keyPair.public,
-            signingKeyPair,
+            signer,
             msg.size.toLong(),
             audience
         ).also {
@@ -267,7 +281,7 @@ class DefinitionService(
     fun <T : Message> save(
         keyPair: KeyPair,
         msg: T,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         audience: Set<PublicKey> = setOf()
     ): ByteArray {
         val putCacheKey = PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.toByteArray().base64Sha512())
@@ -277,7 +291,7 @@ class DefinitionService(
         return osClient.put(
             msg,
             keyPair.public,
-            signingKeyPair,
+            signer,
             additionalAudiences = audience
         ).also {
             putCache[putCacheKey] = true

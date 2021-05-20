@@ -2,11 +2,16 @@ package io.provenance.os.domain.inputstream
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import io.p8e.crypto.SignatureInputStream
+import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.verify
+import io.p8e.util.base64String
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.util.ByteUtil
 import io.provenance.p8e.encryption.util.ByteUtil.writeUInt16
 import io.provenance.p8e.encryption.util.ByteUtil.writeUInt32
 import io.p8e.util.configureProvenance
+import io.p8e.util.toHex
 import io.provenance.p8e.encryption.util.HashingCipherInputStream
 import io.provenance.os.domain.Signature
 import io.provenance.os.util.CertificateUtil
@@ -177,13 +182,13 @@ class DIMEInputStream(
      * @param keyPair - The encryption key pair to decrypt the stream
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(keyPair: KeyPair): SignatureInputStream {
+    fun getDecryptedPayload(keyPair: KeyPair, signer: SignerImpl): SignatureInputStream {
         // seek past the header
         pos += header.size
 
         return ProvenanceDIME.getDEK(dime.audienceList, keyPair)
             .let { ProvenanceDIME.decryptPayload(this, it) }
-            .verify(getFirstSignaturePublicKey(), getFirstSignature())
+            .verify(signer, getFirstSignaturePublicKey(), getFirstSignature())
     }
 
     /**
@@ -194,24 +199,20 @@ class DIMEInputStream(
      * @param signaturePublicKey - The signature public key to use for signature verification
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(
-        keyPair: KeyPair,
-        signaturePublicKey: PublicKey
-    ): SignatureInputStream {
+    fun getDecryptedPayload(keyPair: KeyPair, signaturePublicKey: PublicKey, signer: SignerImpl): SignatureInputStream {
         // seek past the header
         pos += header.size
 
         val signatureToUse = signatures.find { it.publicKey.toString(Charsets.UTF_8) == CertificateUtil.publicKeyToPem(signaturePublicKey) }
-            .orThrow { IllegalStateException("Unable to find signature in object for public key ${CertificateUtil.publicKeyToPem(signaturePublicKey)}")}
+            .orThrow { IllegalStateException("Unable to find signature in object for public key ${signaturePublicKey.toHex()}")}
             .signature
 
         return ProvenanceDIME.getDEK(dime.audienceList, keyPair)
             .let { ProvenanceDIME.decryptPayload(this, it) }
-            .verify(signaturePublicKey, signatureToUse)
+            .verify(signer, signaturePublicKey, signatureToUse)
     }
 
     fun length() = pos
-
 
     companion object {
         const val FIELDNAME = "DIME"
@@ -356,7 +357,6 @@ class DIMEInputStream(
                 read += res
             } while (read < bytes.size)
         }
-
     }
 
     /**

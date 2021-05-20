@@ -32,7 +32,7 @@ import java.util.concurrent.ExecutorService
 import kotlin.concurrent.thread
 
 interface P8eContractEngine {
-    fun handle(keyPair: KeyPair, signingKeyPair: KeyPair, envelope: Envelope, signer: SignerImpl): Envelope
+    fun handle(keyPair: KeyPair, envelope: Envelope, signer: SignerImpl): Envelope
 }
 
 class ContractEngine(
@@ -46,7 +46,6 @@ class ContractEngine(
 
     override fun handle(
         keyPair: KeyPair,
-        signingKeyPair: KeyPair,
         envelope: Envelope,
         signer: SignerImpl
     ): Envelope {
@@ -56,7 +55,7 @@ class ContractEngine(
         val scope = envelope.scope.takeIf { it != Scope.getDefaultInstance() }
 
         val spec = timed("ContractEngine_fetchSpec") {
-            _definitionService.loadProto(keyPair, contract.spec.dataLocation) as? ContractSpec
+            _definitionService.loadProto(keyPair, contract.spec.dataLocation, signer) as? ContractSpec
                 ?: throw ContractDefinitionException("Spec stored at contract.spec.dataLocation is not of type ${ContractSpec::class.java.name}")
         }
 
@@ -74,7 +73,6 @@ class ContractEngine(
                 signer,
                 affiliateService.getSharePublicKeys(listOf(keyPair.public)),
                 scope,
-                signingKeyPair,
                 spec
             )
         }
@@ -88,7 +86,6 @@ class ContractEngine(
         signer: SignerImpl,
         shares: AffiliateSharePublicKeys,
         scope: Scope?,
-        signingKeyPair: KeyPair,
         spec: ContractSpec
     ): Envelope {
         val definitionService = DefinitionService(osClient, memoryClassLoader)
@@ -96,7 +93,7 @@ class ContractEngine(
         // Load contract spec class
         val contractSpecClass = timed("ContractEngine_loadSpecClass") {
             try {
-                definitionService.loadClass(keyPair, spec.definition)
+                definitionService.loadClass(keyPair, spec.definition, signer)
             } catch (e: StatusRuntimeException) {
                 if (e.status.code == Status.Code.NOT_FOUND) {
                     throw ContractDefinitionException(
@@ -117,7 +114,8 @@ class ContractEngine(
             loadAllClasses(
                 keyPair,
                 definitionService,
-                spec
+                spec,
+                signer
             )
         }
 
@@ -138,8 +136,8 @@ class ContractEngine(
 
                     log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
-                    this.getScopeData(keyPair, definitionService, scope)
-                        .threadedMap(executor) { definitionService.save(keyPair, it, signingKeyPair, audience) }
+                    this.getScopeData(keyPair, definitionService, scope, signer)
+                        .threadedMap(executor) { definitionService.save(keyPair, it, signer, audience) }
                 } else { }
             }
             Contracts.ContractType.FACT_BASED, Contracts.ContractType.UNRECOGNIZED -> Unit
@@ -152,7 +150,7 @@ class ContractEngine(
             keyPair,
             definitionService,
             contractBuilder,
-            signingKeyPair
+            signer
         )
 
         val prerequisiteResults = contractWrapper.prerequisites.map { prerequisite ->
@@ -188,7 +186,7 @@ class ContractEngine(
                     prerequisite.fact.name,
                     result,
                     contract.toAudience(scope, shares),
-                    signingKeyPair,
+                    signer,
                     keyPair,
                     scope
                 )
@@ -229,7 +227,7 @@ class ContractEngine(
                             function.fact.name,
                             result,
                             contract.toAudience(scope, shares),
-                            signingKeyPair,
+                            signer,
                             keyPair,
                             scope
                         )
@@ -258,20 +256,22 @@ class ContractEngine(
     private fun getScopeData(
         keyPair: KeyPair,
         definitionService: DefinitionService,
-        scope: Scope
+        scope: Scope,
+        signer: SignerImpl
     ): List<ByteArray> =
         scope.recordGroupList.flatMap { it.recordsList }
             .map { record -> record.inputsList.map { input -> Pair(input.classname, input.hash) } + Pair("unset", record.hash) + Pair(record.classname, record.resultHash) }
             .flatten()
             .plus(scope.recordGroupList.map { Pair(it.classname, it.specification) })
             .toSet()
-            .threadedMap(executor) { (classname, hash) -> definitionService.get(keyPair, hash = hash, classname = classname).readAllBytes() }
+            .threadedMap(executor) { (classname, hash) -> definitionService.get(keyPair, hash = hash, classname = classname, signer).readAllBytes() }
             .toList()
 
     private fun loadAllClasses(
         keyPair: KeyPair,
         definitionService: DefinitionService,
-        spec: ContractSpec
+        spec: ContractSpec,
+        signer: SignerImpl
     ) {
         mutableListOf(spec.definition)
             .apply {
@@ -283,7 +283,7 @@ class ContractEngine(
                 )
             }.threadedMap(executor) { definition ->
                 with (definition.resourceLocation) {
-                    this to definitionService.get(keyPair, hash = this.ref.hash, classname = this.classname)
+                    this to definitionService.get(keyPair, hash = this.ref.hash, classname = this.classname, signer)
                 }
             }.toList()
             .forEach { (location, inputStream) ->  definitionService.addJar(location.ref.hash, inputStream) }
@@ -294,14 +294,14 @@ class ContractEngine(
         name: String,
         message: Message,
         audiences: Set<PublicKey>,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         keyPair: KeyPair,
         scope: Scope?
     ): ExecutionResult {
         val sha512 = definitionService.save(
             keyPair,
             message,
-            signingKeyPair,
+            signer,
             audiences
         )
 

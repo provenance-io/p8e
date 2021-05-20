@@ -2,12 +2,13 @@ package io.provenance.os.mailbox.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.sign
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.baseclient.client.http.ApiException
 import io.provenance.os.baseclient.client.BaseClient
-import io.provenance.os.domain.inputstream.sign
 import io.provenance.os.domain.AckRequest
 import io.provenance.os.domain.CONTENT_LENGTH_HEADER
 import io.provenance.os.domain.IsAckedRequest
@@ -33,7 +34,6 @@ import org.apache.http.util.EntityUtils
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URLEncoder
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.UUID
 
@@ -125,7 +125,7 @@ class MailboxClient(
     override fun put(
         message: Message,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
         uuid: UUID
@@ -135,7 +135,7 @@ class MailboxClient(
                 put(
                     ByteArrayInputStream(bytes),
                     ownerPublicKey,
-                    signingKeyPair,
+                    signer,
                     bytes.size.toLong(),
                     additionalAudiences,
                     metadata,
@@ -147,13 +147,13 @@ class MailboxClient(
     override fun put(
         inputStream: InputStream,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
         uuid: UUID
     ): ObjectWithItem {
-        val signingInputStream = inputStream.sign(signingKeyPair.private)
+        val signingInputStream = inputStream.sign(signer)
         val dime = ProvenanceDIME.createDIME(
             payload = signingInputStream,
             ownerTransactionCert = ownerPublicKey,
@@ -165,7 +165,7 @@ class MailboxClient(
             dime.dime,
             dime.encryptedPayload,
             uuid = uuid,
-            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signingKeyPair.public)),
+            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signer.getPublicKey())),
             internalHash = true,
             externalHash = false
         )
@@ -173,7 +173,7 @@ class MailboxClient(
         return put(
             dimeInputStream,
             contentLength,
-            signingKeyPair.public,
+            signer.getPublicKey(),
             { signingInputStream.sign() },
             { dimeInputStream.internalHash() }
         )

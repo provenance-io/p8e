@@ -2,6 +2,9 @@ package io.provenance.engine.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
+import com.fortanix.sdkms.v1.ApiClient
+import com.fortanix.sdkms.v1.api.AuthenticationApi
+import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import com.timgroup.statsd.NonBlockingStatsDClientBuilder
 import com.tinder.scarlet.Scarlet
 import com.tinder.scarlet.messageadapter.moshi.MoshiMessageAdapter
@@ -269,7 +272,20 @@ class AppConfig : WebMvcConfigurer {
      * Add support for new key management.
      */
     @Bean
-    fun signer(smartKeyProperties: SmartKeyProperties): SignerFactory {
-        return SignerFactory(smartKeyProperties.apiKey)
+    fun signer(smartKeySigner: SmartKeySigner): SignerFactory {
+        return SignerFactory(smartKeySigner)
+    }
+
+    @Bean
+    fun smartKeySigner(smartKeyProperties: SmartKeyProperties): SmartKeySigner {
+        return SmartKeySigner().apply {
+            val client = ApiClient().apply { setBasicAuthString(smartKeyProperties.apiKey) }
+            com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(client)
+
+            val authResponse = AuthenticationApi().authorize()
+            val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
+            auth.apiKey = authResponse.accessToken
+            auth.apiKeyPrefix = "Bearer"
+        }
     }
 }

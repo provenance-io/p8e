@@ -2,10 +2,11 @@ package io.provenance.os.baseclient.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl
+import io.p8e.crypto.sign
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
-import io.provenance.os.domain.inputstream.sign
 import io.provenance.os.domain.CONTENT_LENGTH_HEADER
 import io.provenance.os.domain.OBJECT_BASE_V1
 import io.provenance.os.domain.ObjectWithItem
@@ -13,7 +14,6 @@ import io.provenance.os.domain.PUBLIC_KEY_BASE_V1
 import io.provenance.os.domain.PublicKeyRequest
 import io.provenance.os.domain.SIGNATURE_PUBLIC_KEY_FIELD_NAME
 import io.provenance.os.domain.Sha512ObjectRequest
-import io.provenance.os.domain.UuidObjectRequest
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.util.base64Decode
 import io.provenance.os.util.orThrow
@@ -21,11 +21,9 @@ import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.client.HttpClientBuilder
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.URI
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.UUID
 
@@ -98,7 +96,7 @@ open class OsClient(
     override fun put(
         message: Message,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
         uuid: UUID
@@ -108,7 +106,7 @@ open class OsClient(
                 put(
                     ByteArrayInputStream(bytes),
                     ownerPublicKey,
-                    signingKeyPair,
+                    signer,
                     bytes.size.toLong(),
                     additionalAudiences,
                     metadata,
@@ -120,13 +118,14 @@ open class OsClient(
     override fun put(
         inputStream: InputStream,
         ownerPublicKey: PublicKey,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
         uuid: UUID
     ): ObjectWithItem {
-        val signatureInputStream = inputStream.sign(signingKeyPair.private)
+        val signingPublicKey = signer.getPublicKey()
+        val signatureInputStream = inputStream.sign(signer)
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
             ownerTransactionCert = ownerPublicKey,
@@ -138,7 +137,7 @@ open class OsClient(
             dime.dime,
             dime.encryptedPayload,
             uuid = uuid,
-            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signingKeyPair.public)),
+            metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signingPublicKey)),
             internalHash = true,
             externalHash = false
         )
@@ -146,7 +145,7 @@ open class OsClient(
         return post(
             "$osUrl$OBJECT_BASE_V1",
             dimeInputStream,
-            signingKeyPair.public,
+            signingPublicKey,
             { signatureInputStream.sign() },
             { dimeInputStream.internalHash() },
             headers = mapOf(

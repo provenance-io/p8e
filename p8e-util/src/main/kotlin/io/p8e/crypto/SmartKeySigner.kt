@@ -1,24 +1,27 @@
 package io.p8e.crypto
 
-import com.fortanix.sdkms.v1.ApiClient
-import com.fortanix.sdkms.v1.Configuration
-import com.fortanix.sdkms.v1.api.AuthenticationApi
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
-import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
-import com.fortanix.sdkms.v1.model.VerifyRequest
 import com.google.protobuf.Message
-import io.p8e.proto.Common.Signature
+import io.p8e.proto.Common
+import io.p8e.proto.PK
+import io.p8e.proto.ProtoUtil
+import io.p8e.util.base64Decode
+import io.p8e.util.base64Encode
 import io.p8e.util.orThrow
 import io.p8e.util.toHex
 import io.p8e.util.toJavaPublicKey
+import io.p8e.util.toPublicKeyProto
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider
 import java.lang.IllegalStateException
 import java.security.KeyFactory
 import java.security.PublicKey
+import java.security.Security
+import java.security.Signature
 import java.security.interfaces.ECPublicKey
 import java.security.spec.X509EncodedKeySpec
 
@@ -45,27 +48,96 @@ import java.security.spec.X509EncodedKeySpec
  * operating in a public, private, or hybrid cloud.
  */
 
-class SmartKeySigner(
-    private val appApiKey: String,
-    private val keyUuid: String
-): SignerImpl {
+class SmartKeySigner: SignerImpl {
 
     init {
-        val client = ApiClient()
-        client.setBasicAuthString(appApiKey)
-        Configuration.setDefaultApiClient(client)
-
-        val authResponse = AuthenticationApi().authorize()
-        val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
-        auth.apiKey = authResponse.accessToken
-        auth.apiKeyPrefix = "Bearer"
+        Security.addProvider(BouncyCastleProvider())
     }
 
-    override fun sign(data: String): Signature = sign(data.toByteArray())
+    companion object {
+        // Algo must match Provenance-object-store
+        val SIGN_ALGO = "SHA512withECDSA"
+        val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
 
-    override fun sign(data: Message): Signature = sign(data.toByteArray())
+        //The size of the object bytes that are signed at bootstrap time is 32768.
+        //The data pulled from the dime input stream breaks the data into chunks of 8192.
+        val OBJECT_SIZE_BYTES = 8192 * 4
+    }
 
-    override fun sign(data: ByteArray): Signature {
+    private var signature: Signature? = null
+    private var signatureRequest: SignRequest? = null
+
+    private var verifying: Boolean = false
+    private var keyUuid: String? = null
+
+    private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
+    private var aggregatedData: ByteArray? = null
+
+    fun instance(keyUuid: String): SmartKeySigner {
+        this.keyUuid = keyUuid
+        return this
+    }
+
+    /**
+     * Using the local java security signature instance to verify data.
+     */
+    override fun initVerify(publicKey: PublicKey) {
+        signature = Signature.getInstance(SIGN_ALGO, PROVIDER).apply { initVerify(publicKey) }
+        verifying = true
+    }
+
+    /**
+     * Using SmartKey to sign data.
+     */
+    override fun initSign() {
+        signatureRequest = SignRequest().hashAlg(DigestAlgorithm.SHA512).deterministicSignature(true)
+        verifying = false
+    }
+
+    override fun update(data: ByteArray, off: Int, res: Int) {
+        // If off is less then res, these are the data that we care about.
+        if(off < res) {
+            if(!verifying) {
+                val dataSample = data.copyOfRange(off, off+res)
+                signatureRequest?.data = dataSample
+            } else {
+                /**
+                 * The downstream (data verification) chunks the data into data size of 8192.
+                 * The data needs to be aggregated to its signing size of 32768 before the
+                 * data can be validated.
+                 */
+                if(objSizeIndexer == OBJECT_SIZE_BYTES) {
+                    objSizeIndexer = (off + res)
+                    aggregatedData = null
+                    aggregatedData = if (aggregatedData == null) {
+                        data.copyOfRange(off, off + res)
+                    } else {
+                        aggregatedData?.plus(data.copyOfRange(off, off + res))
+                    }
+                } else {
+                    objSizeIndexer += (off + res)
+                    aggregatedData = aggregatedData?.plus(data.copyOfRange(off, off + res))
+                }
+            }
+        }
+    }
+
+    override fun verify(signatureBytes: ByteArray): Boolean {
+        signature?.update(aggregatedData)
+
+        // Rest the Object size indexer.
+        objSizeIndexer = OBJECT_SIZE_BYTES
+
+        return signature?.verify(signatureBytes)!!
+    }
+
+    override fun sign(): ByteArray = SignAndVerifyApi().sign(keyUuid, signatureRequest).signature
+
+    override fun sign(data: String): Common.Signature = sign(data.toByteArray())
+
+    override fun sign(data: Message): Common.Signature = sign(data.toByteArray())
+
+    override fun sign(data: ByteArray): Common.Signature {
         val signatureRequest = SignRequest()
             .hashAlg(DigestAlgorithm.SHA512)
             .data(data)
@@ -73,13 +145,42 @@ class SmartKeySigner(
 
         val signatureResponse = SignAndVerifyApi().sign(keyUuid, signatureRequest)
 
-        return Signature.newBuilder()
-            .setAlgo(DigestAlgorithm.SHA512.value)
-            .setProvider("SmartKey")
-            .setSignature(signatureResponse.signature.toString())
+        return ProtoUtil
+            .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
+            .setSigner(signer())
             .build()
-            .takeIf { verify(data, signatureResponse.signature) }
-            .orThrow { IllegalStateException("Invalid signature") }
+            .takeIf { verify(data, it) }
+            .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
+    }
+
+    override fun signer(): PK.SigningAndEncryptionPublicKeys =
+        PK.SigningAndEncryptionPublicKeys.newBuilder()
+            .setSigningPublicKey(
+                getPublicKey().toPublicKeyProto()
+            ).build()
+
+    override fun update(data: ByteArray) {
+        if(!verifying) {
+            signatureRequest?.data(data)
+        } else {
+            signature?.update(data)
+        }
+    }
+
+    override fun update(data: Byte) {
+        val dataByteArray = mutableListOf(data)
+        if(!verifying) {
+            signatureRequest?.data(dataByteArray.toByteArray())
+        } else {
+            signature?.update(data)
+        }
+    }
+
+    override fun verify(data: ByteArray, signature: Common.Signature): Boolean {
+        val s = Signature.getInstance(signature.algo, signature.provider)
+        s.initVerify(getPublicKey())
+        s.update(data)
+        return s.verify(signature.signature.base64Decode())
     }
 
     /**
@@ -87,22 +188,10 @@ class SmartKeySigner(
      *
      * @return [PublicKey] return the Java security version of the PublicKey.
      */
-    fun getPublicKey(): PublicKey {
+    override fun getPublicKey(): PublicKey {
         val smPublicKey = SecurityObjectsApi().getSecurityObject(keyUuid).pubKey
         val x509PublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(smPublicKey))
         val bcPublicKey = BCECPublicKey(x509PublicKey as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION)
         return bcPublicKey.toHex().toJavaPublicKey()
-    }
-
-    private fun verify(data: String, signature: Signature): Boolean = verify(data, signature)
-
-    private fun verify(data: ByteArray, signature: ByteArray): Boolean {
-        //TODO: Investigate local signature verification verification.
-        val sigVerificationRequest = VerifyRequest()
-            .hashAlg(DigestAlgorithm.SHA512)
-            .data(data)
-            .signature(signature)
-
-        return SignAndVerifyApi().verify(keyUuid, sigVerificationRequest).result
     }
 }

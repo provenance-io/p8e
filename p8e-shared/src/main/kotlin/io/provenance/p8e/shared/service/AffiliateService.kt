@@ -1,5 +1,8 @@
 package io.provenance.p8e.shared.service
 
+import io.p8e.crypto.SignerFactory
+import io.p8e.crypto.SignerFactoryParam
+import io.p8e.crypto.SignerImpl
 import io.p8e.proto.Affiliate.AffiliateContractWhitelist
 import io.p8e.proto.Affiliate.AffiliateWhitelist
 import io.p8e.util.*
@@ -30,7 +33,8 @@ class AffiliateService(
     private val cacheManager: CacheManager,
     private val osClient: OsClient,
     private val keystoneService: KeystoneService,
-    private val esClient: RestHighLevelClient
+    private val esClient: RestHighLevelClient,
+    private val signerFactory: SignerFactory
 ) {
 
     companion object {
@@ -46,6 +50,26 @@ class AffiliateService(
         const val AFFILIATE_INDEX_NAME = "affiliate_index_name"
         const val AFFILIATE_ENCRYPTION_KEY_PAIR = "affiliate_encryption_key_pair"
         const val AFFILIATE_SIGNING_KID = "affiliate_signing_key_id"
+        const val AFFILIATE_ENCRYPTION_PUBLIC_KEY = "affiliate_encryption_public_key"
+    }
+
+    /**
+     *  Return the signer to be used
+     *
+     *  [publicKey] publicKey used to validate
+     *  [signer] The specific signer used to sign contracts
+     */
+    fun getSigner(publicKey: PublicKey): SignerImpl {
+        val affiliateRecord = get(publicKey)
+        return if(affiliateRecord?.privateKey == null) {
+            signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord?.keyUuid.toString()))
+        } else {
+            signerFactory.getSigner(
+                SignerFactoryParam.PenParam(
+                    KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
+                )
+            )
+        }
     }
 
     /**
@@ -100,7 +124,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_KEY_PAIR)
     fun getSigningKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
-        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
     }
 
     @Cacheable(AFFILIATE_ENCRYPTION_KEY_PAIR)
@@ -112,8 +136,10 @@ class AffiliateService(
     @Cacheable(AFFILIATE_KEY_PAIR)
     fun getSigningKeyPair(uuid: String): KeyPair{
         val affiliateRecord = getFirst(uuid)
-        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
     }
+
+    fun getSigningPublicKey(publicKey: PublicKey): PublicKey = getFirst(publicKey).publicKey.value.toJavaPublicKey()
 
     /**
      * Get the public key that matches with the AffiliateRecord.
@@ -125,6 +151,18 @@ class AffiliateService(
     fun getSigningKeyUuid(publicKey: PublicKey): String {
         val affiliateRecord = getFirst(publicKey)
         return affiliateRecord.keyUuid.toString()
+    }
+
+    /**
+     * Validate that the public key is a valid affiliate against the database.
+     *
+     * @param [publicKey] Public key of the contract being executed.
+     * @return [boolean] return true if the public key exists in the affiliate table.
+     */
+    @Cacheable(AFFILIATES_ENCRYPTION_KEYS)
+    fun getEncryptionPublicKey(publicKey: PublicKey): PublicKey {
+        val affiliateRecord = getFirst(publicKey)
+        return affiliateRecord.encryptionPublicKey.toJavaPublicKey()
     }
 
     /**
@@ -215,6 +253,7 @@ class AffiliateService(
         AFFILIATE_INDEX_NAMES,
         AFFILIATE_INDEX_NAME
     ])
+
     fun save(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null): AffiliateRecord =
         AffiliateRecord.insert(signingPublicKey, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
@@ -251,15 +290,17 @@ class AffiliateService(
      */
     @Cacheable(AFFILIATES_ENCRYPTION_KEYS)
     fun getEncryptionKeyPairs(): Map<String, KeyPair> = getAll()
-            .map {
-                it.encryptionPublicKey to
+        .map {
+            // We need to handle nullable keys
+            it.encryptionPublicKey to
                     KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey.toJavaPrivateKey())
-            }.toMap()
+        }.toMap()
+
 
     @Cacheable(AFFILIATE_SIGNING_KEY_PAIR)
     fun getSigningKeyPairs(): List<KeyPair> = getAll()
         .map {
-            KeyPair(it.publicKey.value.toJavaPublicKey(), it.privateKey.toJavaPrivateKey())
+            KeyPair(it.publicKey.value.toJavaPublicKey(), it.privateKey?.toJavaPrivateKey())
         }
 
     /**

@@ -170,6 +170,7 @@ class IndexGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         val keyPair = transaction { affiliateService.getSigningKeyPair(publicKey()) }
+        val signer = transaction { affiliateService.getSigner(publicKey()) }
 
         indexService.findByScopeUuid(
             request.scopeUuid.toUuidProv(),
@@ -204,7 +205,8 @@ class IndexGrpc(
                         definitionService.get(
                             keyPair,
                             entry.resultHash,
-                            entry.contractClassname
+                            entry.contractClassname,
+                            signer
                         ).readAllBytes()
                             .toByteString()
                     ).build()
