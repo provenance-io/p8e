@@ -42,7 +42,6 @@ open source blockchain. Submitted contract memorialization requests are evaluate
 Chain of custody and control is enforced for all state transitions to ensure provenance of data is maintained.
 
 ## Links
-
 - [docs](https://docs.provenance.io/)
 - [provenance github](https://github.com/provenance-io/provenance)
 - [p8e-gradle-plugin github](https://github.com/provenance-io/p8e-gradle-plugin)

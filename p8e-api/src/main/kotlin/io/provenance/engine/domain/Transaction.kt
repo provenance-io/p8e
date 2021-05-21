@@ -61,7 +61,7 @@ class BlockResultsRequest(
 data class BlockResults(
     val height: Long,
     @JsonProperty("txs_results")
-    val txsResults: List<TxResult>
+    val txsResults: List<TxResult>?
 )
 
 data class TxResult(

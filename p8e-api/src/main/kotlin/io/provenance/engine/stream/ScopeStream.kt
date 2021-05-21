@@ -13,6 +13,7 @@ import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.p8e.shared.index.data.IndexScopeRecord
 import io.provenance.engine.service.EventService
+import io.provenance.engine.service.ProvenanceGrpcService
 import io.provenance.engine.stream.domain.Attribute
 import io.provenance.engine.stream.domain.EventBatch
 import io.provenance.engine.stream.domain.EventStreamResponseObserver
@@ -39,7 +40,8 @@ import java.util.concurrent.TimeUnit
 class ScopeStream(
     private val eventService: EventService,
     eventStreamProperties: EventStreamProperties,
-    private val eventStreamFactory: EventStreamFactory
+    private val eventStreamFactory: EventStreamFactory,
+    private val provenanceGrpcService: ProvenanceGrpcService,
 ) {
     private val log = logger()
 
@@ -85,7 +87,7 @@ class ScopeStream(
     private fun EventBatch.scopes(): List<ScopeEvent> =
         this.events.map { event ->
             ScopeEvent(
-                event.findTxHash(),
+                event.txHash,
                 event.findScope(),
                 event.eventType.toEventType()
             )
@@ -97,9 +99,14 @@ class ScopeStream(
             ?: throw IllegalStateException("Event does not contain a transaction hash")
 
     // Find the scope in an event.
-    private fun StreamEvent.findScope(): Scope =
-        this.attributes.find { it.key == "scope" }?.toScope()
-            ?: throw IllegalStateException("Event does not contain a scope")
+    private fun StreamEvent.findScope(): Scope {
+        return this.attributes.find { it.key == "scope_addr" }?.let {
+            val jsonScope = it.value!!.toString()
+            // remove the enclosing quotes
+            val scope = jsonScope.substring(1, jsonScope.length - 1)
+            provenanceGrpcService.retrieveScope(scope)
+        } ?: throw IllegalStateException("Event does not contain a scope")
+    }
 
     // Parse a scope from an attribute value.
     // We only call this after we find a matching "key" so it should be safe to convert to non nullable
@@ -118,7 +125,7 @@ class ScopeStream(
             uuids.forEach {
                 // TODO: write a test for and possibly fix the case where multiple parties on multiparty contract share same node, but have different index names
                 // may need to index each separately to ensure both indexes populated https://github.com/FigureTechnologies/p8e/pull/444/files#r557465484
-                EnvelopeRecord.findByGroupAndExecutionUuid(it.groupUuid, it.executionUuid).forEachIndexed { i, envelope ->
+                EnvelopeRecord.findByExecutionUuid(it.executionUuid).forEachIndexed { i, envelope ->
                     eventService.submitEvent(
                         P8eEvent.newBuilder()
                             .setEvent(if (i == 0) Event.SCOPE_INDEX else Event.SCOPE_INDEX_FRAGMENT)

@@ -6,6 +6,7 @@ import io.p8e.annotations.Function
 import io.p8e.annotations.Fact
 import io.p8e.annotations.Input
 import io.p8e.annotations.Participants
+import io.p8e.annotations.ScopeSpecification
 import io.p8e.proto.Common.DefinitionSpec
 import io.p8e.proto.Common.DefinitionSpec.Type.FACT
 import io.p8e.proto.Common.DefinitionSpec.Type.FACT_LIST
@@ -82,6 +83,13 @@ object ContractSpecMapper {
         clazz.isSubclassOf(P8eContract::class)
             .orThrowContractDefinition("Contract class ${clazz::class.java.name} is not a subclass of P8eContract")
 
+        val scopeSpecifications = clazz.annotations
+            .filter { it is ScopeSpecification }
+            .map { it as ScopeSpecification }
+            .flatMap { it.names.toList() }
+            .takeUnless { it.isEmpty() }
+            .orThrowContractDefinition("Class requires a ScopeSpecification annotation")
+
         val spec = ContractSpec.newBuilder()
 
         with(ProtoUtil) {
@@ -92,7 +100,8 @@ object ContractSpecMapper {
                     contractRef
                 ),
                 FACT
-            ).build()
+            )
+                .build()
         }
 
         clazz.constructors
