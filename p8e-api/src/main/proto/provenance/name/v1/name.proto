@@ -20,7 +20,7 @@ message Params {
   bool allow_unrestricted_names = 4;
 }
 
-// NameRecord is a structure used to bind ownership of a name heirarchy to a collection of addresses
+// NameRecord is a structure used to bind ownership of a name hierarchy to a collection of addresses
 message NameRecord {
   option (gogoproto.goproto_stringer) = false;
 
@@ -45,4 +45,16 @@ message CreateRootNameProposal {
   string name        = 3;
   string owner       = 4;
   bool   restricted  = 5;
+}
+
+// Event emitted when name is bound.
+message EventNameBound {
+  string address = 1;
+  string name    = 2;
+}
+
+// Event emitted when name is unbound.
+message EventNameUnbound {
+  string address = 1;
+  string name    = 2;
 }

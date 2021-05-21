@@ -37,7 +37,6 @@ data class ScopeDocument(
     val specification: String?,
     val executionUuid: UUID,
     val groupUuid: UUID,
-    val parties: List<String>
 )
 
 @Component
@@ -67,7 +66,6 @@ class IndexHandler(
             groupUuid = scope.lastEvent.groupUuid,
             classname = null,
             specification = null,
-            parties = scope.partiesList.map { it.signer.encryptionPublicKey.toPublicKey().toSha512Hex() }
         )
 
         P8eMDC.set(scope, clear = true)
@@ -99,8 +97,7 @@ class IndexHandler(
 
                     transaction {
                         with(scope.lastEvent) {
-                            EnvelopeRecord.findByGroupAndExecutionUuid(
-                                this.groupUuid.toUuidProv(),
+                            EnvelopeRecord.findByExecutionUuid(
                                 this.executionUuid.toUuidProv()
                             )
                         }
@@ -110,7 +107,8 @@ class IndexHandler(
                             esClient.index(
                                 document.toIndexRequest(
                                     envelope.publicKey.toJavaPublicKey(),
-                                    entries
+                                    entries,
+                                    envelope.data.result.contract.recitalsList.map { it.signer.encryptionPublicKey.toPublicKey().toSha512Hex() }
                                 ), RequestOptions.DEFAULT
                             )
                         } else {
@@ -140,7 +138,7 @@ class IndexHandler(
         lastExecutionTime <= data.chaincodeTime.toOffsetDateTimeProv()
     }
 
-    private fun ScopeDocument.toMap(scopeData: Map<String, Any>): Map<String, Any> {
+    private fun ScopeDocument.toMap(scopeData: Map<String, Any>, encryptionPublicKeys: List<String>): Map<String, Any> {
         val map = mutableMapOf<String, Any>()
         map["scopeUuid"] = this.scopeUuid.value
         map["blockNumber"] = this.blockNumber
@@ -148,7 +146,7 @@ class IndexHandler(
         map["created"] = this.created
         map["p8e.execution.uuid"] = this.executionUuid.value
         map["p8e.group.uuid"] = this.groupUuid.value
-        map["p8e.parties.encryptionPublicKeys"] = this.parties
+        map["p8e.parties.encryptionPublicKeys"] = encryptionPublicKeys
 
         this.classname?.run { map["p8e.classname"] = this }
         this.specification?.run { map["p8e.specification"] = this }
@@ -157,13 +155,13 @@ class IndexHandler(
     }
 
     // Prepare proto indexer output for sending into elastic search.
-    private fun ScopeDocument.toIndexRequest(publicKey: PublicKey, scopeData: Map<String, Any>): IndexRequest {
+    private fun ScopeDocument.toIndexRequest(publicKey: PublicKey, scopeData: Map<String, Any>, encryptionPublicKeys: List<String>): IndexRequest {
         val indexName = transaction {
             affiliateService.getIndexNameByPublicKey(publicKey)
         }
 
         val request = IndexRequest(indexName)
-        request.source(this.toMap(scopeData))
+        request.source(this.toMap(scopeData, encryptionPublicKeys))
         request.id(this.scopeUuid.value)
         request.opType(OpType.INDEX)
         return request
