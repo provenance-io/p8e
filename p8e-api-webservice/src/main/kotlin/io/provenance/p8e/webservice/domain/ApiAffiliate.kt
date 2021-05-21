@@ -46,13 +46,9 @@ fun AffiliateShareRecord.toApi(): ApiAffiliateShare =
         created
     )
 
-enum class KeyProviders(val key: String) {
-    DATABASE("database"),
-    SMART_KEY("smartKey");
-
-    @JsonCreator
-    fun fromText(text: String): KeyProviders = values().find { it.key == text }
-        .orThrow { IllegalArgumentException("Key Provider $text does not exist") }
+enum class KeyProviders {
+    DATABASE,
+    SMART_KEY,
 }
 
 data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val keyProvider: KeyProviders, val indexName: String, val alias: String?) {
