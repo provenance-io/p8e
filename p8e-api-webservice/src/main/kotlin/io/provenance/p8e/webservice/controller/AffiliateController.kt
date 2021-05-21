@@ -22,9 +22,9 @@ open class AffiliateController(private val affiliateRepository: AffiliateReposit
 
     @PostMapping("")
     fun add(@RequestBody body: RegisterAffiliateKey): ApiAffiliateKey {
-        if (body.signingPrivateKey != null || body.encryptionPrivateKey != null) {
+        if (body.hasSigningKey || body.hasEncryptionKey) {
             require(body.keyProvider == KeyProviders.DATABASE) { "Supplying keys only supported for ${KeyProviders.DATABASE.key} provider" }
-            require(body.signingPrivateKey != null && body.encryptionPrivateKey != null) { "When providing existing private keys, you must supply both signing and encryption keys" }
+            require(body.hasSigningKey && body.hasEncryptionKey) { "When providing existing private keys, you must supply both signing and encryption keys" }
         }
 
         return when(body.keyProvider) {

@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fortanix.sdkms.v1.ApiClient
 import com.fortanix.sdkms.v1.api.AuthenticationApi
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
+import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
+import io.p8e.crypto.SignerFactory
 import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.os.client.OsClient
@@ -33,10 +35,12 @@ import org.redisson.Redisson
 import org.redisson.api.RedissonClient
 import org.redisson.config.Config
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Scope
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 import java.net.URI
@@ -137,16 +141,33 @@ class AppConfig : WebMvcConfigurer {
         }
     }
 
+    /**
+     * Add support for new key management.
+     */
     @Bean
-    fun securityObjectsApi(smartKeyProperties: SmartKeyProperties): SecurityObjectsApi {
-        val client = ApiClient().apply { setBasicAuthString(smartKeyProperties.apiKey) }
-        com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(client)
+    @Scope(value = ConfigurableBeanFactory.SCOPE_SINGLETON)
+    fun smartKeyApiClient(smartKeyProperties: SmartKeyProperties): ApiClient = ApiClient().apply {
+        setBasicAuthString(smartKeyProperties.apiKey)
+        com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(this)
 
+        // authenticate with api
         val authResponse = AuthenticationApi().authorize()
-        val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
+        val auth = this.getAuthentication("bearerToken") as ApiKeyAuth
         auth.apiKey = authResponse.accessToken
         auth.apiKeyPrefix = "Bearer"
+    }
 
-        return SecurityObjectsApi()
+    @Bean
+    fun signAndVerifyApi(smartKeyApiClient: ApiClient): SignAndVerifyApi = SignAndVerifyApi(smartKeyApiClient)
+
+    @Bean
+    fun securityObjectsApi(smartKeyApiClient: ApiClient): SecurityObjectsApi = SecurityObjectsApi(smartKeyApiClient)
+
+    @Bean
+    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi): SmartKeySigner = SmartKeySigner(signAndVerifyApi, securityObjectsApi)
+
+    @Bean
+    fun signer(smartKeySigner: SmartKeySigner): SignerFactory {
+        return SignerFactory(smartKeySigner)
     }
 }

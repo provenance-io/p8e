@@ -55,7 +55,10 @@ enum class KeyProviders(val key: String) {
         .orThrow { IllegalArgumentException("Key Provider $text does not exist") }
 }
 
-data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val useSigningKeyForEncryption: Boolean, val keyProvider: KeyProviders, val indexName: String, val alias: String?)
+data class RegisterAffiliateKey(val signingPrivateKey: String?, val encryptionPrivateKey: String?, val keyProvider: KeyProviders, val indexName: String, val alias: String?) {
+    val hasSigningKey = signingPrivateKey?.isNotBlank() == true
+    val hasEncryptionKey = encryptionPrivateKey?.isNotBlank() == true
+}
 
 data class UpdateAffiliateKey(val alias: String?)
 data class AddShare(val publicKey: String)

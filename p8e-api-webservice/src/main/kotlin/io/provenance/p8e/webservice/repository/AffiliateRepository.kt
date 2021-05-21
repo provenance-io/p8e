@@ -2,8 +2,12 @@ package io.provenance.p8e.webservice.repository
 
 import io.p8e.util.orThrowNotFound
 import io.p8e.util.toHex
+import io.p8e.util.toProtoUuidProv
+import io.p8e.util.toUuidProv
 import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
 import io.provenance.p8e.shared.domain.AffiliateRecord
+import io.provenance.p8e.shared.domain.ExternalKeyRef
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.webservice.controller.ApiServiceKey
 import io.provenance.p8e.webservice.controller.toApi
@@ -13,6 +17,7 @@ import io.provenance.p8e.webservice.domain.ApiAffiliateShare
 import io.provenance.p8e.webservice.interceptors.provenanceIdentityUuid
 import io.provenance.p8e.webservice.interceptors.provenanceJwt
 import io.provenance.p8e.webservice.service.KeyManagementService
+import io.provenance.p8e.webservice.service.KeyUsageType
 import io.provenance.p8e.webservice.util.AccessDeniedException
 import org.jetbrains.exposed.dao.with
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -27,6 +32,8 @@ class AffiliateRepository(
     private val affiliateService: AffiliateService,
     private val keyManagementService: KeyManagementService,
 ) {
+    private val log = logger()
+
     fun getAll(): List<ApiAffiliateKey> = transaction {
         affiliateService.getAllRegistered(provenanceIdentityUuid())
             .with(AffiliateRecord::serviceKeys)
@@ -49,23 +56,43 @@ class AffiliateRepository(
         }
 
     fun create(indexName: String?, alias: String?): ApiAffiliateKey {
-        val signingKey = keyManagementService.generateKey("$alias signing key")
-        val encryptionKey = keyManagementService.generateKey("$alias encryption key")
-        val authKeyPair = ProvenanceKeyGenerator.generateKeyPair()
+        var signingKey: ExternalKeyRef? = null
+        var encryptionKey: ExternalKeyRef? = null
 
-        return transaction {
-            affiliateService.save(signingKey, encryptionKey, authKeyPair.public, indexName, alias)
-                .toApi(authKeyPair.private.toHex())
+        return try {
+            signingKey = keyManagementService.generateKey("$alias signing key", KeyUsageType.SIGNING)
+            encryptionKey = keyManagementService.generateKey("$alias encryption key", KeyUsageType.ENCRYPTION)
+            val authKeyPair = ProvenanceKeyGenerator.generateKeyPair()
+
+            transaction {
+                affiliateService.save(signingKey, encryptionKey, authKeyPair.public, indexName, alias, provenanceJwt(), provenanceIdentityUuid())
+                    .toApi(authKeyPair.private.toHex())
+            }
+        } catch (t: Throwable) {
+            log.error("Error creating affiliate using SmartKey provider", t)
+            cleanupExternalKeyRef(signingKey)
+            cleanupExternalKeyRef(encryptionKey)
+            throw t;
         }
+    }
+
+    private fun cleanupExternalKeyRef(ref: ExternalKeyRef?) = try {
+        ref?.uuid?.let {
+            log.info("cleaning up external key ref $it")
+            keyManagementService.deleteKey(it)
+        }
+    } catch (t: Throwable) {
+        log.error("Error cleaning up external key ref ${ref?.uuid}", t)
     }
 
     fun update(publicKey: PublicKey, alias: String?): ApiAffiliateKey = transaction {
         checkCanManageAffiliate(publicKey) {
             AffiliateRecord.findForUpdate(publicKey)
                 .orThrowNotFound("Affiliate record not found")
-                .let {
+                .also {
                     it.alias = alias
-                    it
+                    it.keyUuid?.also { keyManagementService.updateName(it, "$alias signing key") }
+                    it.encryptionKeyUuid?.also { keyManagementService.updateName(it, "$alias encryption key") }
                 }.toApi()
         }
     }

@@ -25,8 +25,8 @@ object AffiliateTable : IdTable<String>("affiliate") {
     val encryptionPrivateKey = text ("encryption_private_key").nullable()
     val indexName = varchar("index_name", 255).default(DEFAULT_INDEX_NAME)
     val active = bool("active").default(true)
-    val keyUuid = uuid("key_uuid")
-    val encryptionKeyUuid = uuid("encryption_key_uuid")
+    val keyUuid = uuid("key_uuid").nullable()
+    val encryptionKeyUuid = uuid("encryption_key_uuid").nullable()
     val authPublicKey = text("auth_public_key")
 
     override val id: Column<EntityID<String>> = publicKey.entityId()
