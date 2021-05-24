@@ -33,21 +33,25 @@ class TransactionStatusService(
     fun setEnvelopeErrors(error: String, executionUuids: List<UUID>) {
         EnvelopeRecord.find {
             EnvelopeTable.executionUuid inList executionUuids
-        }.forUpdate().forEach {envelope ->
-            envelopeStateEngine.onHandleError(envelope)
-            envelope.addChaincodeError(error).also {
-                val envWithError = Envelope.EnvelopeUuidWithError.newBuilder()
-                    .setError(it)
-                    .setEnvelopeUuid(envelope.uuid.value.toProtoUuidProv())
-                    .build()
-                eventService.submitEvent(envWithError.toEvent(Events.P8eEvent.Event.ENVELOPE_ERROR), envelope.uuid.value) // dump for error stream
+        }.forUpdate().let { envelopes ->
+            val sameInstanceKeys = envelopes.map { it.publicKey.toJavaPublicKey() }.toTypedArray()
+            envelopes.forEach { envelope ->
+                envelopeStateEngine.onHandleError(envelope)
+                envelope.addChaincodeError(error).also {
+                    val envWithError = Envelope.EnvelopeUuidWithError.newBuilder()
+                        .setError(it)
+                        .setEnvelopeUuid(envelope.uuid.value.toProtoUuidProv())
+                        .build()
+                    eventService.submitEvent(envWithError.toEvent(Events.P8eEvent.Event.ENVELOPE_ERROR), envelope.uuid.value) // dump for error stream
 
-                // Ship error info to an relevant additional parties
-                mailboxService.error(
-                    envelope.scope.publicKey.toJavaPublicKey(),
-                    envelope.data.input,
-                    it
-                )
+                    // Ship error info to an relevant additional parties
+                    mailboxService.error(
+                        envelope.scope.publicKey.toJavaPublicKey(),
+                        envelope.data.input,
+                        it,
+                        *sameInstanceKeys
+                    )
+                }
             }
         }
     }

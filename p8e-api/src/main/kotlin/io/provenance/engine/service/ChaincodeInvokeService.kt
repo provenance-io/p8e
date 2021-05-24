@@ -55,20 +55,22 @@ class ChaincodeInvokeService(
     private val objectMapper = ObjectMapper().configureProvenance()
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
 
+    private val accountInfo = provenanceGrpc.accountInfo()
+
     // private val queue = ConcurrentHashMap<UUID, BlockchainTransaction>()
 
     // thread safe queue because this spans the worker thread and the enqueue
     private val queue = LinkedBlockingQueue<ContractRequestWrapper>(1_000)
 
     // non-thread safe data structures that are only used within the worker thread
-    private val batch = HashSet<ContractRequestWrapper>()
+    private val batch = mutableListOf<ContractRequestWrapper>()
     private val blockScopeIds = HashSet<String>()
     private val priorityScopeBacklog = HashMap<String, LinkedList<ContractRequestWrapper>>()
     private var currentBlockHeight = 0L
 
     // helper extensions for batch management
-    private val HashSet<ContractRequestWrapper>.executionUuids: List<UUID> get() = map { it.executionUuid }
-    private fun HashSet<ContractRequestWrapper>.removeContract(contract: ContractRequestWrapper) {
+    private val MutableList<ContractRequestWrapper>.executionUuids: List<UUID> get() = map { it.executionUuid }
+    private fun MutableList<ContractRequestWrapper>.removeContract(contract: ContractRequestWrapper) {
         remove(contract)
         attemptTracker.remove(contract)
     }
@@ -80,7 +82,13 @@ class ChaincodeInvokeService(
 
     init {
         thread(isDaemon = true, name = "bc-tx-batch") {
-            memorializeBatchTx()
+            while (true) {
+                try {
+                    memorializeBatchTx()
+                } catch (t: Throwable) {
+                    log.error("Unexpected error in memorializeBatchTx, restarting...", t)
+                }
+            }
         }
     }
 
@@ -88,19 +96,25 @@ class ChaincodeInvokeService(
         log.info("Starting bc-tx-batch thread")
 
         while(true) {
-            provenanceGrpc.getLatestBlock()
-                .takeIf { it.block.header.height > currentBlockHeight }
-                ?.let {
-                    log.info("Clearing blockScopeIds")
-                    currentBlockHeight = it.block.header.height
-                    blockScopeIds.clear()
-                }
+            try {
+                provenanceGrpc.getLatestBlock()
+                    .takeIf { it.block.header.height > currentBlockHeight }
+                    ?.let {
+                        log.info("Clearing blockScopeIds")
+                        currentBlockHeight = it.block.header.height
+                        blockScopeIds.clear()
+                    }
+            } catch (t: Throwable) {
+                log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
+                Thread.sleep(1000);
+                continue;
+            }
 
             // attempt to load the batch with scopes that were previously passed on due to not
                 // wanting to send the same scope in the same block
             while (batch.size < chaincodeProperties.txBatchSize) {
                 // filter the backlog for scopes that aren't in the block and then pick a random
-                    // scope and insert it into the block
+                // scope and insert it into the block
                 priorityScopeBacklog.filterKeys { !blockScopeIds.contains(it) }
                     .keys
                     .toList()
@@ -123,7 +137,7 @@ class ChaincodeInvokeService(
             }
 
             while (batch.size < chaincodeProperties.txBatchSize) {
-                queue.poll(chaincodeProperties.maxTxFlushDelay.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
+                queue.poll(chaincodeProperties.emptyIterationBackoffMS.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
                     if (!blockScopeIds.contains(message.request.scopeId)) {
                         log.debug("adding ${message.request.scopeId} to batch")
 
@@ -151,28 +165,11 @@ class ChaincodeInvokeService(
             log.info("Sending batch with size: ${batch.size} ${batch.map { it.request.scopeId }} total backlog queue size: ${priorityScopeBacklog.values.fold(0) { acc, list ->  acc + list.size }}")
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
-            // Create a new batch of transactions.
-            // val tx = batch {
-            //     var index = 0;
-            //     batch.map {
-            //         batchIndex.put(index++, it.key)
-
-            //         // Note that we've attempted this transaction before.
-            //         // TODO add attempts
-            //         it.value.attempts++
-
-            //         prepare { it.value.txPreparer }
-            //     }
-            // }
-            // TODO clear batch and populate next pre-batch
-
             try {
-                val (txBody, batchIndex) = batch.mapIndexed { index, requestWrapper ->
-                    requestWrapper.attempts++
-                    requestWrapper.request to (index to requestWrapper)
-                }.unzip().let { (msgs, batchIndex) ->
-                    msgs.toTxBody() to batchIndex.toMap()
-                }
+                val txBody = batch.map {
+                    it.attempts++
+                    it.request
+                }.toTxBody()
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
@@ -182,7 +179,7 @@ class ChaincodeInvokeService(
                     log.info("Abci.TxResponse from chain ${resp.txResponse}")
 
                     try {
-                        handleTransactionException(resp.txResponse, batchIndex)
+                        handleTransactionException(resp.txResponse)
                     } catch (e: Exception) {
                         log.error("Handle typed transaction error - ${batch.executionUuids} need _manual_ intervention", e)
 //                            log.error("Handle typed transaction error - ${batch.map { resp.uuid }} need _manual_ intervention")
@@ -195,6 +192,8 @@ class ChaincodeInvokeService(
                         it.future.complete(ContractTxResult(it.request.scopeId))
                     }
                     log.info("batch made it to mempool with txhash = ${resp.txResponse.txhash}")
+
+                    batch.clear()
                 }
             } catch (t: Throwable) {
                 // TODO I'm pretty sure since this is now grpc the only things that would be caught in here
@@ -204,72 +203,52 @@ class ChaincodeInvokeService(
                     // TODO rework this
                     decrementSequenceNumber()
                     log.warn("Unexpected chain execution error", t)
+                    val errorMessage = t.message ?: "Unexpected chain execution error"
 
-                    transaction { transactionStatusService.setEnvelopeErrors(t.toString(), batch.executionUuids) }
-                    batch.map { it.future.completeExceptionally(t) }
+                    val retryable = t.message?.contains("account sequence mismatch") == true
+                    val matchIndex = t.message?.matchIndex()
+
+                    val executionUuidsToFail = when {
+                        matchIndex != null -> {
+                            listOf(rejectContractByIndex(matchIndex, errorMessage))
+                        }
+                        retryable -> {
+                            handleBatchRetry(errorMessage)
+                        }
+                        else -> { // fail the whole batch
+                            batch.map {
+                                it.future.completeExceptionally(t)
+                                it.executionUuid
+                            }.also {
+                                batch.clear()
+                            }
+                        }
+                    }
+
+                    transaction { transactionStatusService.setEnvelopeErrors(t.toString(), executionUuidsToFail) }
                 } catch (e: Exception) {
                     log.error("Handle generic transaction error - ${batch.executionUuids} need _manual_ intervention", e)
                 }
             }
-
-            batch.clear()
         }
     }
 
-     private fun handleTransactionException(response: Abci.TxResponse, batchIndex: Map<Int, ContractRequestWrapper>) {
+     private fun handleTransactionException(response: Abci.TxResponse) {
          decrementSequenceNumber()
 
          // default to failing all envelopes, unless a specific envelope can be identified or certain envelopes can be retried
          var executionUuidsToFail = batch.executionUuids
 
-         val retryable = response.code == SIGNATURE_VERIFICATION_FAILED ||
-             response.rawLog.contains("txn invalid: rmi submit") // can be false negative due to timeout... I don't think we are actually catching this as it is a PBTransactionException, not PBTransactionResultException
-         // todo: what is the new way of specifying the rmi submit thing? Is that now equivalent to a grpc network error?
+         val retryable = response.code == SIGNATURE_VERIFICATION_FAILED
 
-         val match = indexRegex.find(response.rawLog)?.let {
-             if (it.groupValues.size == 2)
-                 it.groupValues[1]
-             else
-                 null
-         }
-         log.info("Found index ${match}")
+         val matchIndex = response.rawLog.matchIndex()
+         log.info("Found index ${matchIndex}")
 
          val errorMessage = "${response.code} - ${response.rawLog}"
 
-         if (match == null) {
-             var printedException = false
+         if (matchIndex == null) {
              if (retryable) {
-                 executionUuidsToFail = batch.filter { it.attempts > 4 }
-                     .map {
-                         if (!printedException) {
-                             log.warn("Exception couldn't be resolved: $errorMessage")
-                             printedException = true
-                         }
-
-                         log.warn("Exceeded max retry attempts for execution: ${it.executionUuid}")
-                         batch.removeContract(it)
-                         it.future.completeExceptionally(IllegalStateException(errorMessage))
-
-                         it.executionUuid
-                     }
-
-                 // Because this could be a sequencing issue, let's wait a full block cut cycle before we retry.
-                 log.info("Waiting for block cut...")
-                 for (i in 1..100) {
-                     Thread.sleep(2500)
-                     val blockHasBeenCut = synchronized(sc) { provenanceGrpc.blockHasBeenCut() }
-                     if (blockHasBeenCut) {
-                         log.info("block cut detected")
-                         break
-                     }
-                 }
-
-                 if (batch.isNotEmpty()) {
-                     log.warn("Retrying due to ${response.rawLog}")
-                     batch.forEach {
-                         queue.put(it)
-                     }
-                 }
+                 executionUuidsToFail = handleBatchRetry(errorMessage)
              } else {
                  batch.forEach {
                      it.future.completeExceptionally(IllegalStateException(errorMessage))
@@ -277,15 +256,7 @@ class ChaincodeInvokeService(
              }
          } else {
              // Ship the error back for the bad index.
-             val erroredContract = batchIndex[match!!.toInt()]!!
-             batch.removeContract(erroredContract)
-             executionUuidsToFail = listOf(erroredContract.executionUuid)
-             erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
-
-             // Resend the rest of the contracts for execution.
-             batch.forEach {
-                 queue.put(it)
-             }
+             executionUuidsToFail = listOf(rejectContractByIndex(matchIndex, errorMessage))
          }
 
          transaction {
@@ -294,6 +265,61 @@ class ChaincodeInvokeService(
              }
          }
      }
+
+    /**
+     * Parse an error message to identify the index of the contract that caused the error
+     * @return the match index, or null if no specific match is found
+     */
+    private fun String.matchIndex(): Int? = indexRegex.find(this)?.let {
+        if (it.groupValues.size == 2)
+            it.groupValues[1].toInt()
+        else
+            null
+    }
+
+    /**
+     * Reject a specific contract within the batch based on its index in the list
+     * @param index: the index to reject
+     * @param errorMessage: the error message to supply for the rejected contract
+     * @return the execution uuid of the rejected contract, should be shipped as a failure
+     */
+    private fun rejectContractByIndex(index: Int, errorMessage: String): UUID {
+        val erroredContract = batch[index]
+        batch.removeContract(erroredContract)
+        erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
+        return erroredContract.executionUuid
+    }
+
+    /**
+     * Reject any contracts from batch which have been retried at least 4 times
+     * @param errorMessage: the error message to supply for rejected contracts in batch
+     * @return the execution uuids that were rejected and should be shipped as failures
+      */
+    private fun handleBatchRetry(errorMessage: String): List<UUID> {
+        var printedException = false
+        val executionUuidsToFail = batch.filter { it.attempts > 4 }
+            .map {
+                if (!printedException) {
+                    log.warn("Exception couldn't be resolved: $errorMessage")
+                    printedException = true
+                }
+
+                log.warn("Exceeded max retry attempts for execution: ${it.executionUuid}")
+                batch.removeContract(it)
+                it.future.completeExceptionally(IllegalStateException(errorMessage))
+
+                it.executionUuid
+            }
+
+        // Because this could be a sequencing issue, let's wait a full block cut cycle before we retry.
+        waitForBlockCut()
+
+        if (batch.isNotEmpty()) {
+            log.warn("Retrying due to ${errorMessage}")
+        }
+
+        return executionUuidsToFail
+    }
 
     // TODO refactor these functions
 
@@ -373,32 +399,50 @@ class ChaincodeInvokeService(
     }
 
     fun batchTx(body: TxBody): BroadcastTxResponse {
-        val accountInfo = provenanceGrpc.accountInfo()
-        log.warn("account info = $accountInfo")
+        val accountNumber = accountInfo.accountNumber
+        val sequenceNumber = getAndIncrementSequenceNumber()
 
-        val estimate = provenanceGrpc.estimateTx(body, accountInfo)
-        log.warn("estimate = $estimate")
 
-        return provenanceGrpc.batchTx(body, accountInfo, accountInfo.getAndIncrementSequenceOffset(), estimate)
+        val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
+
+        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
-    private fun ProvenanceGrpcService.blockHasBeenCut(): Boolean = provenanceGrpc.accountInfo().blockHasBeenCut()
+    /**
+     * Sequence Number Tracking
+     */
+    private var sequenceNumberAndOffset = accountInfo.sequence to 0L
 
-    private var sequenceNumberAndOffset = 0L to 0L
-
-    private fun Auth.BaseAccount.getAndIncrementSequenceOffset(): Long {
-        if (blockHasBeenCut()) {
-            sequenceNumberAndOffset = sequence to 0
-        }
-
-        return sequenceNumberAndOffset.second.also {
-            sequenceNumberAndOffset = sequence to it + 1
+    private fun getAndIncrementSequenceNumber(): Long {
+        return sequenceNumberAndOffset.let { (sequence, offset) ->
+            sequence + offset
+        }.also {
+            sequenceNumberAndOffset = sequenceNumberAndOffset.first to sequenceNumberAndOffset.second + 1
         }
     }
-
-    private fun Auth.BaseAccount.blockHasBeenCut(): Boolean = (sequence > sequenceNumberAndOffset.first) || sequenceNumberAndOffset.second == 0L
 
     private fun decrementSequenceNumber() {
         sequenceNumberAndOffset = sequenceNumberAndOffset.first to Math.max(sequenceNumberAndOffset.second - 1, 0)
+        log.info("Decremented sequence number to ${sequenceNumberAndOffset.first + sequenceNumberAndOffset.second}")
+    }
+
+    private fun resetSequenceNumber() {
+        log.info("Resetting sequence number")
+        sequenceNumberAndOffset = provenanceGrpc.accountInfo().sequence to 0L
+        log.info("Sequence number reset to ${sequenceNumberAndOffset.first}")
+    }
+
+    private fun waitForBlockCut() {
+        val currentHeight = provenanceGrpc.getLatestBlock().block.header.height
+        log.info("Waiting for block cut...")
+        for (i in 1..100) {
+            Thread.sleep(2500)
+            val newHeight = provenanceGrpc.getLatestBlock().block.header.height
+            if (newHeight > currentHeight) {
+                log.info("block cut detected")
+                break
+            }
+        }
+        resetSequenceNumber()
     }
 }

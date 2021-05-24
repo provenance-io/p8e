@@ -60,7 +60,7 @@ class ChaincodeProperties {
     @NotNull lateinit var mnemonic: String
     @NotNull lateinit var chainId: String
     @NotNull var mainNet: Boolean = false
-    @NotNull var maxTxFlushDelay: Int = 1_000
+    @NotNull var emptyIterationBackoffMS: Int = 1_000
     @NotNull var txBatchSize: Int = 25
 }
 

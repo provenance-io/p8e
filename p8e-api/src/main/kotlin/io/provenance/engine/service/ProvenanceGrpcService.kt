@@ -23,6 +23,7 @@ import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
+import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
 import org.kethereum.crypto.getCompressedPublicKey
 import org.springframework.stereotype.Service
@@ -37,7 +38,8 @@ import io.provenance.metadata.v1.QueryGrpc as MetadataQueryGrpc
 @Service
 class ProvenanceGrpcService(
     private val accountProvider: Account,
-    private val chaincodeProperties: ChaincodeProperties
+    private val chaincodeProperties: ChaincodeProperties,
+    private val affiliateService: AffiliateService,
 ) {
     companion object {
         val executor = ThreadPoolFactory.newFixedThreadPool(5, "prov-grpc-%d")
@@ -79,21 +81,17 @@ class ProvenanceGrpcService(
 
     fun getLatestBlock(): GetLatestBlockResponse = nodeService.getLatestBlock(GetLatestBlockRequest.getDefaultInstance())
 
-    // fun getLatestBlockHeight() = nodeService.getBlockByHeight(GetBlockByHeightRequest.newBuilder()
-    //     .setHeight(getLatestBlock().)
-    //     .build())
-
     fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
-    fun signTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long = 0, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
+    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
         val authInfo = AuthInfo.newBuilder()
             .setFee(Fee.newBuilder()
                 .addAllAmount(listOf(
                     CoinOuterClass.Coin.newBuilder()
                         .setDenom("nhash")
-                        .setAmount(gasEstimate.fees.toString())
+                        .setAmount((gasEstimate.fees).toString())
                         .build()
-                )).setGasLimit((gasEstimate.total * 1.4).toLong())
+                )).setGasLimit((gasEstimate.limit).toLong())
             )
             .addAllSignerInfos(listOf(
                 SignerInfo.newBuilder()
@@ -107,7 +105,7 @@ class ProvenanceGrpcService(
                             ModeInfo.Single.newBuilder()
                                 .setModeValue(Signing.SignMode.SIGN_MODE_DIRECT_VALUE)
                         ))
-                    .setSequence(accountInfo.sequence + sequenceNumberOffset)
+                    .setSequence(sequenceNumber)
                     .build()
             )).build()
 
@@ -115,7 +113,7 @@ class ProvenanceGrpcService(
             .setBodyBytes(body.toByteString())
             .setAuthInfoBytes(authInfo.toByteString())
             .setChainId(chaincodeProperties.chainId)
-            .setAccountNumber(accountInfo.accountNumber)
+            .setAccountNumber(accountNumber)
             .build()
             .toByteArray()
             .let { signer(it) }
@@ -128,16 +126,16 @@ class ProvenanceGrpcService(
             .build()
     }
 
-    fun estimateTx(body: TxBody, accountInfo: Auth.BaseAccount): GasEstimate =
-        signTx(body, accountInfo).let {
+    fun estimateTx(body: TxBody, accountNumber: Long, sequenceNumber: Long): GasEstimate =
+        signTx(body, accountNumber, sequenceNumber).let {
             txService.simulate(SimulateRequest.newBuilder()
                 .setTx(it)
                 .build()
             )
         }.let { GasEstimate(it.gasInfo.gasUsed) }
 
-    fun batchTx(body: TxBody, accountInfo: Auth.BaseAccount, sequenceNumberOffset: Long, estimate: GasEstimate): BroadcastTxResponse =
-        signTx(body, accountInfo, sequenceNumberOffset, estimate).run {
+    fun batchTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, estimate: GasEstimate): BroadcastTxResponse =
+        signTx(body, accountNumber, sequenceNumber, estimate).run {
             TxRaw.newBuilder()
                 .setBodyBytes(body.toByteString())
                 .setAuthInfoBytes(authInfo.toByteString())
@@ -170,7 +168,7 @@ class ProvenanceGrpcService(
                 ).contractSpecification.specification.hash
             }.toMap()
 
-        return scopeResponse.toP8e(contractSpecHashLookup)
+        return scopeResponse.toP8e(contractSpecHashLookup, affiliateService)
     }
 }
 
@@ -182,10 +180,14 @@ fun Message.toTxBody(): TxBody = listOf(this).toTxBody()
 
 fun Message.toAny(typeUrlPrefix: String = "") = Any.pack(this, typeUrlPrefix)
 
-data class GasEstimate(val total: Long) {
+data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_FEE_ADJUSTMENT) {
     companion object {
-        private const val feeAdjustment = 0.025
+        private const val DEFAULT_FEE_ADJUSTMENT = 1.25
+        private const val DEFAULT_GAS_PRICE = 1905.00
     }
 
-    val fees = (total * feeAdjustment).roundUp()
+    private val adjustment = feeAdjustment ?: DEFAULT_FEE_ADJUSTMENT
+
+    val limit = (estimate * adjustment).roundUp()
+    val fees = (limit * DEFAULT_GAS_PRICE).roundUp()
 }
