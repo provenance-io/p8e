@@ -11,7 +11,7 @@ import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
-import io.provenance.engine.crypto.Account
+import io.provenance.p8e.shared.crypto.Account
 import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.domain.RPCClient
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
@@ -27,6 +27,7 @@ import io.provenance.p8e.shared.state.EnvelopeStateEngine
 import io.provenance.os.client.OsClient
 import io.provenance.os.mailbox.client.MailboxClient
 import io.provenance.os.mailbox.client.MailboxClientProperties
+import io.provenance.p8e.shared.config.ChaincodeProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.service.KeystoneService

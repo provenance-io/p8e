@@ -70,7 +70,7 @@ dependencies {
     implementation project(":os-client")
     implementation project(":mailbox-client")
 
-    // Ketherium utilities
+    // Kethereum utilities
     implementation "com.github.komputing:kbip44:0.1"
     implementation "com.github.komputing:kbase58:0.1"
     implementation "com.github.komputing.khex:core:$khex_version"

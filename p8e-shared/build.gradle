@@ -33,8 +33,22 @@ dependencies {
 
     implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
 
+    // Kethereum dependencies
+    implementation "com.github.komputing:kbip44:0.1"
+    implementation "com.github.komputing:kbase58:0.1"
+    implementation "com.github.komputing.khex:core:$khex_version"
+    implementation "com.github.komputing.khex:extensions:$khex_version"
+    implementation "com.github.komputing.kethereum:bip32:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip39:$kethereum_version"
+    implementation "com.github.komputing.kethereum:model:$kethereum_version"
+    implementation "com.github.komputing.kethereum:extensions_kotlin:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_api:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_impl_bouncycastle:$kethereum_version"
+
     // GRPC
     implementation("io.grpc:grpc-protobuf:$grpc_version")
+    implementation("io.grpc:grpc-stub:$grpc_version")
     implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
     implementation("io.grpc:grpc-netty:$grpc_version")
 
@@ -60,4 +74,7 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-integration:$springboot_version"
     implementation "org.springframework.boot:spring-boot-starter-actuator:$springboot_version"
     implementation "org.springframework.boot:spring-boot-starter-validation:$springboot_version"
+
+    // ObjectStore
+    implementation "io.provenance.objectstore.locator:os-locator-sdk:$os_locator_version"
 }

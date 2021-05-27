@@ -7,8 +7,7 @@ import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.ContractSpecs.PartyType
 import io.p8e.proto.Util
 import io.p8e.util.*
-import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.asBech32PublicKey
+import io.provenance.p8e.shared.crypto.Account
 import io.provenance.engine.crypto.toBech32Data
 import io.provenance.engine.service.toAny
 import io.provenance.metadata.v1.*
