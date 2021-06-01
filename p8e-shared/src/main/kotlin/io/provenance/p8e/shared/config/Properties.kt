@@ -21,3 +21,8 @@ class JwtProperties {
 class ProvenanceKeystoneProperties {
     @NotNull lateinit var url: String
 }
+
+@ConfigurationProperties(prefix = "smartkey")
+class SmartKeyProperties {
+    @NotNull lateinit var apiKey: String
+}

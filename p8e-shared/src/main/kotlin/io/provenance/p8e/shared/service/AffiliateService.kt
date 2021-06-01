@@ -138,7 +138,7 @@ class AffiliateService(
     @Cacheable(AFFILIATE_ENCRYPTION_KEY_PAIR)
     fun getEncryptionKeyPair(publicKey: PublicKey): KeyPair {
         val affiliateRecord = getFirst(publicKey)
-        return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey.toJavaPrivateKey())
+        return KeyPair(affiliateRecord.encryptionPublicKey.toJavaPublicKey(), affiliateRecord.encryptionPrivateKey?.toJavaPrivateKey())
     }
     
     @Cacheable(AFFILIATE_KEY_PAIR)
@@ -280,14 +280,14 @@ class AffiliateService(
         AFFILIATES_ENCRYPTION_KEYS,
         AFFILIATES_SIGNING_KEYS,
         AFFILIATE_INDEX_NAMES,
-        AFFILIATE_INDEX_NAME
+        AFFILIATE_INDEX_NAME,
+        AFFILIATE_BECH32_LOOKUP,
     ])
-
-    fun save(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null): AffiliateRecord =
-        AffiliateRecord.insert(signingPublicKey, encryptionKeyPair, authPublicKey, indexName, alias)
+    fun save(signingPublicKey: ExternalKeyRef, encryptionPublicKey: ExternalKeyRef, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingPublicKey, encryptionPublicKey, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public)
+                osClient.createPublicKey(encryptionPublicKey.publicKey)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
@@ -295,6 +295,11 @@ class AffiliateService(
                         val response = esClient.indices().create(CreateIndexRequest(it), RequestOptions.DEFAULT)
                         require (response.isAcknowledged) { "ES index creation of $it was not successful" }
                     }
+                }
+
+                if (jwt != null && identityUuid != null) {
+                    keystoneService.registerKey(jwt, signingPublicKey.publicKey, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.CONTRACT)
+                    registerKeyWithIdentity(it, identityUuid)
                 }
             }
 
@@ -322,7 +327,7 @@ class AffiliateService(
         .map {
             // We need to handle nullable keys
             it.encryptionPublicKey to
-                    KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey.toJavaPrivateKey())
+                    KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey?.toJavaPrivateKey())
         }.toMap()
 
 

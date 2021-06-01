@@ -22,10 +22,11 @@ object AffiliateTable : IdTable<String>("affiliate") {
     val privateKey = text("private_key").nullable()
     val whitelistData = proto("whitelist_data", AffiliateWhitelist.getDefaultInstance()).nullable()
     val encryptionPublicKey = text("encryption_public_key")
-    val encryptionPrivateKey = text ("encryption_private_key")
+    val encryptionPrivateKey = text ("encryption_private_key").nullable()
     val indexName = varchar("index_name", 255).default(DEFAULT_INDEX_NAME)
     val active = bool("active").default(true)
-    val keyUuid = uuid("key_uuid")
+    val keyUuid = uuid("key_uuid").nullable()
+    val encryptionKeyUuid = uuid("encryption_key_uuid").nullable()
     val authPublicKey = text("auth_public_key")
 
     override val id: Column<EntityID<String>> = publicKey.entityId()
@@ -79,11 +80,12 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
      * [indexName] Name of index for elasticsearch
      * [alias] Alias for affiliate
      */
-    fun insert(signingPublicKey: PublicKey, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
-        findForUpdate(signingPublicKey)
-            ?: new(signingPublicKey.toHex()) {
-                this.encryptionPrivateKey = encryptionKeyPair.private.toHex()
-                this.encryptionPublicKey = encryptionKeyPair.public.toHex()
+    fun insert(signingPublicKey: ExternalKeyRef, encryptionPublicKey: ExternalKeyRef, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
+        findForUpdate(signingPublicKey.publicKey)
+            ?: new(signingPublicKey.publicKey.toHex()) {
+                this.keyUuid = signingPublicKey.uuid
+                this.encryptionPublicKey = encryptionPublicKey.publicKey.toHex()
+                this.encryptionKeyUuid = encryptionPublicKey.uuid
                 this.authPublicKey = authPublicKey.toHex()
                 this.alias = alias
                 indexName?.takeIf { it.isNotBlank() }?.let{ this.indexName = it }
@@ -104,5 +106,6 @@ class AffiliateRecord(id: EntityID<String>): Entity<String>(id) {
     var serviceKeys by ServiceAccountRecord via AffiliateToServiceTable
     val identities by AffiliateIdentityRecord referrersOn AffiliateIdentityTable.publicKey
     var keyUuid by AffiliateTable.keyUuid
+    var encryptionKeyUuid by AffiliateTable.encryptionKeyUuid
     var authPublicKey by AffiliateTable.authPublicKey
 }

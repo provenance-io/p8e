@@ -47,8 +47,10 @@ import java.security.spec.X509EncodedKeySpec
  * SmartKey is designed to enable businesses to serve key management needs for all their applications, whether they are
  * operating in a public, private, or hybrid cloud.
  */
-
-class SmartKeySigner: SignerImpl {
+class SmartKeySigner(
+    private val signAndVerifyApi: SignAndVerifyApi,
+    private val securityObjectsApi: SecurityObjectsApi,
+): SignerImpl {
 
     init {
         Security.addProvider(BouncyCastleProvider())
@@ -131,7 +133,7 @@ class SmartKeySigner: SignerImpl {
         return signature?.verify(signatureBytes)!!
     }
 
-    override fun sign(): ByteArray = SignAndVerifyApi().sign(keyUuid, signatureRequest).signature
+    override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
 
     override fun sign(data: String): Common.Signature = sign(data.toByteArray())
 
@@ -143,7 +145,7 @@ class SmartKeySigner: SignerImpl {
             .data(data)
             .deterministicSignature(true)
 
-        val signatureResponse = SignAndVerifyApi().sign(keyUuid, signatureRequest)
+        val signatureResponse = signAndVerifyApi.sign(keyUuid, signatureRequest)
 
         return ProtoUtil
             .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
@@ -188,10 +190,5 @@ class SmartKeySigner: SignerImpl {
      *
      * @return [PublicKey] return the Java security version of the PublicKey.
      */
-    override fun getPublicKey(): PublicKey {
-        val smPublicKey = SecurityObjectsApi().getSecurityObject(keyUuid).pubKey
-        val x509PublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(smPublicKey))
-        val bcPublicKey = BCECPublicKey(x509PublicKey as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION)
-        return bcPublicKey.toHex().toJavaPublicKey()
-    }
+    override fun getPublicKey(): PublicKey = securityObjectsApi.getSecurityObject(keyUuid).toJavaPublicKey()
 }

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fortanix.sdkms.v1.ApiClient
 import com.fortanix.sdkms.v1.api.AuthenticationApi
+import com.fortanix.sdkms.v1.api.SecurityObjectsApi
+import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import com.timgroup.statsd.NonBlockingStatsDClientBuilder
 import com.tinder.scarlet.Scarlet
@@ -35,6 +37,7 @@ import io.provenance.os.mailbox.client.MailboxClient
 import io.provenance.os.mailbox.client.MailboxClientProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
+import io.provenance.p8e.shared.config.SmartKeyProperties
 import io.provenance.p8e.shared.service.KeystoneService
 import io.provenance.pbc.clients.Denom
 import io.provenance.pbc.clients.SimpleClient
@@ -53,10 +56,12 @@ import org.kethereum.bip39.toSeed
 import org.redisson.Redisson
 import org.redisson.api.RedissonClient
 import org.redisson.config.Config
+import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Scope
 import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.protobuf.ProtobufHttpMessageConverter
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
@@ -269,20 +274,29 @@ class AppConfig : WebMvcConfigurer {
      * Add support for new key management.
      */
     @Bean
-    fun signer(smartKeySigner: SmartKeySigner): SignerFactory {
-        return SignerFactory(smartKeySigner)
+    @Scope(value = ConfigurableBeanFactory.SCOPE_SINGLETON)
+    fun smartKeyApiClient(smartKeyProperties: SmartKeyProperties): ApiClient = ApiClient().apply {
+        setBasicAuthString(smartKeyProperties.apiKey)
+        com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(this)
+
+        // authenticate with api
+        val authResponse = AuthenticationApi().authorize()
+        val auth = this.getAuthentication("bearerToken") as ApiKeyAuth
+        auth.apiKey = authResponse.accessToken
+        auth.apiKeyPrefix = "Bearer"
     }
 
     @Bean
-    fun smartKeySigner(smartKeyProperties: SmartKeyProperties): SmartKeySigner {
-        return SmartKeySigner().apply {
-            val client = ApiClient().apply { setBasicAuthString(smartKeyProperties.apiKey) }
-            com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(client)
+    fun signAndVerifyApi(smartKeyApiClient: ApiClient): SignAndVerifyApi = SignAndVerifyApi(smartKeyApiClient)
 
-            val authResponse = AuthenticationApi().authorize()
-            val auth = client.getAuthentication("bearerToken") as ApiKeyAuth
-            auth.apiKey = authResponse.accessToken
-            auth.apiKeyPrefix = "Bearer"
-        }
+    @Bean
+    fun securityObjectsApi(smartKeyApiClient: ApiClient): SecurityObjectsApi = SecurityObjectsApi(smartKeyApiClient)
+
+    @Bean
+    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi): SmartKeySigner = SmartKeySigner(signAndVerifyApi, securityObjectsApi)
+
+    @Bean
+    fun signer(smartKeySigner: SmartKeySigner): SignerFactory {
+        return SignerFactory(smartKeySigner)
     }
 }

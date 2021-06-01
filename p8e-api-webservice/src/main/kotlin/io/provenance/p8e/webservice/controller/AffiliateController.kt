@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*
 import io.p8e.util.*
 import io.provenance.p8e.webservice.domain.*
 import io.provenance.p8e.webservice.repository.AffiliateRepository
+import io.provenance.p8e.webservice.util.toOrGenerateKeyPair
 
 // todo: remove CrossOrigin and let Kong handle this
 @CrossOrigin(origins = ["http://localhost:3000"], allowCredentials = "true")
@@ -20,8 +21,18 @@ open class AffiliateController(private val affiliateRepository: AffiliateReposit
     }
 
     @PostMapping("")
-    fun add(@RequestBody body: RegisterAffiliateKey) = affiliateRepository
-        .create(body.signingKeyPair, body.encryptionKeyPair, body.authKeyPair, body.indexName, body.alias)
+    fun add(@RequestBody body: RegisterAffiliateKey): ApiAffiliateKey {
+        if (body.hasSigningKey || body.hasEncryptionKey) {
+            require(body.keyProvider == KeyProviders.DATABASE) { "Supplying keys only supported for ${KeyProviders.DATABASE.key} provider" }
+            require(body.hasSigningKey && body.hasEncryptionKey) { "When providing existing private keys, you must supply both signing and encryption keys" }
+        }
+
+        return when(body.keyProvider) {
+            KeyProviders.DATABASE -> affiliateRepository
+                .create(body.signingPrivateKey.toOrGenerateKeyPair(), body.encryptionPrivateKey.toOrGenerateKeyPair(), body.indexName, body.alias)
+            KeyProviders.SMART_KEY -> affiliateRepository.create(body.indexName, body.alias)
+        }
+    }
 
     @GetMapping("{affiliatePublicKey}/shares")
     fun getShares(@PathVariable("affiliatePublicKey") affiliatePublicKey: String) = affiliatePublicKey.toJavaPublicKey()

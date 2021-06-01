@@ -136,8 +136,3 @@ class MetricsProperties {
     var tags: String = ""
     var prefix: String = "p8e_api"
 }
-
-@ConfigurationProperties(prefix = "smartkey")
-class SmartKeyProperties {
-    @NotNull lateinit var apiKey: String
-}
