@@ -44,9 +44,6 @@ import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
 import org.kethereum.bip39.model.MnemonicWords
 import org.kethereum.bip39.toSeed
-import org.redisson.Redisson
-import org.redisson.api.RedissonClient
-import org.redisson.config.Config
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
@@ -72,7 +69,6 @@ import java.time.Duration
     ReaperFragmentProperties::class,
     ReaperInboxProperties::class,
     ReaperOutboxProperties::class,
-    RedisProperties::class,
     ServiceProperties::class,
     ProvenanceKeystoneProperties::class,
     MetricsProperties::class,
@@ -166,18 +162,6 @@ class AppConfig : WebMvcConfigurer {
 
     @Bean
     fun requestLoggingFilter() = AppRequestLoggingFilter()
-
-    @Bean
-    fun redissonClient(redisProperties: RedisProperties, serviceProperties: ServiceProperties): RedissonClient =
-        Config()
-            .apply {
-                useSingleServer()
-                    .setAddress("redis://${redisProperties.host}:${redisProperties.port}")
-                    .setConnectionPoolSize(redisProperties.connectionPoolSize.toInt())
-                    .setPingConnectionInterval(5000)
-                    .dnsMonitoringInterval = -1
-            }
-            .let(Redisson::create)
 
     @Bean
     fun elasticSearchClient(restClientBuilder: RestClientBuilder): RestHighLevelClient {

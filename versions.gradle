@@ -11,7 +11,6 @@ ext {
     postgres_version = '42.2.19'
     exposed_version = '0.29.1'
     hikari_cp_version = '3.2.0'
-    redisson_version = '3.15.2'
     grpc_version = '1.36.1'
     netty_handler_version = '4.1.60.Final'
     netty_transport_version = '4.1.60.Final'

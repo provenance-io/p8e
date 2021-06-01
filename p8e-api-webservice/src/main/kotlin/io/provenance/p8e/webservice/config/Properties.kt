@@ -38,11 +38,3 @@ class ObjectStoreProperties {
 class ServiceProperties {
     @NotNull lateinit var name: String
 }
-
-@ConfigurationProperties(prefix = "redis")
-@Validated
-class RedisProperties {
-    @NotNull lateinit var host: String
-    @NotNull lateinit var port: String
-    @NotNull lateinit var connectionPoolSize: String
-}

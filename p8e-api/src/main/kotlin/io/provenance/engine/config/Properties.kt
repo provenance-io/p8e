@@ -64,14 +64,6 @@ class ChaincodeProperties {
     @NotNull var txBatchSize: Int = 25
 }
 
-@ConfigurationProperties(prefix = "redis")
-@Validated
-class RedisProperties {
-    @NotNull lateinit var host: String
-    @NotNull lateinit var port: String
-    @NotNull lateinit var connectionPoolSize: String
-}
-
 @ConfigurationProperties(prefix = "elasticsearch")
 @Validated
 class ElasticSearchProperties {
