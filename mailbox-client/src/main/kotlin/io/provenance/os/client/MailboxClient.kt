@@ -24,6 +24,7 @@ import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.mailbox.client.inputstream.HeaderInputStream
 import io.provenance.os.mailbox.client.iterator.MultiDIMEIterator
 import io.provenance.os.util.orThrow
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import org.apache.http.HttpStatus
 import org.apache.http.client.config.RequestConfig
@@ -124,7 +125,7 @@ class MailboxClient(
 
     override fun put(
         message: Message,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
@@ -134,7 +135,7 @@ class MailboxClient(
             .let { bytes ->
                 put(
                     ByteArrayInputStream(bytes),
-                    ownerPublicKey,
+                    ownerEncryptionKeyRef,
                     signer,
                     bytes.size.toLong(),
                     additionalAudiences,
@@ -146,7 +147,7 @@ class MailboxClient(
 
     override fun put(
         inputStream: InputStream,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey>,
@@ -156,7 +157,7 @@ class MailboxClient(
         val signingInputStream = inputStream.sign(signer)
         val dime = ProvenanceDIME.createDIME(
             payload = signingInputStream,
-            ownerTransactionCert = ownerPublicKey,
+            ownerEncryptionKeyRef = ownerEncryptionKeyRef,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
             processingAudienceKeys = listOf()
         )

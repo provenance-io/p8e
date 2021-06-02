@@ -46,6 +46,7 @@ object ECUtils {
     val PRIVATE_KEY_SIZE = 32
     val PUBLIC_KEY_SIZE = 64
     val KDF_SIZE = 512
+    val AGREEKEY_SIZE = 256
     val provider = "BC"
 
     /**
@@ -215,10 +216,6 @@ object ECUtils {
                 ECUtils.decodeString(base64EncodedTag),
                 ECUtils.decodeString(base64EncodedEncryptedData))
 
-    }
-
-    fun getProvenanceDecrypt(privateKey: PrivateKey, additionalAuthenticatedData: String = ""): ProvenanceECIESDecrypt {
-        return ProvenanceECIESDecrypt(privateKey as java.security.interfaces.ECPrivateKey, additionalAuthenticatedData)
     }
 
     fun publicKeyToPem(publicKey: PublicKey): String {

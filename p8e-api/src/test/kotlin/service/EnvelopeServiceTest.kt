@@ -2,13 +2,13 @@ package service
 
 import helper.TestUtils
 import io.p8e.crypto.SignerFactory
-import io.p8e.crypto.SignerImpl
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope
 import io.p8e.util.*
 import io.provenance.engine.service.*
 import io.provenance.os.client.OsClient
 import io.provenance.os.domain.inputstream.DIMEInputStream
+import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.shared.domain.*
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -82,7 +82,9 @@ class EnvelopeServiceTest {
                 it[encryptionPrivateKey] = ecKeys.private.toHex()
                 it[active] = true
                 it[indexName] = "scopes"
-                it[keyUuid] = UUID.randomUUID()
+                it[signingKeyUuid] = UUID.randomUUID()
+                it[encryptionKeyUuid] = UUID.randomUUID()
+                it[keyType] = DATABASE
                 it[authPublicKey] = ecKeys.public.toHex()
             }
         }
@@ -579,7 +581,9 @@ class EnvelopeServiceTest {
                 it[encryptionPrivateKey] = secondKeyPair.private.toHex()
                 it[active] = true
                 it[indexName] = "scopes"
-                it[keyUuid] = UUID.randomUUID()
+                it[signingKeyUuid] = UUID.randomUUID()
+                it[encryptionKeyUuid] = UUID.randomUUID()
+                it[keyType] = DATABASE
                 it[authPublicKey] = secondKeyPair.public.toHex()
             }
 

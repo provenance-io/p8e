@@ -46,10 +46,12 @@ class MailboxService(
 
         val results = mutableListOf<Pair<DIMEInputStreamResponse, ByteArray>>()
         val signer = transaction { affiliateService.getSigner(keyPair.public) }
+        val encryptionKeyRef = transaction { affiliateService.getEncryptionKeyRef(keyPair.public) }
+
         mailboxClient.poll(keyPair.public, limit = limit).use { iterator ->
             while (iterator.hasNext()) {
                 iterator.next().let { dimeInputStreamResponse ->
-                    dimeInputStreamResponse.dimeInputStream.getDecryptedPayload(keyPair, signer).use {
+                    dimeInputStreamResponse.dimeInputStream.getDecryptedPayload(encryptionKeyRef, signer).use {
                         // TODO - double check readAllBytes is safe for our use case
                         val bytes = it.readAllBytes()
                         if (!it.verify()) {
@@ -84,13 +86,13 @@ class MailboxService(
         log.info("Fragmenting env:{}", env.getUuid())
 
         val signer = affiliateService.getSigner(publicKey)
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         val invokerPublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
 
         // if the invoker public key does not match the encryption or signing public key, then error.
-        if (invokerPublicKey != encryptionKeyPair.public && invokerPublicKey != signer.getPublicKey()) {
-            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionKeyPair.public.toHex()}")
+        if (invokerPublicKey != encryptionKeyRef.publicKey && invokerPublicKey != signer.getPublicKey()) {
+            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionKeyRef.publicKey.toHex()}")
             return
         }
 
@@ -110,7 +112,7 @@ class MailboxService(
         mailboxClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            ownerPublicKey = encryptionKeyPair.public,
+            ownerEncryptionKeyRef = encryptionKeyRef,
             signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_REQUEST
@@ -145,11 +147,12 @@ class MailboxService(
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
         val signer = affiliateService.getSigner(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         mailboxClient.put(
             uuid = UUID.randomUUID(),
             message = error,
-            ownerPublicKey = publicKey,
+            ownerEncryptionKeyRef = encryptionKeyRef,
             signer = signer,
             additionalAudiences = audiencesPublicKey.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
@@ -167,12 +170,12 @@ class MailboxService(
 
         val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
         val signer = affiliateService.getSigner(publicKey)
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         mailboxClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            ownerPublicKey = encryptionKeyPair.public,
+            ownerEncryptionKeyRef = encryptionKeyRef,
             signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_RESPONSE
@@ -190,8 +193,8 @@ class MailboxService(
         val publicKeyBytes = ECUtils.convertPublicKeyToBytes(publicKey)
         val completableFuture = CompletableFuture<Boolean>()
 
-        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
         val signer = affiliateService.getSigner(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         try {
             MailboxReaper.publicKeyCheckCallbacks[publicKeyBytes.base64encodeBytes().toString(Charsets.UTF_8)] = {
@@ -205,7 +208,7 @@ class MailboxService(
                         publicKeyBytes
                             .toByteString()
                     ).build(),
-                ownerPublicKey = encryptionPublicKey,
+                ownerEncryptionKeyRef = encryptionKeyRef,
                 signer = signer,
                 additionalAudiences = setOf(publicKey),
                 metadata = MailboxMeta.MAILBOX_PUBLIC_KEY_ALLOWED
@@ -231,11 +234,13 @@ class MailboxService(
         publicKeyAllowed: PublicKeyAllowed
     ) {
         val signer = affiliateService.getSigner(ownerKeyPair.public)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(ownerKeyPair.public)
+
         try {
             mailboxClient.put(
                 uuid = UUID.randomUUID(),
                 message = publicKeyAllowed,
-                ownerPublicKey = ownerKeyPair.public,
+                ownerEncryptionKeyRef = encryptionKeyRef,
                 signer = signer,
                 additionalAudiences = setOf(receiverPublicKey),
                 metadata = MailboxMeta.MAILBOX_PUBLIC_KEY_ALLOWED_RESPONSE

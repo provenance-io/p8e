@@ -1,5 +1,11 @@
 package io.provenance.p8e.encryption.experimental.extensions
 
+import com.fortanix.sdkms.v1.api.SecurityObjectsApi
+import com.fortanix.sdkms.v1.model.AgreeKeyMechanism
+import com.fortanix.sdkms.v1.model.AgreeKeyRequest
+import com.fortanix.sdkms.v1.model.KeyObject
+import com.fortanix.sdkms.v1.model.ObjectType
+import com.fortanix.sdkms.v1.model.SobjectDescriptor
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.encryption.ecies.ProvenanceECIESCryptogram
@@ -74,3 +80,17 @@ fun EncryptionProtos.Audience.toCryptogram(): ProvenanceECIESCryptogram {
 }
 
 fun String.toSecretKeySpecProv() = ProvenanceAESCrypt.secretKeySpecGenerate(Base64.getDecoder().decode(this))
+
+fun String.toAgreeKey(): KeyObject {
+       val keyUuid = this
+       val request = AgreeKeyRequest().apply {
+            privateKey = SobjectDescriptor().kid(keyUuid)
+            publicKey = SobjectDescriptor().kid(keyUuid)
+            name = keyUuid
+            keySize = ECUtils.AGREEKEY_SIZE
+            keyType = ObjectType.AES
+            mechanism = AgreeKeyMechanism.HELLMAN
+            transient = true
+        }
+        return SecurityObjectsApi().agreeKey(request)
+}

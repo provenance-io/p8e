@@ -17,6 +17,7 @@ import io.provenance.os.domain.Sha512ObjectRequest
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.util.base64Decode
 import io.provenance.os.util.orThrow
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import org.apache.http.client.config.RequestConfig
 import org.apache.http.impl.client.HttpClientBuilder
@@ -95,7 +96,7 @@ open class OsClient(
 
     override fun put(
         message: Message,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         additionalAudiences: Set<PublicKey>,
         metadata: Map<String, String>,
@@ -105,7 +106,7 @@ open class OsClient(
             .let { bytes ->
                 put(
                     ByteArrayInputStream(bytes),
-                    ownerPublicKey,
+                    ownerEncryptionKeyRef,
                     signer,
                     bytes.size.toLong(),
                     additionalAudiences,
@@ -117,7 +118,7 @@ open class OsClient(
 
     override fun put(
         inputStream: InputStream,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey>,
@@ -126,9 +127,10 @@ open class OsClient(
     ): ObjectWithItem {
         val signingPublicKey = signer.getPublicKey()
         val signatureInputStream = inputStream.sign(signer)
+
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
-            ownerTransactionCert = ownerPublicKey,
+            ownerEncryptionKeyRef = ownerEncryptionKeyRef,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
             processingAudienceKeys = listOf()
         )

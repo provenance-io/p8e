@@ -2,11 +2,9 @@ package io.provenance.p8e.webservice.repository
 
 import io.p8e.util.orThrowNotFound
 import io.p8e.util.toHex
-import io.p8e.util.toProtoUuidProv
-import io.p8e.util.toUuidProv
 import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
+import io.provenance.p8e.encryption.model.ExternalKeyRef
 import io.provenance.p8e.shared.domain.AffiliateRecord
-import io.provenance.p8e.shared.domain.ExternalKeyRef
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.webservice.controller.ApiServiceKey
@@ -22,9 +20,7 @@ import io.provenance.p8e.webservice.util.AccessDeniedException
 import org.jetbrains.exposed.dao.with
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
-import java.lang.IllegalArgumentException
 import java.security.KeyPair
-import java.security.PrivateKey
 import java.security.PublicKey
 
 @Component
@@ -91,7 +87,7 @@ class AffiliateRepository(
                 .orThrowNotFound("Affiliate record not found")
                 .also {
                     it.alias = alias
-                    it.keyUuid?.also { keyManagementService.updateName(it, "$alias signing key") }
+                    it.signingKeyUuid?.also { keyManagementService.updateName(it, "$alias signing key") }
                     it.encryptionKeyUuid?.also { keyManagementService.updateName(it, "$alias encryption key") }
                 }.toApi()
         }

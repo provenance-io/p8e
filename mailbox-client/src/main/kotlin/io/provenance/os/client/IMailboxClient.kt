@@ -7,6 +7,7 @@ import io.provenance.os.domain.ObjectWithItem
 import io.provenance.os.domain.Scope
 import io.provenance.os.domain.Scope.GENERAL
 import io.provenance.os.domain.inputstream.DIMEInputStream
+import io.provenance.p8e.encryption.model.KeyRef
 import java.io.InputStream
 import java.security.KeyPair
 import java.security.PublicKey
@@ -21,7 +22,7 @@ interface IMailboxClient {
 
     fun put(
         message: Message,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
@@ -30,7 +31,7 @@ interface IMailboxClient {
 
     fun put(
         inputStream: InputStream,
-        ownerPublicKey: PublicKey,
+        ownerEncryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey> = setOf(),

@@ -9,6 +9,7 @@ import io.p8e.proto.Contracts.*
 import io.p8e.spec.P8eContract
 import io.p8e.util.orThrowContractDefinition
 import io.p8e.util.toOffsetDateTimeProv
+import io.provenance.p8e.encryption.model.KeyRef
 import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.lang.reflect.Parameter
@@ -22,7 +23,7 @@ import kotlin.streams.toList
 class ContractWrapper(
     private val executor: ExecutorService,
     private val contractSpecClass: Class<out Any>,
-    private val keyPair: KeyPair,
+    private val encryptionKeyRef: KeyRef,
     private val definitionService: DefinitionService,
     private val contractBuilder: Contract.Builder,
     private val signer: SignerImpl
@@ -51,7 +52,7 @@ class ContractWrapper(
     val functions = contractBuilder.considerationsBuilderList
         .filter { it.result == ExecutionResult.getDefaultInstance() }
         .map { consideration -> consideration to getConsiderationMethod(contract.javaClass, consideration.considerationName) }
-        .map { (consideration, method) -> Function(keyPair, signer, definitionService, contract, consideration, method, facts) }
+        .map { (consideration, method) -> Function(encryptionKeyRef, signer, definitionService, contract, consideration, method, facts) }
 
     private fun getConstructor(
         clazz: Class<*>
@@ -103,13 +104,13 @@ class ContractWrapper(
     private fun buildFacts(): List<FactInstance> {
         return contractBuilder.inputsList
             .filter { it.dataLocation.ref.hash.isNotEmpty() }
-            .toFactInstance(keyPair)
+            .toFactInstance(encryptionKeyRef)
             .takeIf { facts -> facts.map { it.name }.toSet().size == facts.size }
             .orThrowContractDefinition("Found duplicate fact messages by name.")
     }
 
     private fun List<Fact>.toFactInstance(
-        keyPair: KeyPair
+        encryptionKeyRef: KeyRef
     ): List<FactInstance> {
         val factMap: Map<String, List<Message>> = groupByTo(mutableMapOf(), { it.name }) { fact ->
             val completableFuture = CompletableFuture<Message>()
@@ -118,7 +119,7 @@ class ContractWrapper(
                     try {
                         completableFuture.complete(
                             definitionService.loadProto(
-                                keyPair,
+                                encryptionKeyRef,
                                 fact,
                                 signer
                             )

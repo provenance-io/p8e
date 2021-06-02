@@ -53,8 +53,7 @@ class EnvelopeService(
         }
 
         log.info("Handling envelope")
-
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
         val signer = affiliateService.getSigner(publicKey)
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
@@ -89,7 +88,7 @@ class EnvelopeService(
 
         val result = timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
-                keyPair = encryptionKeyPair,
+                encryptionKeyRef,
                 envelope = envelope,
                 signer = signer
             )
@@ -199,12 +198,12 @@ class EnvelopeService(
         if (record.data.hasExecutedTime())
             return record
 
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
         val signer = affiliateService.getSigner(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(
-                encryptionKeyPair,
+                encryptionKeyRef,
                 envelope = record.data.input,
                 signer = signer
             )

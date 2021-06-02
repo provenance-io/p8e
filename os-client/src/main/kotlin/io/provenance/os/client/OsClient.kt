@@ -16,6 +16,7 @@ import io.provenance.os.proto.*
 import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
 import io.provenance.os.util.base64Decode
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -132,7 +133,7 @@ open class OsClient(uri: URI) {
 
     fun put(
         message: Message,
-        ownerPublicKey: PublicKey,
+        encryptionKeyRef: KeyRef,
         signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
@@ -142,7 +143,7 @@ open class OsClient(uri: URI) {
 
         return put(
             ByteArrayInputStream(bytes),
-            ownerPublicKey,
+            encryptionKeyRef,
             signer,
             bytes.size.toLong(),
             additionalAudiences,
@@ -153,7 +154,7 @@ open class OsClient(uri: URI) {
 
     fun put(
         inputStream: InputStream,
-        ownerPublicKey: PublicKey,
+        encryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
         additionalAudiences: Set<PublicKey> = setOf(),
@@ -166,7 +167,7 @@ open class OsClient(uri: URI) {
         val signingPublicKey = CertificateUtil.publicKeyToPem(signerPublicKey)
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
-            ownerTransactionCert = ownerPublicKey,
+            ownerEncryptionKeyRef = encryptionKeyRef,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
             processingAudienceKeys = listOf()
         )

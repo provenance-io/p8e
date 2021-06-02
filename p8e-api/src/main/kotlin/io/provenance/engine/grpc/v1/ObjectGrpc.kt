@@ -15,9 +15,9 @@ import io.p8e.proto.Objects
 import io.p8e.proto.Objects.ObjectLoadRequest
 import io.p8e.proto.Objects.ObjectLoadResponse
 import io.p8e.proto.Objects.ObjectLoadJsonResponse
-import io.p8e.util.base64String
 import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toByteString
+import io.p8e.util.toHex
 import io.p8e.util.toJsonString
 import io.provenance.engine.extension.toProto
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
@@ -44,9 +44,9 @@ class ObjectGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         val msg = request.message.toByteArray()
-        val encryptionKeyPair = transaction { affiliateService.getEncryptionKeyPair(publicKey()) }
         val signer = transaction { affiliateService.getSigner(publicKey()) }
         val affiliateShares = transaction { affiliateService.getSharePublicKeys(request.toAudience().plus(publicKey())) }
+        val encryptionKeyRef = transaction { affiliateService.getEncryptionKeyRef(publicKey()) }
 
         // Update the dime's audience list to use encryption public keys.
         val audience = request.toAudience().plus(affiliateShares.value).map {
@@ -61,7 +61,7 @@ class ObjectGrpc(
         }.toSet()
 
         DefinitionService(osClient)
-            .save(encryptionKeyPair, msg, signer, audience)
+            .save(encryptionKeyRef, msg, signer, audience)
             .toProto()
             .complete(responseObserver)
     }
@@ -76,10 +76,10 @@ class ObjectGrpc(
 
         transaction {
             val signer = affiliateService.getSigner(publicKey())
-            val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey())
+            val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey())
 
             DefinitionService(osClient).get(
-                encryptionKeyPair,
+                encryptionKeyRef,
                 request.uri,
                 "<raw fetch - classname not included>",
                 signer = signer,
@@ -103,8 +103,8 @@ class ObjectGrpc(
 
         transaction {
             val signer = affiliateService.getSigner(publicKey())
-            val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey())
-            val spec = DefinitionService(osClient).loadProto(encryptionKeyPair, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signer, signer.getPublicKey()) as ContractSpecs.ContractSpec
+            val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey())
+            val spec = DefinitionService(osClient).loadProto(encryptionKeyRef, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signer, signer.getPublicKey()) as ContractSpecs.ContractSpec
 
             val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}"
             val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -113,10 +113,10 @@ class ObjectGrpc(
 
             DefinitionService(osClient, memoryClassLoader).run {
                 // spec.definition is the contract uberjar
-                addJar(encryptionKeyPair, spec.definition, signer)
+                addJar(encryptionKeyRef, spec.definition, signer)
 
                 forThread {
-                    loadProto(encryptionKeyPair, request.hash, request.classname, signer, signer.getPublicKey())
+                    loadProto(encryptionKeyRef, request.hash, request.classname, signer, signer.getPublicKey())
                 }.toJsonString()
             }
         }?.let { json ->
