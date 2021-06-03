@@ -71,12 +71,14 @@ open class OsClient(uri: URI) {
     fun mailboxGet(publicKey: PublicKey, maxResults: Int): Collection<Pair<UUID, DIMEInputStream>> {
         val mail = mutableListOf<Pair<UUID, DIMEInputStream>>()
 
-        mailboxBlockingClient.get(
+        val response = mailboxBlockingClient.get(
             Mailboxes.GetRequest.newBuilder()
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
                 .setMaxResults(maxResults)
                 .build()
-        ).forEachRemaining {
+        )
+
+        response.forEachRemaining {
             val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
             mail.add(Pair(UUID.fromString(it.uuid.value), dime))
         }

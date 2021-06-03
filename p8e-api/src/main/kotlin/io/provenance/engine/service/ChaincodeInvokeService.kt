@@ -1,7 +1,6 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import cosmos.auth.v1beta1.Auth
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
@@ -46,7 +45,6 @@ data class ContractRequestWrapper(
 class ChaincodeInvokeService(
     private val accountProvider: Account,
     private val transactionStatusService: TransactionStatusService,
-    private val sc: SimpleClient,
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
 ) : IChaincodeInvokeService {

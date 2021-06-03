@@ -3,6 +3,8 @@ package io.provenance.engine.batch
 import com.google.protobuf.Any
 import com.google.protobuf.ByteString
 import com.google.protobuf.Message
+import io.grpc.Status
+import io.grpc.StatusRuntimeException
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractScope.EnvelopeError
 import io.p8e.proto.ContractScope.EnvelopeState
@@ -29,6 +31,7 @@ import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
 import io.provenance.proto.encryption.EncryptionProtos.Audience
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.MDC
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import java.security.PublicKey
@@ -217,23 +220,37 @@ class MailboxReaper(
      */
     @Scheduled(initialDelayString = "\${reaper.inbox.delay}", fixedDelayString = "\${reaper.inbox.interval}")
     fun pollInbound() {
+        MDC.clear()
+
         log.debug("Polling mailbox reaper inbound")
 
         // TODO catch status runtime exceptions and don't rethrow
         transaction { affiliateService.getEncryptionKeyPairs() }
             .flatMap { entry ->
-                osClient.mailboxGet(entry.value.public, maxResults = 100).map { entry.value to it }
-            }.map { (keyPair, result) ->
+                try {
+                    osClient.mailboxGet(entry.value.public, maxResults = 100).map { entry.value to it }
+                } catch (e: StatusRuntimeException) {
+                    if (e.status.code == Status.Code.UNAVAILABLE) {
+                        log.warn("Failed mailbox GET", e)
+                        Thread.sleep(10_000)
+
+                        return@pollInbound
+                    } else {
+                        throw e
+                    }
+                }
+            }.mapNotNull { (keyPair, result) ->
                 val (uuid, dimeInputStream) = result
                 dimeInputStream.getDecryptedPayload(keyPair).use {
                     // TODO EXISTING - double check readAllBytes is safe for our use case
                     val bytes = it.readAllBytes()
 
                     if (!it.verify()) {
-                        throw NotFoundException("Mailbox object verification failure [public key: ${keyPair.public.toHex()}] [mailbox uuid: $uuid]")
+                        log.warn("Mailbox object verification failure [public key: ${keyPair.public.toHex()}] [mailbox uuid: $uuid]")
+                        null
+                    } else {
+                        MailboxItem(uuid, keyPair.public, dimeInputStream, bytes)
                     }
-
-                    MailboxItem(uuid, keyPair.public, dimeInputStream, bytes)
                 }
             }.map {
                 MailboxInboundCallable(

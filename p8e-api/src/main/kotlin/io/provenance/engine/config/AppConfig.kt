@@ -12,7 +12,6 @@ import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.domain.RPCClient
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
@@ -28,10 +27,6 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.service.KeystoneService
-import io.provenance.pbc.clients.Denom
-import io.provenance.pbc.clients.SimpleClient
-import io.provenance.pbc.clients.SimpleClientOpts
-import io.provenance.pbc.clients.coins
 import okhttp3.OkHttpClient
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
@@ -82,21 +77,6 @@ class AppConfig : WebMvcConfigurer {
             pathString = if (chaincodeProperties.mainNet) Account.PROVENANCE_MAINNET_BIP44_PATH else Account.PROVENANCE_TESTNET_BIP44_PATH,
             mainnet = chaincodeProperties.mainNet
         ).childAccount(hardenAddress = false)
-    }
-
-    @Bean
-    fun simpleClient(chaincodeProperties: ChaincodeProperties, accountProvider: Account): SimpleClient {
-        return SimpleClient(
-            chaincodeProperties.apiKey,
-            SimpleClientOpts(
-                chainId = chaincodeProperties.chainId,
-                bech32Address = accountProvider.bech32Address(),
-                uri = chaincodeProperties.url,
-                signer = PbSigner.signerFor(accountProvider.getKeyPair()),
-                txFees = listOf(5000 coins Denom.vspn),
-                gas = "250000"
-            )
-        )
     }
 
     @Bean
