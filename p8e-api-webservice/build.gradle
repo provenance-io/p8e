@@ -49,7 +49,6 @@ dependencies {
     implementation project(":p8e-shared")
     implementation project(":p8e-common")
     implementation project(":p8e-sdk")
-    implementation project(":mailbox-client")
     implementation project(":os-client")
 
     implementation "com.google.protobuf:protobuf-java:$protobuf_version"

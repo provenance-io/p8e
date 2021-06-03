@@ -11,7 +11,7 @@ option java_outer_classname = "Objects";
 service ObjectService {
     rpc Put(stream ChunkBidi) returns (ObjectResponse) {};
 
-    rpc Get(Sha512Request) returns (stream ChunkBidi) {};
+    rpc Get(HashRequest) returns (stream ChunkBidi) {};
 
     // rpc GetByUuid(UUID) returns (stream ChunkBidi) {};
 }
@@ -23,7 +23,7 @@ message ChunkBidi {
     }
 }
 
-message Sha512Request {
+message HashRequest {
     bytes hash = 1;
     bytes public_key = 2;
 }
@@ -50,12 +50,12 @@ message StreamHeader {
 }
 
 message ObjectResponse {
-    reserved 2, 9, 10, 12, 13, 14;
-    reserved "object_uuid", "effective_start_date", "effective_end_date", "created_by", "updated", "updated_by";
+    reserved 2, 4, 9, 10, 12, 13, 14;
+    reserved "object_uuid", "signatures", "effective_start_date", "effective_end_date", "created_by", "updated", "updated_by";
 
     UUID uuid = 1;
+    UUID dime_uuid = 15;
     bytes hash = 3;
-    repeated Signature signatures = 4;
     string uri = 5;
     string bucket = 6;
     string name = 7;
@@ -70,9 +70,4 @@ message ObjectMetadata {
     bytes sha512 = 3;
     int64 length = 4;
     int64 content_length = 10;
-}
-
-message Signature {
-    bytes signature = 1;
-    bytes public_key = 2;
 }

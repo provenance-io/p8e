@@ -68,7 +68,6 @@ dependencies {
     implementation project(":simple-client")
     implementation project(":event-stream")
     implementation project(":os-client")
-    implementation project(":mailbox-client")
 
     // Ketherium utilities
     implementation "com.github.komputing:kbip44:0.1"

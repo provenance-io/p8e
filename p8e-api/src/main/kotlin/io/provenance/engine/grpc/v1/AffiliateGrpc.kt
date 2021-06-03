@@ -23,7 +23,6 @@ import java.security.KeyPair
 @GRpcService(interceptors = [JwtServerInterceptor::class, UnhandledExceptionInterceptor::class])
 class AffiliateGrpc(
     private val affiliateService: AffiliateService,
-    private val mailboxService: MailboxService
 ): AffiliateServiceImplBase() {
 
     private val log = logger()
@@ -42,9 +41,10 @@ class AffiliateGrpc(
 
         log.info("Saving affiliate encryption key: ${ecPublicKey.toHex()}")
 
-        if (mailboxService.encryptionPublicKeyExists(ecPublicKey)) {
-            throw IllegalArgumentException("Derived encryption public key [${ecPublicKey.toHex()}] is not allowed, please choose another.")
-        }
+        // TODO rethink this in decentralized system
+        // if (mailboxService.encryptionPublicKeyExists(ecPublicKey)) {
+        //     throw IllegalArgumentException("Derived encryption public key [${ecPublicKey.toHex()}] is not allowed, please choose another.")
+        // }
 
         transaction {
             affiliateService.save(
