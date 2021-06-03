@@ -25,8 +25,6 @@ import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
 import io.provenance.os.client.OsClient
-import io.provenance.os.mailbox.client.MailboxClient
-import io.provenance.os.mailbox.client.MailboxClientProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.service.KeystoneService
@@ -62,7 +60,6 @@ import java.time.Duration
     ElasticSearchProperties::class,
     EventStreamProperties::class,
     JwtProperties::class,
-    MailboxProperties::class,
     ObjectStoreProperties::class,
     ReaperChaincodeProperties::class,
     ReaperExpirationProperties::class,
@@ -148,17 +145,6 @@ class AppConfig : WebMvcConfigurer {
     @Bean
     fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties): OsClient =
         OsClient(URI(objectStoreProperties.url))
-
-    @Bean
-    fun mailboxClient(objectMapper: ObjectMapper, mailboxProperties: MailboxProperties): MailboxClient =
-        MailboxClient(
-            objectMapper,
-            MailboxClientProperties(mailboxProperties.url, mailboxProperties.key),
-            poolLambda = {
-                it.maxTotal = mailboxProperties.poolSize.toInt()
-                it.defaultMaxPerRoute = mailboxProperties.poolSize.toInt()
-            }
-        )
 
     @Bean
     fun requestLoggingFilter() = AppRequestLoggingFilter()

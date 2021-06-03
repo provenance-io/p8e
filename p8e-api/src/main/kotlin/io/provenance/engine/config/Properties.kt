@@ -29,14 +29,6 @@ class ObjectStoreProperties {
     var key: String? = null
 }
 
-@ConfigurationProperties(prefix = "mailbox")
-@Validated
-class MailboxProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var key: String
-    @NotNull lateinit var poolSize: Integer
-}
-
 @ConfigurationProperties(prefix = "event.stream")
 @Validated
 class EventStreamProperties {
