@@ -68,7 +68,6 @@ dependencies {
     implementation project(":simple-client")
     implementation project(":event-stream")
     implementation project(":os-client")
-    implementation project(":mailbox-client")
 
     // Ketherium utilities
     implementation "com.github.komputing:kbip44:0.1"
@@ -122,9 +121,6 @@ dependencies {
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
     implementation 'com.zaxxer:HikariCP:3.4.2'
-
-    // Redis
-    implementation "org.redisson:redisson:$redisson_version"
 
     // Swagger
     implementation 'io.springfox:springfox-swagger2:2.7.0'

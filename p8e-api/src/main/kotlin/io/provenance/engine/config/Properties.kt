@@ -29,14 +29,6 @@ class ObjectStoreProperties {
     var key: String? = null
 }
 
-@ConfigurationProperties(prefix = "mailbox")
-@Validated
-class MailboxProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var key: String
-    @NotNull lateinit var poolSize: Integer
-}
-
 @ConfigurationProperties(prefix = "event.stream")
 @Validated
 class EventStreamProperties {
@@ -62,14 +54,6 @@ class ChaincodeProperties {
     @NotNull var mainNet: Boolean = false
     @NotNull var emptyIterationBackoffMS: Int = 1_000
     @NotNull var txBatchSize: Int = 25
-}
-
-@ConfigurationProperties(prefix = "redis")
-@Validated
-class RedisProperties {
-    @NotNull lateinit var host: String
-    @NotNull lateinit var port: String
-    @NotNull lateinit var connectionPoolSize: String
 }
 
 @ConfigurationProperties(prefix = "elasticsearch")

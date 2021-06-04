@@ -201,8 +201,6 @@ class AffiliateService(
     @Cacheable(AFFILIATES)
     fun getAll(): List<AffiliateRecord> = AffiliateRecord.all().toList()
 
-    fun getAllRegistered(identityUuid: UUID): List<AffiliateRecord> = AffiliateRecord.allByIdentityUuid(identityUuid)
-
     /**
      * Get all distinct index names
      *
@@ -241,8 +239,8 @@ class AffiliateService(
         AFFILIATE_INDEX_NAME,
         AFFILIATE_BECH32_LOOKUP,
     ])
-    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
-        AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
+
+    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
@@ -254,12 +252,8 @@ class AffiliateService(
                         require (response.isAcknowledged) { "ES index creation of $it was not successful" }
                     }
                 }
-
-                if (jwt != null && identityUuid != null) {
-                    keystoneService.registerKey(jwt, signingKeyPair.public, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.CONTRACT)
-                    registerKeyWithIdentity(it, identityUuid)
-                }
             }
+
 
     /**
      * Save or update an affiliate with a signing public key from a key management system.
@@ -390,10 +384,6 @@ class AffiliateService(
     fun addShare(affiliatePublicKey: PublicKey, publicKey: PublicKey) = AffiliateShareRecord.insert(affiliatePublicKey, publicKey)
 
     fun removeShare(affiliatePublicKey: PublicKey, publicKey: PublicKey) = AffiliateShareRecord.findByAffiliateAndPublicKey(affiliatePublicKey, publicKey)?.delete()
-
-    fun getAffiliateByPublicKeyAndIdentityUuid(affiliatePublicKey: PublicKey, identityUuid: UUID) = AffiliateRecord.findManagedByPublicKey(affiliatePublicKey, identityUuid)
-
-    fun canManageAffiliate(affiliatePublicKey: PublicKey, identityUuid: UUID) = AffiliateRecord.findManagedByPublicKey(affiliatePublicKey, identityUuid)?.let { true } ?: false
 
     /**
      * Eviction of caches on a timer.

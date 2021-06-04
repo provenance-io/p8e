@@ -38,22 +38,3 @@ class ObjectStoreProperties {
 class ServiceProperties {
     @NotNull lateinit var name: String
 }
-
-@ConfigurationProperties(prefix = "redis")
-@Validated
-class RedisProperties {
-    @NotNull lateinit var host: String
-    @NotNull lateinit var port: String
-    @NotNull lateinit var connectionPoolSize: String
-}
-
-@ConfigurationProperties(prefix = "provenance.oauth")
-@Validated
-class ProvenanceOAuthProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var clientId: String
-    @NotNull lateinit var clientSecret: String
-    @NotNull lateinit var redirectUrl: String
-    @NotNull lateinit var identityUrl: String
-    @NotNull lateinit var ttlSeconds: Integer
-}

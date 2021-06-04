@@ -6,7 +6,7 @@ repositories {
 }
 
 dependencies {
-    implementation project(":os-proto")
+    compile project(":os-proto")
     implementation project(":p8e-util")
     implementation project(":p8e-encryption")
 
