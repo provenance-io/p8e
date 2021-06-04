@@ -26,7 +26,10 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-open class OsClient(uri: URI) {
+open class OsClient(
+    uri: URI,
+    deadlineMs: Long
+) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
@@ -47,6 +50,7 @@ open class OsClient(uri: URI) {
 
         objectAsyncClient = ObjectServiceGrpc.newStub(channel)
         publicKeyBlockingClient = PublicKeyServiceGrpc.newBlockingStub(channel)
+            .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
