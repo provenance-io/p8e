@@ -12,11 +12,8 @@ import io.provenance.p8e.webservice.controller.toApi
 import io.provenance.p8e.webservice.domain.toApi
 import io.provenance.p8e.webservice.domain.ApiAffiliateKey
 import io.provenance.p8e.webservice.domain.ApiAffiliateShare
-import io.provenance.p8e.webservice.interceptors.provenanceIdentityUuid
-import io.provenance.p8e.webservice.interceptors.provenanceJwt
 import io.provenance.p8e.webservice.service.KeyManagementService
 import io.provenance.p8e.webservice.service.KeyUsageType
-import io.provenance.p8e.webservice.util.AccessDeniedException
 import org.jetbrains.exposed.dao.with
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
@@ -59,7 +56,7 @@ class AffiliateRepository(
             val authKeyPair = ProvenanceKeyGenerator.generateKeyPair()
 
             transaction {
-                affiliateService.save(signingKey, encryptionKey, authKeyPair.public, indexName, alias, provenanceJwt(), provenanceIdentityUuid())
+                affiliateService.save(signingKey, encryptionKey, authKeyPair.public, indexName, alias)
                     .toApi(authKeyPair.private.toHex())
             }
         } catch (t: Throwable) {

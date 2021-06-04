@@ -241,7 +241,11 @@ class MailboxReaper(
                 }
             }.mapNotNull { (keyPair, result) ->
                 val (uuid, dimeInputStream) = result
-                dimeInputStream.getDecryptedPayload(keyPair).use {
+
+                val signer = affiliateService.getSigner(keyPair.public)
+                val encrptyionKeyRef = affiliateService.getEncryptionKeyRef(keyPair.public)
+
+                dimeInputStream.getDecryptedPayload(encrptyionKeyRef, signer).use {
                     // TODO EXISTING - double check readAllBytes is safe for our use case
                     val bytes = it.readAllBytes()
 

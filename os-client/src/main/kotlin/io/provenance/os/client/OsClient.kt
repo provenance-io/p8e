@@ -12,8 +12,6 @@ import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.domain.*
 import io.provenance.os.domain.inputstream.DIMEInputStream
-import io.provenance.os.proto.*
-import io.provenance.os.domain.inputstream.sign
 import io.provenance.os.proto.BufferedStreamObserver
 import io.provenance.os.proto.InputStreamChunkedIterator
 import io.provenance.os.proto.MailboxServiceGrpc

@@ -240,7 +240,7 @@ class AffiliateService(
         AFFILIATE_BECH32_LOOKUP,
     ])
 
-    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
+    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
