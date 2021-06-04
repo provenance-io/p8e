@@ -8,15 +8,15 @@ import java.util.concurrent.TimeUnit
 class ChaincodeClient(
     channel: ManagedChannel,
     interceptor: ChallengeResponseInterceptor,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
     private val client = ChaincodeGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
-        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun addSpec(
         specRequest: SpecRequest
     ) {
-        client.addSpec(specRequest)
+        client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .addSpec(specRequest)
     }
 }
