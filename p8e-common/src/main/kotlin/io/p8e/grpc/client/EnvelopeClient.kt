@@ -1,8 +1,6 @@
 package io.p8e.grpc.client
 
-import com.google.protobuf.Empty
 import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractScope.EnvelopeCollection
@@ -12,13 +10,16 @@ import io.p8e.proto.Envelope.RejectCancel
 import io.p8e.proto.EnvelopeServiceGrpc
 import io.p8e.util.toProtoUuidProv
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class EnvelopeClient(
     channel: ManagedChannel,
-    interceptor: ChallengeResponseInterceptor
+    interceptor: ChallengeResponseInterceptor,
+    deadlineMs: Long
 ) {
     private val blockingClient = EnvelopeServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
+        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     private val eventClient = EnvelopeServiceGrpc.newStub(channel)
         .withInterceptors(interceptor)

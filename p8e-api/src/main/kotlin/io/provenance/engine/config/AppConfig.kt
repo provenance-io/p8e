@@ -151,7 +151,10 @@ class AppConfig : WebMvcConfigurer {
 
     @Bean
     fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties): OsClient =
-        OsClient(URI(objectStoreProperties.url))
+        OsClient(
+            uri = URI(objectStoreProperties.url),
+            deadlineMs = 60000
+        )
 
     @Bean
     fun mailboxClient(objectMapper: ObjectMapper, mailboxProperties: MailboxProperties): MailboxClient =

@@ -1,19 +1,21 @@
 package io.p8e.grpc.client
 
 import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.p8e.proto.Common.Location
 import io.p8e.proto.Common.WithAudience
 import io.p8e.proto.ObjectGrpc
 import io.p8e.proto.Objects
 import io.p8e.proto.Objects.ObjectLoadRequest
+import java.util.concurrent.TimeUnit
 
 class ObjectClient(
     channel: ManagedChannel,
-    challengeResponseInterceptor: ChallengeResponseInterceptor
+    challengeResponseInterceptor: ChallengeResponseInterceptor,
+    deadlineMs: Long
 ) {
     private val client = ObjectGrpc.newBlockingStub(channel)
         .withInterceptors(challengeResponseInterceptor)
+        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun store(
         withAudience: WithAudience

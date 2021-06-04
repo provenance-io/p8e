@@ -3,10 +3,8 @@ package io.p8e.index.client
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.grpc.ManagedChannel
-import io.grpc.ManagedChannelBuilder
 import io.p8e.grpc.client.ChallengeResponseInterceptor
 import io.p8e.index.client.query.Query
-import io.p8e.proto.Index
 import io.p8e.proto.Index.ElasticSearchQueryRequest
 import io.p8e.proto.Index.FactHistoryRequest
 import io.p8e.proto.Index.FactHistoryResponse
@@ -21,14 +19,17 @@ import io.p8e.util.asJsonNode
 import io.p8e.util.toProtoUuidProv
 import org.elasticsearch.index.query.QueryBuilder
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class IndexClient(
     channel: ManagedChannel,
     interceptor: ChallengeResponseInterceptor,
+    deadlineMs: Long,
     private val objectMapper: ObjectMapper
 ) {
     private val client = IndexServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
+        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun query(query: Query): ScopeWrappers {
         return client.query(
