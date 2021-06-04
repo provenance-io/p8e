@@ -8,15 +8,15 @@ import java.util.concurrent.TimeUnit
 
 class AuthenticationClient(
     channel: ManagedChannel,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
     private val blockingStub = AuthenticationServiceGrpc
         .newBlockingStub(channel)
-        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun authenticate(
         request: Authentication.AuthenticationRequest
     ): Jwt {
-        return blockingStub.authenticate(request)
+        return blockingStub.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .authenticate(request)
     }
 }

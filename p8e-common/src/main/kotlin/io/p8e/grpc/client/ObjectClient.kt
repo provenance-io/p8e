@@ -11,26 +11,27 @@ import java.util.concurrent.TimeUnit
 class ObjectClient(
     channel: ManagedChannel,
     challengeResponseInterceptor: ChallengeResponseInterceptor,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
     private val client = ObjectGrpc.newBlockingStub(channel)
         .withInterceptors(challengeResponseInterceptor)
-        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun store(
         withAudience: WithAudience
     ): Location {
-        return client.store(withAudience)
+        return client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .store(withAudience)
     }
 
     fun load(
         uri: String
     ): ByteArray {
-        return client.load(
-            ObjectLoadRequest.newBuilder()
-                .setUri(uri)
-                .build()
-        ).bytes.toByteArray()
+        return client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .load(
+                ObjectLoadRequest.newBuilder()
+                    .setUri(uri)
+                    .build()
+            ).bytes.toByteArray()
     }
 
     fun loadJson(
@@ -38,12 +39,13 @@ class ObjectClient(
         className: String,
         contractSpecHash: String
     ): String {
-        return client.loadJson(
-            Objects.ObjectLoadJsonRequest.newBuilder()
-                .setHash(hash)
-                .setClassname(className)
-                .setContractSpecHash(contractSpecHash)
-                .build()
-        ).json
+        return client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .loadJson(
+                Objects.ObjectLoadJsonRequest.newBuilder()
+                    .setHash(hash)
+                    .setClassname(className)
+                    .setContractSpecHash(contractSpecHash)
+                    .build()
+            ).json
     }
 }

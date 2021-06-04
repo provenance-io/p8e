@@ -15,11 +15,10 @@ import java.util.concurrent.TimeUnit
 class EnvelopeClient(
     channel: ManagedChannel,
     interceptor: ChallengeResponseInterceptor,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
     private val blockingClient = EnvelopeServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
-        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     private val eventClient = EnvelopeServiceGrpc.newStub(channel)
         .withInterceptors(interceptor)
@@ -27,42 +26,48 @@ class EnvelopeClient(
     fun getAllByGroupUuid(
         groupUuid: UUID
     ): EnvelopeCollection {
-        return blockingClient.getAllByGroupUuid(groupUuid.toProtoUuidProv())
+        return blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getAllByGroupUuid(groupUuid.toProtoUuidProv())
     }
 
     fun getByExecutionUuid(
         executionUuid: UUID
     ): Envelope {
-        return blockingClient.getByExecutionUuid(executionUuid.toProtoUuidProv())
+        return blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getByExecutionUuid(executionUuid.toProtoUuidProv())
     }
 
     fun getScopeByExecutionUuid(
         executionUuid: UUID
     ): Scope {
-        return blockingClient.getScopeByExecutionUuid(executionUuid.toProtoUuidProv())
+        return blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getScopeByExecutionUuid(executionUuid.toProtoUuidProv())
     }
 
     fun rejectByExecutionUuid(
         executionUuid: UUID,
         message: String
     ): Envelope {
-        return blockingClient.rejectByExecutionUuid(
-            RejectCancel.newBuilder()
-                .setExecutionUuid(executionUuid.toProtoUuidProv())
-                .setMessage(message)
-                .build()
-        )
+        return blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .rejectByExecutionUuid(
+                RejectCancel.newBuilder()
+                    .setExecutionUuid(executionUuid.toProtoUuidProv())
+                    .setMessage(message)
+                    .build()
+            )
     }
 
     fun cancelByExecutionUuid(
         executionUuid: UUID,
         message: String
     ): Envelope {
-        return blockingClient.cancelByExecutionUuid(
-            RejectCancel.newBuilder()
-                .setExecutionUuid(executionUuid.toProtoUuidProv())
-                .setMessage(message)
-                .build())
+        return blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .cancelByExecutionUuid(
+                RejectCancel.newBuilder()
+                    .setExecutionUuid(executionUuid.toProtoUuidProv())
+                    .setMessage(message)
+                    .build()
+            )
     }
 
     fun event(
@@ -75,7 +80,8 @@ class EnvelopeClient(
         request: EnvelopeEvent
     ): EnvelopeEvent {
         return GrpcRetry.unavailableBackoff {
-            blockingClient.execute(request)
+            blockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+                .execute(request)
         }
     }
 }

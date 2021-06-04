@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 
 open class OsClient(
     uri: URI,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
@@ -50,7 +50,6 @@ open class OsClient(
 
         objectAsyncClient = ObjectServiceGrpc.newStub(channel)
         publicKeyBlockingClient = PublicKeyServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
@@ -219,24 +218,27 @@ open class OsClient(
     }
 
     fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
-        publicKeyBlockingClient.create(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        ).toDomain()
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .create(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            ).toDomain()
 
     fun deletePublicKey(publicKey: PublicKey) {
-        publicKeyBlockingClient.delete(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        )
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .delete(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            )
     }
 
     fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
-        publicKeyBlockingClient.getAll(Empty.getDefaultInstance())
-            .keyList
-            .map { it.toDomain() }
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getAll(Empty.getDefaultInstance())
+                .keyList
+                .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

@@ -8,21 +8,22 @@ import java.util.concurrent.TimeUnit
 class SigningAndEncryptionPublicKeysClient (
     channel: ManagedChannel,
     interceptor: ChallengeResponseInterceptor,
-    deadlineMs: Long
+    private val deadlineMs: Long
 ) {
     private val client = AffiliateServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
-        .withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
 
     fun register(
         request: Affiliate.AffiliateRegisterRequest
     ) {
-        client.register(request)
+        client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .register(request)
     }
 
     fun whitelistClass(
         whitelist: Affiliate.AffiliateContractWhitelist
     ) {
-        client.whitelistClass(whitelist)
+        client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .whitelistClass(whitelist)
     }
 }
