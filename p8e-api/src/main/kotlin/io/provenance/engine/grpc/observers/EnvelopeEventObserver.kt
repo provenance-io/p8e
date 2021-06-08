@@ -169,8 +169,6 @@ class EnvelopeEventObserver(
     private fun connect(value: EnvelopeEvent): QueueingStreamObserverSender<EnvelopeEvent> {
         val publicKey = if(value.publicKey.hasEncryptionPublicKey()) value.publicKey.encryptionPublicKey.toPublicKey() else value.publicKey.signingPublicKey.toPublicKey()
 
-        logger().debug("Connecting [publicKey = ${publicKey.toHex()}, classname = ${value.classname}, action = ${value.action}, ip = ${clientIp()}]")
-
         val streamObserver = timed("affiliate_connect") {
             transaction {
                 // Verify that this is a known affiliate
@@ -191,7 +189,7 @@ class EnvelopeEventObserver(
                 affiliateConnection.lastHeartbeat = OffsetDateTime.now()
             }
 
-            logger().debug("GRPC Connected: Affiliate ${queuerKey!!.publicKey.toHex()} Class ${queuerKey!!.classname}")
+            logger().debug("GRPC Connected: [affiliate = ${queuerKey!!.publicKey.toHex()}, classname = ${queuerKey!!.classname}, action = ${value.action}, ip = ${clientIp()}]")
 
             connectedKey.set(publicKey.toPublicKeyProto())
             queuers.computeIfAbsent(queuerKey!!) {
