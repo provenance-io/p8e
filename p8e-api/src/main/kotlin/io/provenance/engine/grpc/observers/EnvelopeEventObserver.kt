@@ -169,7 +169,7 @@ class EnvelopeEventObserver(
     private fun connect(value: EnvelopeEvent): QueueingStreamObserverSender<EnvelopeEvent> {
         val publicKey = if(value.publicKey.hasEncryptionPublicKey()) value.publicKey.encryptionPublicKey.toPublicKey() else value.publicKey.signingPublicKey.toPublicKey()
 
-        logger().info("Connecting [publicKey = ${publicKey.toHex()}, classname = ${value.classname}, action = ${value.action}, ip = ${clientIp()}]")
+        logger().debug("Connecting [publicKey = ${publicKey.toHex()}, classname = ${value.classname}, action = ${value.action}, ip = ${clientIp()}]")
 
         val streamObserver = timed("affiliate_connect") {
             transaction {
