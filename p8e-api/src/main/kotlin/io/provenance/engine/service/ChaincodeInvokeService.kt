@@ -62,11 +62,10 @@ class ChaincodeInvokeService(
     private var gasMultiplierResetAt = OffsetDateTime.now()
     private var gasMultiplierDailyCount = 0
         get() {
-            val now = OffsetDateTime.now()
-            if (gasMultiplierResetAt.plusDays(1) < now) {
+            if (gasMultiplierResetAt.plusDays(1) < OffsetDateTime.now()) {
                 log.info("resetting gasMultiplier daily count to 0")
                 field = 0
-                gasMultiplierResetAt = now
+                gasMultiplierResetAt = gasMultiplierResetAt.plusDays(1)
             }
             return field
         }
