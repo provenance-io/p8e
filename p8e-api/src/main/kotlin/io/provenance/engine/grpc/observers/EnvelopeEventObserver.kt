@@ -1,6 +1,7 @@
 package io.provenance.engine.grpc.observers
 
 import io.grpc.stub.StreamObserver
+import io.p8e.grpc.clientIp
 import io.p8e.grpc.observers.CompleteState
 import io.p8e.grpc.observers.EndState
 import io.p8e.grpc.observers.ExceptionState
@@ -167,6 +168,8 @@ class EnvelopeEventObserver(
 
     private fun connect(value: EnvelopeEvent): QueueingStreamObserverSender<EnvelopeEvent> {
         val publicKey = if(value.publicKey.hasEncryptionPublicKey()) value.publicKey.encryptionPublicKey.toPublicKey() else value.publicKey.signingPublicKey.toPublicKey()
+
+        logger().info("Connecting [publicKey = ${publicKey.toHex()}, classname = ${value.classname}, action = ${value.action}, ip = ${clientIp()}]")
 
         val streamObserver = timed("affiliate_connect") {
             transaction {
