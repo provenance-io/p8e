@@ -708,16 +708,18 @@ class Contract<T: P8eContract>(
         if(this.isDead())
             throw IllegalArgumentException("Contract reached max recursion")
 
-        if (this.isFragment) {
-            // TODO can we remove this?
-            timed("contract_saveSpec") {
-                this.saveSpec(contractManager)
-            }
+        // if (this.isFragment) {
+        //     // TODO can we remove this?
+        //     timed("contract_saveSpec") {
+        //         this.saveSpec(contractManager)
+        //     }
 
-            execute(envelope.executionUuid.toUuidProv())
-        } else {
-            execute(this.packageContract())
-        }
+        //     execute(envelope.executionUuid.toUuidProv())
+        // } else {
+            // execute(this.packageContract())
+            this.packageContract()
+            Either.Right(this)
+        // }
     } catch (t: Throwable) {
         Either.Left(P8eError.PreExecutionError(t))
     }
