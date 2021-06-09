@@ -11,6 +11,7 @@ import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.domain.GetTxResult
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.domain.TxResult
+import io.provenance.engine.service.ProvenanceGrpcService
 import io.provenance.engine.service.TransactionNotFoundError
 import io.provenance.engine.service.TransactionQueryService
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -18,6 +19,7 @@ import io.provenance.engine.service.TransactionStatusService
 import io.provenance.engine.stream.ScopeStream
 import io.provenance.engine.stream.domain.Attribute
 import io.provenance.engine.stream.domain.Event
+import io.provenance.engine.stream.domain.StreamEvent
 import io.provenance.p8e.shared.index.ScopeEvent
 import io.provenance.p8e.shared.index.isScopeEventType
 import io.provenance.p8e.shared.index.toEventType
@@ -32,7 +34,8 @@ class TxErrorReaper(
     private val transactionStatusService: TransactionStatusService,
     private val transactionQueryService: TransactionQueryService,
     private val scopeStream: ScopeStream,
-    eventStreamProperties: EventStreamProperties
+    eventStreamProperties: EventStreamProperties,
+    private val provenanceGrpcService: ProvenanceGrpcService,
 ) {
     private val log = logger()
 
@@ -60,7 +63,7 @@ class TxErrorReaper(
                         if (blockHeight <= latestBlockHeight) { // EventStream is past this height, need to process manually
                             transactionStatus.scopeEvents()
                                 .also { events -> log.error("indexing ${events.size} events missed by eventStream") }
-                                .map { event -> event.toScopeEvent() }
+                                .map { event -> event.toScopeEvent(it.transactionHash.value) }
                                 .also { events -> scopeStream.queueIndexScopes(blockHeight, events) }
                         }
                     }
@@ -82,13 +85,11 @@ class TxErrorReaper(
 
     private fun GetTxResult.scopeEvents(): List<Event> = txResult?.events?.filter { it.type.isScopeEventType() } ?: emptyList()
 
-    private fun Event.findTxHash(): String = attributes.find { it.key == "tx_hash" }?.value
-        ?: throw IllegalStateException("Event does not contain a transaction hash")
+    private fun Event.findScope(): Scope = attributes.find { it.key == "scope_addr" }?.let {
+        provenanceGrpcService.retrieveScope(it.value!!.removeSurrounding("\""))
+    } ?: throw IllegalStateException("Event does not contain a scope")
 
-    private fun Event.findScope(): Scope = attributes.find { it.key == "scope" }?.toScope()
-        ?: throw IllegalStateException("Event does not contain a scope")
-
-    private fun Event.toScopeEvent(): ScopeEvent = ScopeEvent(findTxHash(), findScope(), type.toEventType())
+    private fun Event.toScopeEvent(txHash: String): ScopeEvent = ScopeEvent(txHash, findScope(), type.toEventType())
 
     // We only call this after we find a matching "key" so it should be safe to convert to non nullable
     private fun Attribute.toScope(): Scope = value!!.base64Decode().let { Scope.parseFrom(it) }
