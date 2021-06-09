@@ -93,20 +93,10 @@ class ScopeStream(
             )
          }
 
-    // Find the transaction hash in an event.
-    private fun StreamEvent.findTxHash(): String =
-        this.attributes.find { it.key == "tx_hash" }?.value
-            ?: throw IllegalStateException("Event does not contain a transaction hash")
-
     // Find the scope in an event.
-    private fun StreamEvent.findScope(): Scope {
-        return this.attributes.find { it.key == "scope_addr" }?.let {
-            val jsonScope = it.value!!.toString()
-            // remove the enclosing quotes
-            val scope = jsonScope.substring(1, jsonScope.length - 1)
-            provenanceGrpcService.retrieveScope(scope)
-        } ?: throw IllegalStateException("Event does not contain a scope")
-    }
+    private fun StreamEvent.findScope(): Scope = this.attributes.find { it.key == "scope_addr" }?.let {
+        provenanceGrpcService.retrieveScope(it.value!!.removeSurrounding("\""))
+    } ?: throw IllegalStateException("Event does not contain a scope")
 
     // Parse a scope from an attribute value.
     // We only call this after we find a matching "key" so it should be safe to convert to non nullable
