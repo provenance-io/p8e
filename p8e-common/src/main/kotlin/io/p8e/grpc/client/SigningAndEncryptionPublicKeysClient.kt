@@ -3,11 +3,12 @@ package io.p8e.grpc.client
 import io.grpc.ManagedChannel
 import io.p8e.proto.Affiliate
 import io.p8e.proto.AffiliateServiceGrpc
-import io.p8e.proto.PK
+import java.util.concurrent.TimeUnit
 
 class SigningAndEncryptionPublicKeysClient (
     channel: ManagedChannel,
-    interceptor: ChallengeResponseInterceptor
+    interceptor: ChallengeResponseInterceptor,
+    private val deadlineMs: Long
 ) {
     private val client = AffiliateServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
@@ -15,12 +16,14 @@ class SigningAndEncryptionPublicKeysClient (
     fun register(
         request: Affiliate.AffiliateRegisterRequest
     ) {
-        client.register(request)
+        client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .register(request)
     }
 
     fun whitelistClass(
         whitelist: Affiliate.AffiliateContractWhitelist
     ) {
-        client.whitelistClass(whitelist)
+        client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .whitelistClass(whitelist)
     }
 }

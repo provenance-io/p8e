@@ -54,6 +54,8 @@ class ChaincodeProperties {
     @NotNull var mainNet: Boolean = false
     @NotNull var emptyIterationBackoffMS: Int = 1_000
     @NotNull var txBatchSize: Int = 25
+    @NotNull var gasMultiplier: Double = 1.0
+    @NotNull var maxGasMultiplierPerDay: Int = 1000
 }
 
 @ConfigurationProperties(prefix = "elasticsearch")

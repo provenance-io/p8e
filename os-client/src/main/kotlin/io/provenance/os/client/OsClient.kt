@@ -35,7 +35,10 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-open class OsClient(uri: URI) {
+open class OsClient(
+    uri: URI,
+    private val deadlineMs: Long
+) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
@@ -68,9 +71,7 @@ open class OsClient(uri: URI) {
         mailboxBlockingClient.ack(request)
     }
 
-    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Collection<Pair<UUID, DIMEInputStream>> {
-        val mail = mutableListOf<Pair<UUID, DIMEInputStream>>()
-
+    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Sequence<Pair<UUID, DIMEInputStream>> {
         val response = mailboxBlockingClient.get(
             Mailboxes.GetRequest.newBuilder()
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
@@ -78,12 +79,11 @@ open class OsClient(uri: URI) {
                 .build()
         )
 
-        response.forEachRemaining {
-            val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
-            mail.add(Pair(UUID.fromString(it.uuid.value), dime))
-        }
-
-        return mail
+        return response.asSequence()
+            .map {
+                val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
+                Pair(UUID.fromString(it.uuid.value), dime)
+            }
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
@@ -252,12 +252,13 @@ open class OsClient(uri: URI) {
     }
 
     fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
-        publicKeyBlockingClient.add(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(publicKey.toPublicKeyProtoOS())
-                .setUrl("http://localhost") // todo: what is this supposed to be?
-                .build()
-        )
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .add(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(publicKey.toPublicKeyProtoOS())
+                    .setUrl("http://localhost") // todo: what is this supposed to be?
+                    .build()
+            )
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {
