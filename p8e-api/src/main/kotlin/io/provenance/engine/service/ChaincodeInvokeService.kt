@@ -25,6 +25,7 @@ import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
@@ -54,6 +55,18 @@ class ChaincodeInvokeService(
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
 
     private val accountInfo = provenanceGrpc.accountInfo()
+
+    // Optional gas multiplier tracking
+    private var gasMultiplierResetAt = OffsetDateTime.now()
+    private var gasMultiplierDailyCount = 0
+        get() {
+            if (gasMultiplierResetAt.plusDays(1) < OffsetDateTime.now()) {
+                log.info("resetting gasMultiplier daily count to 0")
+                field = 0
+                gasMultiplierResetAt = gasMultiplierResetAt.plusDays(1)
+            }
+            return field
+        }
 
     // private val queue = ConcurrentHashMap<UUID, BlockchainTransaction>()
 
@@ -403,8 +416,15 @@ class ChaincodeInvokeService(
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
-
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
+
+        if (gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
+            log.info("setting gasMultiplier to ${chaincodeProperties.gasMultiplier} (current count = $gasMultiplierDailyCount)")
+            estimate.setGasMultiplier(chaincodeProperties.gasMultiplier)
+            gasMultiplierDailyCount++
+        } else {
+            log.info("skipping gasMultiplier due to daily limit")
+        }
 
         return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }

@@ -1,6 +1,7 @@
 package io.provenance.engine.grpc.observers
 
 import io.grpc.stub.StreamObserver
+import io.p8e.grpc.clientIp
 import io.p8e.grpc.observers.CompleteState
 import io.p8e.grpc.observers.EndState
 import io.p8e.grpc.observers.ExceptionState
@@ -187,7 +188,7 @@ class EnvelopeEventObserver(
                 affiliateConnection.connectionStatus = CONNECTED
                 affiliateConnection.lastHeartbeat = OffsetDateTime.now()
 
-                logger().debug("GRPC Connected: Affiliate ${queuerKey!!.publicKey.toHex()} Class ${queuerKey!!.classname}")
+                logger().debug("GRPC Connected: [affiliate = ${queuerKey!!.publicKey.toHex()}, classname = ${queuerKey!!.classname}, action = ${value.action}, ip = ${clientIp()}]")
 
                 // auth with the auth_public_key, and we will set the connected key with the signing.
                 connectedKey.set(affiliateRecord.publicKey.value.toPublicKeyProto())

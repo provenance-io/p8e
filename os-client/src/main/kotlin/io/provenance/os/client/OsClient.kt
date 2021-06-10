@@ -36,7 +36,10 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-open class OsClient(uri: URI) {
+open class OsClient(
+    uri: URI,
+    private val deadlineMs: Long
+) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
@@ -254,13 +257,28 @@ open class OsClient(uri: URI) {
         return responseObserver.get()
     }
 
-    fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
-        publicKeyBlockingClient.add(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(publicKey.toPublicKeyProtoOS())
-                .setUrl("http://localhost") // todo: what is this supposed to be?
-                .build()
-        )
+    fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .create(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            ).toDomain()
+
+    fun deletePublicKey(publicKey: PublicKey) {
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .delete(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            )
+    }
+
+    fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getAll(Empty.getDefaultInstance())
+                .keyList
+                .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

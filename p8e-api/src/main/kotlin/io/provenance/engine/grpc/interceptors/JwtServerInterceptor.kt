@@ -30,8 +30,11 @@ class JwtServerInterceptor(
             return object: ServerCall.Listener<ReqT>() {}
         }
 
+        val clientIp = call.attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)
+
         val context = Context.current()
             .withValue(Constant.PUBLIC_KEY_CTX, publicKey)
+            .withValue(Constant.CLIENT_IP_CTX, clientIp.toString())
 
         return Contexts.interceptCall(context, call, headers, next)
     }
