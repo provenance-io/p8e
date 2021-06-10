@@ -15,6 +15,7 @@ import io.p8e.util.toByteString
 import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
 import io.provenance.engine.grpc.v1.AuthenticationGrpc
 import io.provenance.engine.service.AuthenticationService
+import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.shared.domain.AffiliateRecord
 import io.provenance.p8e.shared.domain.AffiliateTable
 import io.provenance.p8e.shared.service.AffiliateService
@@ -71,7 +72,9 @@ class AuthenticationServiceTest {
                     encryptionPrivateKey = keyPair.private.toHex()
                     indexName = "test"
                     alias = "test"
-                    keyUuid = UUID.randomUUID()
+                    signingKeyUuid = UUID.randomUUID()
+                    encryptionKeyUuid = UUID.randomUUID()
+                    keyType = DATABASE
                     authPublicKey = keyPair.public.toHex()
                 }
         }

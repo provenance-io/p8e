@@ -1,7 +1,6 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import cosmos.auth.v1beta1.Auth
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
@@ -46,7 +45,6 @@ data class ContractRequestWrapper(
 class ChaincodeInvokeService(
     private val accountProvider: Account,
     private val transactionStatusService: TransactionStatusService,
-    private val sc: SimpleClient,
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
 ) : IChaincodeInvokeService {
@@ -100,9 +98,12 @@ class ChaincodeInvokeService(
                 provenanceGrpc.getLatestBlock()
                     .takeIf { it.block.header.height > currentBlockHeight }
                     ?.let {
-                        log.info("Clearing blockScopeIds")
                         currentBlockHeight = it.block.header.height
-                        blockScopeIds.clear()
+
+                        if (!blockScopeIds.isEmpty()) {
+                            log.info("Clearing blockScopeIds")
+                            blockScopeIds.clear()
+                        }
                     }
             } catch (t: Throwable) {
                 log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
@@ -156,7 +157,7 @@ class ChaincodeInvokeService(
 
             // Skip the rest of the loop if there are no transactions to execute.
             if (batch.size == 0) {
-                log.info("No batch available, waiting...")
+                log.debug("No batch available, waiting...")
                 log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
                 continue

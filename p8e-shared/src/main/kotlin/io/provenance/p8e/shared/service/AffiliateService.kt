@@ -4,10 +4,8 @@ import io.p8e.crypto.SignerFactory
 import io.p8e.crypto.SignerFactoryParam
 import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.Hash
-import io.p8e.crypto.proto.CryptoProtos
 import io.p8e.proto.Affiliate.AffiliateContractWhitelist
 import io.p8e.proto.Affiliate.AffiliateWhitelist
-import io.p8e.proto.PK
 import io.p8e.util.*
 import io.p8e.util.auditedProv
 import io.p8e.util.toProtoTimestampProv
@@ -16,6 +14,9 @@ import io.provenance.engine.crypto.toBech32Data
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.shared.extension.isActive
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.ExternalKeyRef
+import io.provenance.p8e.encryption.model.KeyProviders.SMARTKEY
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.domain.*
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.jetbrains.exposed.sql.and
@@ -69,15 +70,25 @@ class AffiliateService(
      */
     fun getSigner(publicKey: PublicKey): SignerImpl {
         val affiliateRecord = get(publicKey)
-        return if(affiliateRecord?.privateKey == null) {
-            signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord?.keyUuid.toString()))
+        return if(affiliateRecord?.keyType == SMARTKEY) {
+            signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString()))
         } else {
             signerFactory.getSigner(
                 SignerFactoryParam.PenParam(
-                    KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey?.toJavaPrivateKey())
+                    KeyPair(affiliateRecord?.publicKey?.value?.toJavaPublicKey(), affiliateRecord?.privateKey?.toJavaPrivateKey())
                 )
             )
         }
+    }
+
+    fun getEncryptionKeyRef(publicKey: PublicKey): KeyRef {
+        val affiliateRecord = getFirst(publicKey)
+        return KeyRef(
+            affiliateRecord.encryptionPublicKey.toJavaPublicKey(),
+            affiliateRecord.encryptionPrivateKey?.toJavaPrivateKey(),
+            affiliateRecord.encryptionKeyUuid,
+            affiliateRecord.keyType
+        )
     }
 
     /**
@@ -88,7 +99,8 @@ class AffiliateService(
      */
     @Cacheable(AFFILIATE)
     fun get(publicKey: PublicKey): AffiliateRecord? = AffiliateRecord.findById(publicKey.toHex())
-        ?: AffiliateRecord.findByEncryptionPublicKey(publicKey)
+            ?: AffiliateRecord.findByEncryptionPublicKey(publicKey)
+            ?: AffiliateRecord.findByAuthenticationPublicKey(publicKey)
 
     /**
      * Get affiliate by UUID.
@@ -150,18 +162,6 @@ class AffiliateService(
     fun getSigningPublicKey(publicKey: PublicKey): PublicKey = getFirst(publicKey).publicKey.value.toJavaPublicKey()
 
     /**
-     * Get the public key that matches with the AffiliateRecord.
-     *
-     * @param [publicKey] Public key of the contract being executed.
-     * @return [uuid] the identifier of which that public key belongs to from the affiliate table.
-     */
-    @Cacheable(AFFILIATE_SIGNING_KID)
-    fun getSigningKeyUuid(publicKey: PublicKey): String {
-        val affiliateRecord = getFirst(publicKey)
-        return affiliateRecord.keyUuid.toString()
-    }
-
-    /**
      * Validate that the public key is a valid affiliate against the database.
      *
      * @param [publicKey] Public key of the contract being executed.
@@ -201,8 +201,6 @@ class AffiliateService(
     @Cacheable(AFFILIATES)
     fun getAll(): List<AffiliateRecord> = AffiliateRecord.all().toList()
 
-    fun getAllRegistered(identityUuid: UUID): List<AffiliateRecord> = AffiliateRecord.allByIdentityUuid(identityUuid)
-
     /**
      * Get all distinct index names
      *
@@ -241,8 +239,8 @@ class AffiliateService(
         AFFILIATE_INDEX_NAME,
         AFFILIATE_BECH32_LOOKUP,
     ])
-    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
-        AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
+
+    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
@@ -254,12 +252,8 @@ class AffiliateService(
                         require (response.isAcknowledged) { "ES index creation of $it was not successful" }
                     }
                 }
-
-                if (jwt != null && identityUuid != null) {
-                    keystoneService.registerKey(jwt, signingKeyPair.public, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.CONTRACT)
-                    registerKeyWithIdentity(it, identityUuid)
-                }
             }
+
 
     /**
      * Save or update an affiliate with a signing public key from a key management system.
@@ -330,13 +324,6 @@ class AffiliateService(
                     KeyPair(it.encryptionPublicKey.toJavaPublicKey(), it.encryptionPrivateKey?.toJavaPrivateKey())
         }.toMap()
 
-
-    @Cacheable(AFFILIATE_SIGNING_KEY_PAIR)
-    fun getSigningKeyPairs(): List<KeyPair> = getAll()
-        .map {
-            KeyPair(it.publicKey.value.toJavaPublicKey(), it.privateKey?.toJavaPrivateKey())
-        }
-
     /**
      * Get whitelists data for an affiliate.
      *
@@ -397,10 +384,6 @@ class AffiliateService(
     fun addShare(affiliatePublicKey: PublicKey, publicKey: PublicKey) = AffiliateShareRecord.insert(affiliatePublicKey, publicKey)
 
     fun removeShare(affiliatePublicKey: PublicKey, publicKey: PublicKey) = AffiliateShareRecord.findByAffiliateAndPublicKey(affiliatePublicKey, publicKey)?.delete()
-
-    fun getAffiliateByPublicKeyAndIdentityUuid(affiliatePublicKey: PublicKey, identityUuid: UUID) = AffiliateRecord.findManagedByPublicKey(affiliatePublicKey, identityUuid)
-
-    fun canManageAffiliate(affiliatePublicKey: PublicKey, identityUuid: UUID) = AffiliateRecord.findManagedByPublicKey(affiliatePublicKey, identityUuid)?.let { true } ?: false
 
     /**
      * Eviction of caches on a timer.

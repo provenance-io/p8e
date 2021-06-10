@@ -1,22 +1,32 @@
 package io.provenance.os.client
 
-import com.google.protobuf.Empty
 import com.google.protobuf.Message
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.sign
 import io.p8e.util.toByteString
+import io.p8e.util.toHex
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.domain.*
 import io.provenance.os.domain.inputstream.DIMEInputStream
-import io.provenance.os.proto.*
+import io.provenance.os.proto.BufferedStreamObserver
+import io.provenance.os.proto.InputStreamChunkedIterator
+import io.provenance.os.proto.MailboxServiceGrpc
+import io.provenance.os.proto.Mailboxes
+import io.provenance.os.proto.ObjectServiceGrpc
 import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
+import io.provenance.os.proto.PublicKeyServiceGrpc
+import io.provenance.os.proto.PublicKeys
 import io.provenance.os.util.base64Decode
+import io.provenance.p8e.encryption.model.KeyRef
+import io.provenance.os.util.toHexString
+import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
+import objectstore.Util
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -30,6 +40,7 @@ open class OsClient(uri: URI) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
+    private val mailboxBlockingClient: MailboxServiceGrpc.MailboxServiceBlockingStub
 
     init {
         val channel = ManagedChannelBuilder.forAddress(uri.host, uri.port)
@@ -47,6 +58,33 @@ open class OsClient(uri: URI) {
 
         objectAsyncClient = ObjectServiceGrpc.newStub(channel)
         publicKeyBlockingClient = PublicKeyServiceGrpc.newBlockingStub(channel)
+        mailboxBlockingClient = MailboxServiceGrpc.newBlockingStub(channel)
+    }
+
+    fun ack(uuid: UUID) {
+        val request = Mailboxes.AckRequest.newBuilder()
+            .setUuid(Util.UUID.newBuilder().setValue(uuid.toString()).build())
+            .build()
+
+        mailboxBlockingClient.ack(request)
+    }
+
+    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Collection<Pair<UUID, DIMEInputStream>> {
+        val mail = mutableListOf<Pair<UUID, DIMEInputStream>>()
+
+        val response = mailboxBlockingClient.get(
+            Mailboxes.GetRequest.newBuilder()
+                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                .setMaxResults(maxResults)
+                .build()
+        )
+
+        response.forEachRemaining {
+            val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
+            mail.add(Pair(UUID.fromString(it.uuid.value), dime))
+        }
+
+        return mail
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
@@ -71,8 +109,8 @@ open class OsClient(uri: URI) {
         val bytes = ByteArrayOutputStream()
 
         objectAsyncClient.get(
-            Objects.Sha512Request.newBuilder()
-                .setSha512(sha512.toByteString())
+            Objects.HashRequest.newBuilder()
+                .setHash(sha512.toByteString())
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
                 .build(),
             BufferedStreamObserver(errorHandler = { error = it; finishLatch.countDown() }) { buffer, startTimeMs ->
@@ -121,7 +159,7 @@ open class OsClient(uri: URI) {
         )
 
         if (!finishLatch.await(deadlineSeconds, TimeUnit.SECONDS)) {
-            throw TimeoutException("No response received")
+            throw TimeoutException("Deadline exceeded waiting for object ${sha512.toHexString()} with public key ${publicKey.toHex()}")
         }
         if (error != null) {
             throw error!!
@@ -132,17 +170,17 @@ open class OsClient(uri: URI) {
 
     fun put(
         message: Message,
-        ownerPublicKey: PublicKey,
+        encryptionKeyRef: KeyRef,
         signer: SignerImpl,
-        additionalAudiences: Set<PublicKey> = setOf(),
+        additionalAudiences: Set<KeyRef> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
-    ): ObjectWithItem {
+    ): Objects.ObjectResponse {
         val bytes = message.toByteArray()
 
         return put(
             ByteArrayInputStream(bytes),
-            ownerPublicKey,
+            encryptionKeyRef,
             signer,
             bytes.size.toLong(),
             additionalAudiences,
@@ -153,20 +191,21 @@ open class OsClient(uri: URI) {
 
     fun put(
         inputStream: InputStream,
-        ownerPublicKey: PublicKey,
+        encryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
-        additionalAudiences: Set<PublicKey> = setOf(),
+        additionalAudiences: Set<KeyRef> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
         deadlineSeconds: Long = 60L
-    ): ObjectWithItem {
+    ): Objects.ObjectResponse {
         val signerPublicKey = signer.getPublicKey()
         val signatureInputStream = inputStream.sign(signer)
         val signingPublicKey = CertificateUtil.publicKeyToPem(signerPublicKey)
+
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
-            ownerTransactionCert = ownerPublicKey,
+            ownerEncryptionKeyRef = encryptionKeyRef,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
             processingAudienceKeys = listOf()
         )
@@ -212,28 +251,16 @@ open class OsClient(uri: URI) {
             throw responseObserver.error!!
         }
 
-        return responseObserver.get().toDomain()
+        return responseObserver.get()
     }
 
-    fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
-        publicKeyBlockingClient.create(
+    fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
+        publicKeyBlockingClient.add(
             PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        ).toDomain()
-
-    fun deletePublicKey(publicKey: PublicKey) {
-        publicKeyBlockingClient.delete(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                .setPublicKey(publicKey.toPublicKeyProtoOS())
+                .setUrl("http://localhost") // todo: what is this supposed to be?
                 .build()
         )
-    }
-
-    fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
-        publicKeyBlockingClient.getAll(Empty.getDefaultInstance())
-            .keyList
-            .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

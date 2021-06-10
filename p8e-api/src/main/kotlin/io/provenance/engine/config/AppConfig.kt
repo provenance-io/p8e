@@ -20,7 +20,6 @@ import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.domain.RPCClient
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
@@ -33,16 +32,10 @@ import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
 import io.provenance.os.client.OsClient
-import io.provenance.os.mailbox.client.MailboxClient
-import io.provenance.os.mailbox.client.MailboxClientProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.config.SmartKeyProperties
 import io.provenance.p8e.shared.service.KeystoneService
-import io.provenance.pbc.clients.Denom
-import io.provenance.pbc.clients.SimpleClient
-import io.provenance.pbc.clients.SimpleClientOpts
-import io.provenance.pbc.clients.coins
 import okhttp3.OkHttpClient
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
@@ -53,9 +46,6 @@ import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
 import org.kethereum.bip39.model.MnemonicWords
 import org.kethereum.bip39.toSeed
-import org.redisson.Redisson
-import org.redisson.api.RedissonClient
-import org.redisson.config.Config
 import org.springframework.beans.factory.config.ConfigurableBeanFactory
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
@@ -76,14 +66,12 @@ import java.time.Duration
     ElasticSearchProperties::class,
     EventStreamProperties::class,
     JwtProperties::class,
-    MailboxProperties::class,
     ObjectStoreProperties::class,
     ReaperChaincodeProperties::class,
     ReaperExpirationProperties::class,
     ReaperFragmentProperties::class,
     ReaperInboxProperties::class,
     ReaperOutboxProperties::class,
-    RedisProperties::class,
     ServiceProperties::class,
     ProvenanceKeystoneProperties::class,
     MetricsProperties::class,
@@ -101,21 +89,6 @@ class AppConfig : WebMvcConfigurer {
             pathString = if (chaincodeProperties.mainNet) Account.PROVENANCE_MAINNET_BIP44_PATH else Account.PROVENANCE_TESTNET_BIP44_PATH,
             mainnet = chaincodeProperties.mainNet
         ).childAccount(hardenAddress = false)
-    }
-
-    @Bean
-    fun simpleClient(chaincodeProperties: ChaincodeProperties, accountProvider: Account): SimpleClient {
-        return SimpleClient(
-            chaincodeProperties.apiKey,
-            SimpleClientOpts(
-                chainId = chaincodeProperties.chainId,
-                bech32Address = accountProvider.bech32Address(),
-                uri = chaincodeProperties.url,
-                signer = PbSigner.signerFor(accountProvider.getKeyPair()),
-                txFees = listOf(5000 coins Denom.vspn),
-                gas = "250000"
-            )
-        )
     }
 
     @Bean
@@ -166,30 +139,7 @@ class AppConfig : WebMvcConfigurer {
         OsClient(URI(objectStoreProperties.url))
 
     @Bean
-    fun mailboxClient(objectMapper: ObjectMapper, mailboxProperties: MailboxProperties): MailboxClient =
-        MailboxClient(
-            objectMapper,
-            MailboxClientProperties(mailboxProperties.url, mailboxProperties.key),
-            poolLambda = {
-                it.maxTotal = mailboxProperties.poolSize.toInt()
-                it.defaultMaxPerRoute = mailboxProperties.poolSize.toInt()
-            }
-        )
-
-    @Bean
     fun requestLoggingFilter() = AppRequestLoggingFilter()
-
-    @Bean
-    fun redissonClient(redisProperties: RedisProperties, serviceProperties: ServiceProperties): RedissonClient =
-        Config()
-            .apply {
-                useSingleServer()
-                    .setAddress("redis://${redisProperties.host}:${redisProperties.port}")
-                    .setConnectionPoolSize(redisProperties.connectionPoolSize.toInt())
-                    .setPingConnectionInterval(5000)
-                    .dnsMonitoringInterval = -1
-            }
-            .let(Redisson::create)
 
     @Bean
     fun elasticSearchClient(restClientBuilder: RestClientBuilder): RestHighLevelClient {

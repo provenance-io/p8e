@@ -15,7 +15,7 @@ class ServiceAccountService(private val keystoneService: KeystoneService) {
      *
      * @return the [ServiceAccountRecord] list
      */
-    fun getAll(identityUuid: UUID): List<ServiceAccountRecord> = ServiceAccountRecord.allByIdentityUuid(identityUuid)
+    fun getAll(): List<ServiceAccountRecord> = ServiceAccountRecord.all().toList()
 
     /**
      * Add a service account key
@@ -26,12 +26,7 @@ class ServiceAccountService(private val keystoneService: KeystoneService) {
      *
      * @return the [ServiceAccountRecord] added
      */
-    fun save(keyPair: KeyPair, status: String, alias: String?, jwt: String, identityUuid: UUID) = ServiceAccountRecord.insert(keyPair, status, alias).also {
-        keystoneService.registerKey(jwt, keyPair.public, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.SERVICE)
-        registerKeyWithIdentity(it, identityUuid)
-    }
-
-    fun registerKeyWithIdentity(serviceRecord: ServiceAccountRecord, identityUuid: UUID) = ServiceIdentityRecord.fromServiceRecord(serviceRecord, identityUuid)
+    fun save(keyPair: KeyPair, status: String, alias: String?) = ServiceAccountRecord.insert(keyPair, status, alias)
 
     /**
      * Update an existing service account key

@@ -22,6 +22,7 @@ import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.domain.AffiliateSharePublicKeys
 import io.provenance.p8e.shared.service.AffiliateService
 import java.io.ByteArrayInputStream
@@ -32,7 +33,7 @@ import java.util.concurrent.ExecutorService
 import kotlin.concurrent.thread
 
 interface P8eContractEngine {
-    fun handle(keyPair: KeyPair, envelope: Envelope, signer: SignerImpl): Envelope
+    fun handle(encryptionKeyRef: KeyRef, envelope: Envelope, signer: SignerImpl): Envelope
 }
 
 class ContractEngine(
@@ -45,7 +46,7 @@ class ContractEngine(
     private val log = logger()
 
     override fun handle(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         envelope: Envelope,
         signer: SignerImpl
     ): Envelope {
@@ -55,7 +56,7 @@ class ContractEngine(
         val scope = envelope.scope.takeIf { it != Scope.getDefaultInstance() }
 
         val spec = timed("ContractEngine_fetchSpec") {
-            _definitionService.loadProto(keyPair, contract.spec.dataLocation, signer) as? ContractSpec
+            _definitionService.loadProto(encryptionKeyRef, contract.spec.dataLocation, signer) as? ContractSpec
                 ?: throw ContractDefinitionException("Spec stored at contract.spec.dataLocation is not of type ${ContractSpec::class.java.name}")
         }
 
@@ -68,10 +69,10 @@ class ContractEngine(
             internalRun(
                 contract,
                 envelope,
-                keyPair,
+                encryptionKeyRef,
                 memoryClassLoader,
                 signer,
-                affiliateService.getSharePublicKeys(listOf(keyPair.public)),
+                affiliateService.getSharePublicKeys(listOf(encryptionKeyRef.publicKey)),
                 scope,
                 spec
             )
@@ -81,7 +82,7 @@ class ContractEngine(
     private fun internalRun(
         contract: Contract,
         envelope: Envelope,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         memoryClassLoader: MemoryClassLoader,
         signer: SignerImpl,
         shares: AffiliateSharePublicKeys,
@@ -93,14 +94,14 @@ class ContractEngine(
         // Load contract spec class
         val contractSpecClass = timed("ContractEngine_loadSpecClass") {
             try {
-                definitionService.loadClass(keyPair, spec.definition, signer)
+                definitionService.loadClass(encryptionKeyRef, spec.definition, signer)
             } catch (e: StatusRuntimeException) {
                 if (e.status.code == Status.Code.NOT_FOUND) {
                     throw ContractDefinitionException(
                         """
                             Unable to load contract jar. Verify that you're using a jar that has been bootstrapped.
                             [classname: ${spec.definition.resourceLocation.classname}]
-                            [public key: ${keyPair.public.toHex()}]
+                            [public key: ${encryptionKeyRef.publicKey.toHex()}]
                             [hash: ${spec.definition.resourceLocation.ref.hash}]
                         """.trimIndent()
                     )
@@ -112,7 +113,7 @@ class ContractEngine(
         // Ensure all the classes listed in the spec are loaded into the MemoryClassLoader
         timed("ContractEngine_loadAllClasses") {
             loadAllClasses(
-                keyPair,
+                encryptionKeyRef,
                 definitionService,
                 spec,
                 signer
@@ -126,18 +127,19 @@ class ContractEngine(
             Contracts.ContractType.CHANGE_SCOPE -> {
                 if (scope != null &&
                     envelope.status == Envelope.Status.CREATED &&
-                    contract.invoker.encryptionPublicKey == keyPair.public.toPublicKeyProto()
+                    contract.invoker.encryptionPublicKey == encryptionKeyRef.publicKey.toPublicKeyProto()
                 ) {
                     val audience = scope.partiesList.map { it.signer.signingPublicKey }
                         .plus(contract.recitalsList.map { it.signer.signingPublicKey })
                         .map { it.toPublicKey() }
                         .let { it + affiliateService.getSharePublicKeys(it).value }
+                        .map { affiliateService.getEncryptionKeyRef(it) }
                         .toSet()
+                    
+                    log.debug("Change scope ownership - adding ${audience.map { it.publicKey.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
-                    log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
-
-                    this.getScopeData(keyPair, definitionService, scope, signer)
-                        .threadedMap(executor) { definitionService.save(keyPair, it, signer, audience) }
+                    this.getScopeData(encryptionKeyRef, definitionService, scope, signer)
+                        .threadedMap(executor) { definitionService.save(encryptionKeyRef, it, signer, audience) }
                 } else { }
             }
             Contracts.ContractType.FACT_BASED, Contracts.ContractType.UNRECOGNIZED -> Unit
@@ -147,7 +149,7 @@ class ContractEngine(
         val contractWrapper = ContractWrapper(
             executor,
             contractSpecClass,
-            keyPair,
+            encryptionKeyRef,
             definitionService,
             contractBuilder,
             signer
@@ -180,14 +182,18 @@ class ContractEngine(
                 )
             }
 
+            val contractAudienceRef = contract.toAudience(scope, shares).map {
+                affiliateService.getEncryptionKeyRef(it)
+            }.toSet()
+
             ResultSetter {
                 conditionBuilder.result = signAndStore(
                     definitionService,
                     prerequisite.fact.name,
                     result,
-                    contract.toAudience(scope, shares),
+                    contractAudienceRef,
                     signer,
-                    keyPair,
+                    encryptionKeyRef,
                     scope
                 )
             }
@@ -221,14 +227,19 @@ class ContractEngine(
                             """.trimIndent()
                         )
                     }
+
+                    val contractAudienceRef = contract.toAudience(scope, shares).map {
+                        affiliateService.getEncryptionKeyRef(it)
+                    }.toSet()
+
                     ResultSetter {
                         considerationBuilder.result = signAndStore(
                             definitionService,
                             function.fact.name,
                             result,
-                            contract.toAudience(scope, shares),
+                            contractAudienceRef,
                             signer,
-                            keyPair,
+                            encryptionKeyRef,
                             scope
                         )
                     }
@@ -237,7 +248,6 @@ class ContractEngine(
                         function.considerationBuilder.result = ExecutionResult.newBuilder().setResult(SKIP).build()
                     }
                 }
-
 
         timed("ContractEngine_saveResults") {
             prerequisiteResults.toMutableList()
@@ -254,7 +264,7 @@ class ContractEngine(
     }
 
     private fun getScopeData(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
         scope: Scope,
         signer: SignerImpl
@@ -264,11 +274,11 @@ class ContractEngine(
             .flatten()
             .plus(scope.recordGroupList.map { Pair(it.classname, it.specification) })
             .toSet()
-            .threadedMap(executor) { (classname, hash) -> definitionService.get(keyPair, hash = hash, classname = classname, signer).readAllBytes() }
+            .threadedMap(executor) { (classname, hash) -> definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = hash, classname = classname, signer = signer).readAllBytes() }
             .toList()
 
     private fun loadAllClasses(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
         spec: ContractSpec,
         signer: SignerImpl
@@ -283,7 +293,7 @@ class ContractEngine(
                 )
             }.threadedMap(executor) { definition ->
                 with (definition.resourceLocation) {
-                    this to definitionService.get(keyPair, hash = this.ref.hash, classname = this.classname, signer)
+                    this to definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = this.ref.hash, classname = this.classname, signer)
                 }
             }.toList()
             .forEach { (location, inputStream) ->  definitionService.addJar(location.ref.hash, inputStream) }
@@ -293,13 +303,13 @@ class ContractEngine(
         definitionService: DefinitionService,
         name: String,
         message: Message,
-        audiences: Set<PublicKey>,
+        audiences: Set<KeyRef>,
         signer: SignerImpl,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         scope: Scope?
     ): ExecutionResult {
         val sha512 = definitionService.save(
-            keyPair,
+            encryptionKeyRef,
             message,
             signer,
             audiences
@@ -344,7 +354,6 @@ data class ResultSetter(val setter: () -> Unit)
 
 fun Contract.toAudience(scope: Scope?, shares: AffiliateSharePublicKeys): Set<PublicKey> = recitalsList
     .filter { it.hasSigner() }
-    //.map { it.signer.encryptionPublicKeyPem }
     .map { it.signer.encryptionPublicKey }
     .plus(
         scope?.partiesList

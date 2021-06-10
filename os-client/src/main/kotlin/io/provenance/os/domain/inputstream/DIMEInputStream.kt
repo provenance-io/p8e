@@ -16,6 +16,7 @@ import io.provenance.p8e.encryption.util.HashingCipherInputStream
 import io.provenance.os.domain.Signature
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.util.orThrow
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.DIME
 import java.io.BufferedInputStream
 import java.io.EOFException
@@ -182,11 +183,11 @@ class DIMEInputStream(
      * @param keyPair - The encryption key pair to decrypt the stream
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(keyPair: KeyPair, signer: SignerImpl): SignatureInputStream {
+    fun getDecryptedPayload(encryptionKeyRef: KeyRef, signer: SignerImpl): SignatureInputStream {
         // seek past the header
         pos += header.size
 
-        return ProvenanceDIME.getDEK(dime.audienceList, keyPair)
+        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
             .let { ProvenanceDIME.decryptPayload(this, it) }
             .verify(signer, getFirstSignaturePublicKey(), getFirstSignature())
     }
@@ -199,7 +200,7 @@ class DIMEInputStream(
      * @param signaturePublicKey - The signature public key to use for signature verification
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(keyPair: KeyPair, signaturePublicKey: PublicKey, signer: SignerImpl): SignatureInputStream {
+    fun getDecryptedPayload(encryptionKeyRef: KeyRef, signaturePublicKey: PublicKey, signer: SignerImpl): SignatureInputStream {
         // seek past the header
         pos += header.size
 
@@ -207,7 +208,7 @@ class DIMEInputStream(
             .orThrow { IllegalStateException("Unable to find signature in object for public key ${signaturePublicKey.toHex()}")}
             .signature
 
-        return ProvenanceDIME.getDEK(dime.audienceList, keyPair)
+        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
             .let { ProvenanceDIME.decryptPayload(this, it) }
             .verify(signer, signaturePublicKey, signatureToUse)
     }

@@ -11,19 +11,13 @@ import io.p8e.proto.ProtoUtil
 import io.p8e.util.base64Decode
 import io.p8e.util.base64Encode
 import io.p8e.util.orThrow
-import io.p8e.util.toHex
 import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKeyProto
-import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.pqc.jcajce.provider.BouncyCastlePQCProvider
 import java.lang.IllegalStateException
-import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.Security
 import java.security.Signature
-import java.security.interfaces.ECPublicKey
-import java.security.spec.X509EncodedKeySpec
 
 /**
  * About SmartKey
@@ -127,7 +121,7 @@ class SmartKeySigner(
     override fun verify(signatureBytes: ByteArray): Boolean {
         signature?.update(aggregatedData)
 
-        // Rest the Object size indexer.
+        // Reset the object size indexer.
         objSizeIndexer = OBJECT_SIZE_BYTES
 
         return signature?.verify(signatureBytes)!!

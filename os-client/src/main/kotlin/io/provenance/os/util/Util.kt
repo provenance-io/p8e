@@ -1,7 +1,11 @@
 package io.provenance.os.util
 
 import com.google.common.hash.Hashing
+import io.p8e.util.toByteString
+import io.provenance.p8e.encryption.ecies.ECUtils
+import objectstore.Util
 import java.io.InputStream
+import java.security.PublicKey
 import java.util.Base64
 
 const val CHUNK_SIZE = 2 * 1024 * 1024
@@ -40,6 +44,11 @@ fun InputStream.readAllBytes(contentLength: Int) = use { inputStream ->
         } while (read > 0)
     }
 }
+
+fun PublicKey.toPublicKeyProtoOS(): Util.PublicKey =
+    Util.PublicKey.newBuilder()
+        .setSecp256K1(ECUtils.convertPublicKeyToBytes(this).toByteString())
+        .build()
 
 object Util {
     fun getFullPath(bucket: String, name: String) = "$bucket/$name"

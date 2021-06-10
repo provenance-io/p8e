@@ -4,7 +4,7 @@ import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.model.*
 import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toUuidProv
-import io.provenance.p8e.shared.domain.ExternalKeyRef
+import io.provenance.p8e.encryption.model.ExternalKeyRef
 import io.provenance.p8e.shared.extension.logger
 import org.springframework.stereotype.Service
 import java.security.KeyPair

@@ -16,6 +16,7 @@ import io.provenance.os.client.OsClient
 import io.p8e.proto.IndexProto.Index
 import io.p8e.proto.IndexProto.Index.Behavior
 import io.p8e.proto.IndexProto.Index.Behavior.*
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -46,9 +47,10 @@ class ProtoIndexer(
 
                         // Need a reference of the signer that is used to verify signatures.
                         val signer = transaction { affiliateService.getSigner(keyPair.public) }
+                        val encryptionKeyRef = transaction { affiliateService.getEncryptionKeyRef(keyPair.public) }
 
                         // Try to re-use MemoryClassLoader if possible for caching reasons
-                        val spec = _definitionService.loadProto(keyPair, group.specification, ContractSpec::class.java.name, signer) as ContractSpec
+                        val spec = _definitionService.loadProto(encryptionKeyRef, group.specification, ContractSpec::class.java.name, signer) as ContractSpec
 
                         val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}-${spec.considerationSpecsList.first().outputSpec.spec.resourceLocation.ref.hash}"
                         val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -56,11 +58,11 @@ class ProtoIndexer(
                         }
 
                         val definitionService = DefinitionService(osClient, memoryClassLoader)
-                        loadAllJars(keyPair, definitionService, spec, signer)
+                        loadAllJars(encryptionKeyRef, definitionService, spec, signer)
 
                         fact.resultName to indexFields(
                             definitionService,
-                            keyPair,
+                            encryptionKeyRef,
                             fact,
                             signer
                         )
@@ -72,7 +74,7 @@ class ProtoIndexer(
     @Suppress("UNCHECKED_CAST")
     fun <T: Message> indexFields(
         definitionService: DefinitionService,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         t: T,
         signer: SignerImpl,
         indexParent: Boolean? = null
@@ -84,7 +86,7 @@ class ProtoIndexer(
                 } else {
                     definitionService.forThread {
                         definitionService.loadProto(
-                            keyPair,
+                            encryptionKeyRef,
                             t.resultHash,
                             t.classname,
                             signer
@@ -111,7 +113,7 @@ class ProtoIndexer(
                         for (i in 0 until list.size) {
                                 getValue(
                                     definitionService,
-                                    keyPair,
+                                    encryptionKeyRef,
                                     fieldDescriptor,
                                     doIndex,
                                     list[i],
@@ -124,7 +126,7 @@ class ProtoIndexer(
                         fieldDescriptor.jsonName to (message.getField(fieldDescriptor) as Map<String, *>).mapValues { value ->
                             getValue(
                                 definitionService,
-                                keyPair,
+                                encryptionKeyRef,
                                 fieldDescriptor,
                                 doIndex,
                                 message.getField(fieldDescriptor),
@@ -133,7 +135,7 @@ class ProtoIndexer(
                         }.takeIf { it.entries.any { it.value != null } }
                     else -> fieldDescriptor.jsonName to getValue(
                         definitionService,
-                        keyPair,
+                        encryptionKeyRef,
                         fieldDescriptor,
                         doIndex,
                         message.getField(fieldDescriptor),
@@ -148,7 +150,7 @@ class ProtoIndexer(
 
     private fun getValue(
         definitionService: DefinitionService,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         fieldDescriptor: FieldDescriptor,
         doIndex: Boolean,
         value: Any,
@@ -167,7 +169,7 @@ class ProtoIndexer(
             MESSAGE -> {
                 indexFields(
                     definitionService,
-                    keyPair,
+                    encryptionKeyRef,
                     value as Message,
                     signer,
                     doIndex
@@ -212,7 +214,7 @@ class ProtoIndexer(
     }
 
     private fun loadAllJars(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
         spec: ContractSpec,
         signer: SignerImpl
@@ -230,7 +232,7 @@ class ProtoIndexer(
                 )
             }.forEach {
                 definitionService.addJar(
-                    keyPair,
+                    encryptionKeyRef,
                     it,
                     signer
                 )
