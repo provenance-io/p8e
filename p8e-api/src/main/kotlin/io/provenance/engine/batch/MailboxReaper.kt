@@ -224,7 +224,6 @@ class MailboxReaper(
 
         log.debug("Polling mailbox reaper inbound")
 
-        // TODO catch status runtime exceptions and don't rethrow
         transaction { affiliateService.getEncryptionKeyPairs() }
             .flatMap { entry ->
                 try {
