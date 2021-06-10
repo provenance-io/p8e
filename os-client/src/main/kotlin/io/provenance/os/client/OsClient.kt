@@ -26,7 +26,10 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-open class OsClient(uri: URI) {
+open class OsClient(
+    uri: URI,
+    private val deadlineMs: Long
+) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
@@ -215,24 +218,27 @@ open class OsClient(uri: URI) {
     }
 
     fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
-        publicKeyBlockingClient.create(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        ).toDomain()
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .create(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            ).toDomain()
 
     fun deletePublicKey(publicKey: PublicKey) {
-        publicKeyBlockingClient.delete(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                .build()
-        )
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .delete(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .build()
+            )
     }
 
     fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
-        publicKeyBlockingClient.getAll(Empty.getDefaultInstance())
-            .keyList
-            .map { it.toDomain() }
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .getAll(Empty.getDefaultInstance())
+                .keyList
+                .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

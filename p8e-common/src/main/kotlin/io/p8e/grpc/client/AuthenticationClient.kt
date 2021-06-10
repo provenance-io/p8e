@@ -4,9 +4,11 @@ import io.grpc.ManagedChannel
 import io.p8e.proto.Authentication
 import io.p8e.proto.Authentication.Jwt
 import io.p8e.proto.AuthenticationServiceGrpc
+import java.util.concurrent.TimeUnit
 
 class AuthenticationClient(
-    channel: ManagedChannel
+    channel: ManagedChannel,
+    private val deadlineMs: Long
 ) {
     private val blockingStub = AuthenticationServiceGrpc
         .newBlockingStub(channel)
@@ -14,6 +16,7 @@ class AuthenticationClient(
     fun authenticate(
         request: Authentication.AuthenticationRequest
     ): Jwt {
-        return blockingStub.authenticate(request)
+        return blockingStub.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .authenticate(request)
     }
 }
