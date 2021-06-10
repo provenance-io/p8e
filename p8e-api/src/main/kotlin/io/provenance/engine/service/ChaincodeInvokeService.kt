@@ -101,7 +101,7 @@ class ChaincodeInvokeService(
                         currentBlockHeight = it.block.header.height
 
                         if (!blockScopeIds.isEmpty()) {
-                            log.info("Clearing blockScopeIds")
+                            log.debug("Clearing blockScopeIds")
                             blockScopeIds.clear()
                         }
                     }
