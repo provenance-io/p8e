@@ -22,6 +22,7 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.shared.util.P8eMDC
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.security.PublicKey
 import java.time.Duration
@@ -86,12 +87,15 @@ class EnvelopeService(
                         )
                 }.build()
 
-        val result = timed("EnvelopeService_contractEngine_handle") {
-            ContractEngine(osClient, affiliateService).handle(
-                encryptionKeyRef,
-                envelope = envelope,
-                signer = signer
-            )
+        val result =
+            timed("EnvelopeService_contractEngine_handle") {
+                transaction {
+                    ContractEngine(osClient, affiliateService).handle(
+                        encryptionKeyRef,
+                        envelope = envelope,
+                        signer = signer
+                    )
+                }
         }
 
         return envelope.wrap(result)
@@ -202,11 +206,13 @@ class EnvelopeService(
         val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         timed("EnvelopeService_contractEngine_handle") {
-            ContractEngine(osClient, affiliateService).handle(
-                encryptionKeyRef,
-                envelope = record.data.input,
-                signer = signer
-            )
+            transaction {
+                ContractEngine(osClient, affiliateService).handle(
+                    encryptionKeyRef,
+                    envelope = record.data.input,
+                    signer = signer
+                )
+            }
         }.also { result ->
             envelopeStateEngine.onHandleExecute(record, result)
 

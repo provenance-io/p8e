@@ -133,9 +133,10 @@ class ContractEngine(
                         .plus(contract.recitalsList.map { it.signer.signingPublicKey })
                         .map { it.toPublicKey() }
                         .let { it + affiliateService.getSharePublicKeys(it).value }
+                        .map { affiliateService.getEncryptionKeyRef(it) }
                         .toSet()
-
-                    log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
+                    
+                    log.debug("Change scope ownership - adding ${audience.map { it.publicKey.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
                     this.getScopeData(encryptionKeyRef, definitionService, scope, signer)
                         .threadedMap(executor) { definitionService.save(encryptionKeyRef, it, signer, audience) }
@@ -181,12 +182,16 @@ class ContractEngine(
                 )
             }
 
+            val contractAudienceRef = contract.toAudience(scope, shares).map {
+                affiliateService.getEncryptionKeyRef(it)
+            }.toSet()
+
             ResultSetter {
                 conditionBuilder.result = signAndStore(
                     definitionService,
                     prerequisite.fact.name,
                     result,
-                    contract.toAudience(scope, shares),
+                    contractAudienceRef,
                     signer,
                     encryptionKeyRef,
                     scope
@@ -222,12 +227,17 @@ class ContractEngine(
                             """.trimIndent()
                         )
                     }
+
+                    val contractAudienceRef = contract.toAudience(scope, shares).map {
+                        affiliateService.getEncryptionKeyRef(it)
+                    }.toSet()
+
                     ResultSetter {
                         considerationBuilder.result = signAndStore(
                             definitionService,
                             function.fact.name,
                             result,
-                            contract.toAudience(scope, shares),
+                            contractAudienceRef,
                             signer,
                             encryptionKeyRef,
                             scope
@@ -238,7 +248,6 @@ class ContractEngine(
                         function.considerationBuilder.result = ExecutionResult.newBuilder().setResult(SKIP).build()
                     }
                 }
-
 
         timed("ContractEngine_saveResults") {
             prerequisiteResults.toMutableList()
@@ -294,7 +303,7 @@ class ContractEngine(
         definitionService: DefinitionService,
         name: String,
         message: Message,
-        audiences: Set<PublicKey>,
+        audiences: Set<KeyRef>,
         signer: SignerImpl,
         encryptionKeyRef: KeyRef,
         scope: Scope?
@@ -345,7 +354,6 @@ data class ResultSetter(val setter: () -> Unit)
 
 fun Contract.toAudience(scope: Scope?, shares: AffiliateSharePublicKeys): Set<PublicKey> = recitalsList
     .filter { it.hasSigner() }
-    //.map { it.signer.encryptionPublicKeyPem }
     .map { it.signer.encryptionPublicKey }
     .plus(
         scope?.partiesList

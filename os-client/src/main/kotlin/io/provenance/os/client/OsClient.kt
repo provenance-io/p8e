@@ -172,7 +172,7 @@ open class OsClient(uri: URI) {
         message: Message,
         encryptionKeyRef: KeyRef,
         signer: SignerImpl,
-        additionalAudiences: Set<PublicKey> = setOf(),
+        additionalAudiences: Set<KeyRef> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
     ): Objects.ObjectResponse {
@@ -194,7 +194,7 @@ open class OsClient(uri: URI) {
         encryptionKeyRef: KeyRef,
         signer: SignerImpl,
         contentLength: Long,
-        additionalAudiences: Set<PublicKey> = setOf(),
+        additionalAudiences: Set<KeyRef> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
         deadlineSeconds: Long = 60L

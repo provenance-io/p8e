@@ -7,6 +7,7 @@ import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.provenance.engine.batch.MailboxMeta
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.service.AffiliateService
 import org.springframework.stereotype.Service
 import java.security.PublicKey
@@ -44,12 +45,14 @@ class MailboxService(
         val scopeOwners = env.scope.partiesList
             .filter { it.hasSigner() }
             .map { it.signer.encryptionPublicKey.toPublicKey() }
+            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
 
         val additionalAudiences = env.contract.recitalsList
             .filter { it.hasSigner() }
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
             .map { it.signer.encryptionPublicKey.toPublicKey() }
+            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
             .plus(scopeOwners)
 
@@ -77,6 +80,7 @@ class MailboxService(
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
             .map { it.signer.encryptionPublicKey.toPublicKey() }
             .filterNot { audiencePublicKeyFilter.contains(it) }
+            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
             .run { error(publicKey, this, error) }
     }
@@ -88,7 +92,7 @@ class MailboxService(
      * @param [audiencesPublicKey] Public key(s) to send mail to
      * @param [error] The envelope error to return
      */
-    fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
+    fun error(publicKey: PublicKey, audiencesPublicKey: Collection<KeyRef>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
         val signer = affiliateService.getSigner(publicKey)
@@ -113,7 +117,8 @@ class MailboxService(
     fun result(publicKey: PublicKey, env: Envelope) {
         log.info("Returning fragment result env:{}", env.getUuid())
 
-        val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
+        val additionalAudiencePublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
+        val additionalAudiences = setOf(affiliateService.getEncryptionKeyRef(additionalAudiencePublicKey))
         val signer = affiliateService.getSigner(publicKey)
         val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 

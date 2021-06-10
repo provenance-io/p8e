@@ -185,7 +185,7 @@ class MailboxReaper(
                         )
                         // TODO - do we need to handle only-once processing for mailing errors?
                         .also {
-                            mailboxService.error(item.publicKey, listOf(ownerAudience.publicKey.toPublicKey()), it)
+                            mailboxService.error(item.publicKey, listOf(affiliateService.getEncryptionKeyRef(ownerAudience.publicKey.toPublicKey())), it)
                         }
             }
         }
@@ -242,10 +242,10 @@ class MailboxReaper(
             }.mapNotNull { (keyPair, result) ->
                 val (uuid, dimeInputStream) = result
 
-                val signer = affiliateService.getSigner(keyPair.public)
-                val encrptyionKeyRef = affiliateService.getEncryptionKeyRef(keyPair.public)
+                val signer = transaction{ affiliateService.getSigner(keyPair.public) }
+                val encryptionKeyRef = transaction{ affiliateService.getEncryptionKeyRef(keyPair.public) }
 
-                dimeInputStream.getDecryptedPayload(encrptyionKeyRef, signer).use {
+                dimeInputStream.getDecryptedPayload(encryptionKeyRef, signer).use {
                     // TODO EXISTING - double check readAllBytes is safe for our use case
                     val bytes = it.readAllBytes()
 

@@ -65,9 +65,8 @@ class ProvenanceECIESCipher {
         try {
             val ephemeralKeyPair = ProvenanceKeyGenerator.generateKeyPair(publicKey)
 
-            val agreeKey = kid.toAgreeKey()
             val ephemeralDerivedSecretKey =
-                agreeKey.kcv.let { ProvenanceHKDFSHA256.derive(it.encodeToByteArray(), null, ECUtils.KDF_SIZE) }
+                kid.toAgreeKey().kcv.let { ProvenanceHKDFSHA256.derive(it.toByteArray(), null, ECUtils.KDF_SIZE) }
 
             // Encrypt the data
             val encKeyBytes = Arrays.copyOf(ephemeralDerivedSecretKey, 32)
@@ -79,7 +78,7 @@ class ProvenanceECIESCipher {
 
             val tag = ProvenanceAESCrypt.encrypt(macKeyBytes, additionalAuthenticatedData, encKey, true)
 
-            return ProvenanceECIESCryptogram(ephemeralKeyPair.public, tag = tag!!, encryptedData = body!!)
+            return ProvenanceECIESCryptogram(ephemeralPublicKey = ephemeralKeyPair.public, tag = tag!!, encryptedData = body!!)
         } catch (e: InvalidKeyException) {
             logger.error("Invalid key exception", e)
             throw ProvenanceECIESEncryptException("Decryption error occurred", e)
@@ -136,8 +135,7 @@ class ProvenanceECIESCipher {
     fun decrypt(payload: ProvenanceECIESCryptogram, kid: String, additionalAuthenticatedData: String?): ByteArray {
         try {
             //Key Checksum Value (KCV) is the checksum of a cryptographic key.[1] It is used to validate the key integrity or compare keys without knowing their actual values
-            val ephemeralDerivedSecretKey =
-                ProvenanceHKDFSHA256.derive(kid.toAgreeKey().kcv.encodeToByteArray(), null, ECUtils.KDF_SIZE)
+            val ephemeralDerivedSecretKey = ProvenanceHKDFSHA256.derive(kid.toAgreeKey().kcv.toByteArray(), null, ECUtils.KDF_SIZE)
 
             val encKeyBytes = Arrays.copyOf(ephemeralDerivedSecretKey, 32)
             val encKey = ProvenanceAESCrypt.secretKeySpecGenerate(encKeyBytes)

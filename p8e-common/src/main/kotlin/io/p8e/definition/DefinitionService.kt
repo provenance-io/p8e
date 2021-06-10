@@ -182,8 +182,6 @@ class DefinitionService(
         signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): InputStream {
-
-        //byteCache caches via signing public key
         return byteCache.computeIfAbsent(ByteCacheKey(encryptionKeyRef.publicKey, hash)) {
             val item = try {
                 osClient.get(hash.base64Decode(), encryptionKeyRef.publicKey)
@@ -261,9 +259,9 @@ class DefinitionService(
         encryptionKeyRef: KeyRef,
         msg: ByteArray,
         signer: SignerImpl,
-        audience: Set<PublicKey> = setOf()
+        audience: Set<KeyRef> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())
+        val putCacheKey = PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.sha512()
         }
@@ -274,7 +272,7 @@ class DefinitionService(
             msg.size.toLong(),
             audience
         ).also {
-            putCache[PutCacheKey(audience.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())] = true
+            putCache[PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())] = true
         }.hash.toByteArray()
     }
 
@@ -282,9 +280,9 @@ class DefinitionService(
         encryptionKeyRef: KeyRef,
         msg: T,
         signer: SignerImpl,
-        audience: Set<PublicKey> = setOf()
+        audience: Set<KeyRef> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionKeyRef.publicKey), msg.toByteArray().base64Sha512())
+        val putCacheKey = PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.toByteArray().base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.toByteArray().sha512()
         }
