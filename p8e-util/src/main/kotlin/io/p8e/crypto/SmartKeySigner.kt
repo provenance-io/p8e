@@ -1,5 +1,6 @@
 package io.p8e.crypto
 
+import com.fortanix.sdkms.v1.api.AuthenticationApi
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
@@ -44,10 +45,14 @@ import java.security.Signature
 class SmartKeySigner(
     private val signAndVerifyApi: SignAndVerifyApi,
     private val securityObjectsApi: SecurityObjectsApi,
+    private val authenticationApi: AuthenticationApi
 ): SignerImpl {
 
     init {
         Security.addProvider(BouncyCastleProvider())
+
+        // Kick background thread to refresh SmartKey's auth api.
+        SmartKeyAuthRefresh(authenticationApi).refreshSmartKeyAuthToken()
     }
 
     companion object {

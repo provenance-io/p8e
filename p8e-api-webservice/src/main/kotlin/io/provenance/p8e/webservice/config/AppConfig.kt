@@ -104,7 +104,7 @@ class AppConfig : WebMvcConfigurer {
         com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(this)
 
         // authenticate with api
-        val authResponse = AuthenticationApi().authorize()
+        val authResponse = authenticationApi(this).authorize()
         val auth = this.getAuthentication("bearerToken") as ApiKeyAuth
         auth.apiKey = authResponse.accessToken
         auth.apiKeyPrefix = "Bearer"
@@ -114,13 +114,15 @@ class AppConfig : WebMvcConfigurer {
     fun signAndVerifyApi(smartKeyApiClient: ApiClient): SignAndVerifyApi = SignAndVerifyApi(smartKeyApiClient)
 
     @Bean
+    fun authenticationApi(smartKeyApiClient: ApiClient): AuthenticationApi = AuthenticationApi(smartKeyApiClient)
+
+    @Bean
     fun securityObjectsApi(smartKeyApiClient: ApiClient): SecurityObjectsApi = SecurityObjectsApi(smartKeyApiClient)
 
     @Bean
-    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi): SmartKeySigner = SmartKeySigner(signAndVerifyApi, securityObjectsApi)
+    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi, authenticationApi: AuthenticationApi): SmartKeySigner
+            = SmartKeySigner(signAndVerifyApi, securityObjectsApi, authenticationApi)
 
     @Bean
-    fun signer(smartKeySigner: SmartKeySigner): SignerFactory {
-        return SignerFactory(smartKeySigner)
-    }
+    fun signer(smartKeySigner: SmartKeySigner): SignerFactory = SignerFactory(smartKeySigner)
 }
