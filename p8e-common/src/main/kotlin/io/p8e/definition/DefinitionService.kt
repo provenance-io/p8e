@@ -261,7 +261,7 @@ class DefinitionService(
             audience
         ).also {
             putCache[PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.base64Sha512())] = true
-        }.obj.unencryptedSha512
+        }.hash.toByteArray()
     }
 
     fun <T : Message> save(
@@ -281,7 +281,7 @@ class DefinitionService(
             additionalAudiences = audience
         ).also {
             putCache[putCacheKey] = true
-        }.obj.unencryptedSha512
+        }.hash.toByteArray()
     }
 
     fun <T> forThread(fn: () -> T): T {
