@@ -99,29 +99,35 @@ class AppConfig : WebMvcConfigurer {
      */
     @Bean
     @Scope(value = ConfigurableBeanFactory.SCOPE_SINGLETON)
-    fun smartKeyApiClient(smartKeyProperties: SmartKeyProperties): ApiClient = ApiClient().apply {
-        setBasicAuthString(smartKeyProperties.apiKey)
-        com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(this)
+    fun smartKeyApiClient(smartKeyProperties: SmartKeyProperties): ApiClient? {
+        return if(smartKeyProperties.apiKey != null && smartKeyProperties.apiKey != "") {
+            ApiClient().apply {
+                setBasicAuthString(smartKeyProperties.apiKey)
+                com.fortanix.sdkms.v1.Configuration.setDefaultApiClient(this)
 
-        // authenticate with api
-        val authResponse = authenticationApi(this).authorize()
-        val auth = this.getAuthentication("bearerToken") as ApiKeyAuth
-        auth.apiKey = authResponse.accessToken
-        auth.apiKeyPrefix = "Bearer"
+                // authenticate with api
+                val authResponse = authenticationApi(this).authorize()
+                val auth = this.getAuthentication("bearerToken") as ApiKeyAuth
+                auth.apiKey = authResponse.accessToken
+                auth.apiKeyPrefix = "Bearer"
+            }
+        } else {
+            null // SmartKey is not initialized.
+        }
     }
-
-    @Bean
-    fun signAndVerifyApi(smartKeyApiClient: ApiClient): SignAndVerifyApi = SignAndVerifyApi(smartKeyApiClient)
 
     @Bean
     fun authenticationApi(smartKeyApiClient: ApiClient): AuthenticationApi = AuthenticationApi(smartKeyApiClient)
 
     @Bean
+    fun signAndVerifyApi(smartKeyApiClient: ApiClient): SignAndVerifyApi = SignAndVerifyApi(smartKeyApiClient)
+
+    @Bean
     fun securityObjectsApi(smartKeyApiClient: ApiClient): SecurityObjectsApi = SecurityObjectsApi(smartKeyApiClient)
 
     @Bean
-    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi, authenticationApi: AuthenticationApi): SmartKeySigner
-            = SmartKeySigner(signAndVerifyApi, securityObjectsApi, authenticationApi)
+    fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi): SmartKeySigner
+            = SmartKeySigner(signAndVerifyApi, securityObjectsApi)
 
     @Bean
     fun signer(smartKeySigner: SmartKeySigner): SignerFactory = SignerFactory(smartKeySigner)
