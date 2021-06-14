@@ -29,6 +29,12 @@ class ObjectStoreProperties {
     var key: String? = null
 }
 
+@ConfigurationProperties(prefix = "objectstore.locator")
+@Validated
+class ObjectStoreLocatorProperties {
+    @NotNull lateinit var url: String
+}
+
 @ConfigurationProperties(prefix = "mailbox")
 @Validated
 class MailboxProperties {

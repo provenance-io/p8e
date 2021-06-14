@@ -6,7 +6,6 @@ import io.p8e.util.configureProvenance
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.config.ChaincodeProperties
 import io.provenance.p8e.shared.config.JwtProperties
-import io.provenance.p8e.shared.config.ObjectStoreLocatorProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.crypto.Account
 import io.provenance.p8e.shared.service.KeystoneService
@@ -39,7 +38,6 @@ import java.net.URI
     ServiceProperties::class,
     JwtProperties::class,
     ProvenanceKeystoneProperties::class,
-    ObjectStoreLocatorProperties::class,
 ])
 class AppConfig : WebMvcConfigurer {
     @Bean

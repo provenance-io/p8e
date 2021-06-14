@@ -172,7 +172,7 @@ class ChaincodeInvokeService(
                 }.toTxBody()
 
                 // Send the transactions to the blockchain.
-                val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
+                val resp = batchTx(txBody)
 
                 if (resp.txResponse.code != 0) {
                     // adding extra raw logging during exceptional cases so that we can see what typical responses look like while this interface is new
@@ -383,14 +383,12 @@ class ChaincodeInvokeService(
             }
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
-            synchronized(provenanceGrpc) {
-                batchTx(txBody).also {
-                    if (it.txResponse.code != 0) {
-                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
-                    }
-
-                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
+            batchTx(txBody).also {
+                if (it.txResponse.code != 0) {
+                    throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                 }
+
+                log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
@@ -398,14 +396,13 @@ class ChaincodeInvokeService(
         }
     }
 
-    fun batchTx(body: TxBody): BroadcastTxResponse {
+    fun batchTx(body: TxBody): BroadcastTxResponse = synchronized(provenanceGrpc) {
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
-
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
 
-        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
+        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
     /**

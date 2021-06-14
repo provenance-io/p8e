@@ -33,9 +33,3 @@ class JwtProperties {
 class ProvenanceKeystoneProperties {
     @NotNull lateinit var url: String
 }
-
-@ConfigurationProperties(prefix = "objectstore.locator")
-@Validated
-class ObjectStoreLocatorProperties {
-    var url: String? = null
-}
