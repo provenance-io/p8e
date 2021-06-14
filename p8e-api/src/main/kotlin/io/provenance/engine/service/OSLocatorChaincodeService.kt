@@ -115,7 +115,7 @@ class OSLocatorChaincodeService(
             val response = try {
                 provenanceGrpcService.getTx(txHash)
             } catch (t: Throwable) {
-                log.info("Error fetching transaction [hash = $txHash]", t)
+                log.info("Error fetching transaction [hash = $txHash, message = ${t.message}]")
                 continue
             }
 
