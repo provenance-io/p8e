@@ -43,7 +43,7 @@ import java.security.Signature
  */
 class SmartKeySigner(
     private val signAndVerifyApi: SignAndVerifyApi,
-    private val securityObjectsApi: SecurityObjectsApi,
+    private val securityObjectsApi: SecurityObjectsApi
 ): SignerImpl {
 
     init {

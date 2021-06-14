@@ -17,7 +17,6 @@ import io.provenance.p8e.encryption.model.DIMEProcessingModel
 import io.provenance.p8e.encryption.model.DIMEStreamProcessingModel
 import io.p8e.proto.Util
 import io.provenance.p8e.encryption.ecies.ProvenanceECIESCipher
-import io.provenance.p8e.encryption.model.KeyProviders
 import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos
@@ -109,7 +108,10 @@ object ProvenanceDIME {
 
     fun getECIESEncodedPayload(encryptionKeyRef: KeyRef, additionalAuthenticatedData: String = "", key: SecretKeySpec): Pair<String, ProvenanceECIESCryptogram> {
         val publicKeyEncodedStr = BaseEncoding.base64().encode(ECUtils.convertPublicKeyToBytes(encryptionKeyRef.publicKey))
-        val provenanceECIESCryptogram = if(encryptionKeyRef.type == DATABASE) {
+
+        // Encrypt any encryptionKeyRef with a null UUID the legacy way, as we do not know if the Affiliate will be a
+        // SmartKey managed key.
+        val provenanceECIESCryptogram = if(encryptionKeyRef.uuid == null || encryptionKeyRef.type == DATABASE) {
             ProvenanceECIESCipher().encrypt(
                 BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
                 encryptionKeyRef.publicKey,

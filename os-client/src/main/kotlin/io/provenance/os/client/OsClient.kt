@@ -257,28 +257,14 @@ open class OsClient(
         return responseObserver.get()
     }
 
-    fun createPublicKey(publicKey: PublicKey): io.provenance.os.domain.PublicKey =
+    fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
         publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
-            .create(
+            .add(
                 PublicKeys.PublicKeyRequest.newBuilder()
-                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
-                    .build()
-            ).toDomain()
-
-    fun deletePublicKey(publicKey: PublicKey) {
-        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
-            .delete(
-                PublicKeys.PublicKeyRequest.newBuilder()
-                    .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                    .setPublicKey(publicKey.toPublicKeyProtoOS())
+                    .setUrl("http://localhost") // todo: what is this supposed to be?
                     .build()
             )
-    }
-
-    fun getAllKeys(): List<io.provenance.os.domain.PublicKey> =
-        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
-            .getAll(Empty.getDefaultInstance())
-                .keyList
-                .map { it.toDomain() }
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

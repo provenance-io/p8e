@@ -24,5 +24,5 @@ class ProvenanceKeystoneProperties {
 
 @ConfigurationProperties(prefix = "smartkey")
 class SmartKeyProperties {
-    @NotNull lateinit var apiKey: String
+    var apiKey: String? = null
 }
