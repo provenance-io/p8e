@@ -17,12 +17,12 @@ class SmartKeyAuthRefresh(
     }
 
     /**
-     * Refresh the Auth Token every 5 Minutes
+     * Refresh current SmartKey auth session every 5 minutes.
      */
     @Scheduled(fixedRate = REFRESH_RATE)
     fun refreshSmartKeyAuthToken() {
         if(authenticationApi.apiClient != null) {
-            log.debug("refreshing SmartKey auth token")
+            log.debug("refreshing SmartKey auth session")
             authenticationApi.refresh()
         }
     }
