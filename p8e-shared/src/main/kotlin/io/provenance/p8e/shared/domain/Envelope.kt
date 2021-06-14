@@ -159,7 +159,7 @@ open class EnvelopeEntityClass : UUIDEntityClass<EnvelopeRecord>(
             statement.set(3, className)
         }.executeQuery().toUuids()
 
-    fun search(limit: Int, q: String?, publicKey: String?, type: String?, eagerLoadScope: Boolean = true, identityUUID: UUID): List<EnvelopeRecord> = mutableListOf<Op<Boolean>>(InSubQueryOp(EnvelopeTable.publicKey, AffiliateRecord.allByIdentityUuidQuery(identityUUID).adjustSlice { slice(AffiliateTable.publicKey) }))
+    fun search(limit: Int, q: String?, publicKey: String?, type: String?, eagerLoadScope: Boolean = true): List<EnvelopeRecord> = mutableListOf<Op<Boolean>>()
             .let { expressions ->
                 val columns = EnvelopeTable.columns.filter { !it.equals(EnvelopeTable.data) }
                     .plus(EnvelopeTable.contractName)

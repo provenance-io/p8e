@@ -9,8 +9,6 @@ import io.provenance.p8e.shared.domain.ServiceAccountRecord
 import io.provenance.p8e.shared.domain.ServiceAccountStates
 import io.provenance.p8e.shared.service.ServiceAccountService
 import io.provenance.p8e.webservice.domain.ApiPublicKey
-import io.provenance.p8e.webservice.interceptors.provenanceIdentityUuid
-import io.provenance.p8e.webservice.interceptors.provenanceJwt
 
 data class ApiServiceKey(
     val publicKey: ApiPublicKey,
@@ -41,7 +39,7 @@ data class RegisterServiceKey(val privateKey: String?, val alias: String?) {
 @RequestMapping("keys/service")
 open class ServiceAccountController(val serviceAccountService: ServiceAccountService) {
     @GetMapping("")
-    fun index() = transaction { serviceAccountService.getAll(provenanceIdentityUuid()) }.map{ it.toApi() }
+    fun index() = transaction { serviceAccountService.getAll() }.map{ it.toApi() }
 
     @PatchMapping("{publicKey}")
     fun update(@PathVariable("publicKey") publicKey: String, @RequestBody body: UpdateServiceKey) = transaction { serviceAccountService.update(
@@ -51,6 +49,6 @@ open class ServiceAccountController(val serviceAccountService: ServiceAccountSer
 
     @PostMapping("")
     fun add(@RequestBody body: RegisterServiceKey) = transaction {
-        serviceAccountService.save(body.keyPair, ServiceAccountStates.INITIALIZED, body.alias, provenanceJwt(), provenanceIdentityUuid())
+        serviceAccountService.save(body.keyPair, ServiceAccountStates.INITIALIZED, body.alias)
     }.toApi()
 }
