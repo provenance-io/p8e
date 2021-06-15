@@ -77,20 +77,20 @@ class ContractManager(
         private val objectMapper = ObjectMapper().configureProvenance()
         private var channel: ManagedChannel? = null
 
-        fun create(hexKey: String, url: String? = null) = create(hexKey.toJavaPrivateKey(), url)
+        fun create(hexKey: String, url: String? = null, deadlineMs: Long = 60000) = create(hexKey.toJavaPrivateKey(), url, deadlineMs)
 
-        fun create(privateKey: PrivateKey, url: String? = null): ContractManager {
+        fun create(privateKey: PrivateKey, url: String? = null, deadlineMs: Long = 60000): ContractManager {
             val keyPair = privateKey.let {
                 KeyPair(it.computePublicKey(), it)
             }
 
-            return create(keyPair, url)
+            return create(keyPair, url, deadlineMs)
         }
 
         /**
          * Create a new ContractManager for a given Party
          */
-        fun create(keyPair: KeyPair, url: String? = null): ContractManager {
+        fun create(keyPair: KeyPair, url: String? = null, deadlineMs: Long = 60000): ContractManager {
             val apiUrl = url ?: System.getenv("API_URL") ?: "http://localhost:8080/engine"
             val uri = URI(apiUrl)
             val customTrustStore = System.getenv("TRUST_STORE_PATH")?.let(::File)
@@ -124,12 +124,13 @@ class ContractManager(
             val interceptor = ChallengeResponseInterceptor(
                 keyPair,
                 AuthenticationClient(
-                    channel!!
+                    channel!!,
+                    deadlineMs
                 )
             )
 
-            val index = IndexClient(channel!!, interceptor, objectMapper)
-            return RemoteClient(keyPair.public, channel!!, interceptor, index).let {
+            val index = IndexClient(channel!!, interceptor, deadlineMs, objectMapper)
+            return RemoteClient(keyPair.public, channel!!, interceptor, index, deadlineMs).let {
                 ContractManager(it, index, keyPair)
             }
         }

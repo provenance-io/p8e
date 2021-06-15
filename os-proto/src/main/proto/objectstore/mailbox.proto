@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package objectstore;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "objectstore/util.proto";
+
+option java_package = "io.provenance.os.proto";
+option java_outer_classname = "Mailboxes";
+
+service MailboxService {
+    rpc Get(GetRequest) returns (stream MailPayload) {};
+
+    rpc Ack(AckRequest) returns (google.protobuf.Empty) {};
+}
+
+message GetRequest {
+    bytes public_key = 1;
+    int32 max_results = 2;
+}
+
+message AckRequest {
+    UUID uuid = 1;
+}
+
+message MailPayload {
+    UUID uuid = 1;
+    bytes data = 2;
+}

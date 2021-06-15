@@ -49,7 +49,6 @@ dependencies {
     implementation project(":p8e-shared")
     implementation project(":p8e-common")
     implementation project(":p8e-sdk")
-    implementation project(":mailbox-client")
     implementation project(":os-client")
 
     implementation "com.google.protobuf:protobuf-java:$protobuf_version"
@@ -82,9 +81,6 @@ dependencies {
     implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation 'com.zaxxer:HikariCP:3.4.2'
-
-    // Redis
-    implementation "org.redisson:redisson:$redisson_version"
 
     // Logging
     implementation 'ch.qos.logback:logback-classic:1.2.3'

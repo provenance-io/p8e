@@ -35,14 +35,6 @@ class ObjectStoreLocatorProperties {
     @NotNull lateinit var url: String
 }
 
-@ConfigurationProperties(prefix = "mailbox")
-@Validated
-class MailboxProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var key: String
-    @NotNull lateinit var poolSize: Integer
-}
-
 @ConfigurationProperties(prefix = "event.stream")
 @Validated
 class EventStreamProperties {
@@ -58,12 +50,18 @@ class ServiceProperties {
     @NotNull lateinit var name: String
 }
 
-@ConfigurationProperties(prefix = "redis")
-@Validated
-class RedisProperties {
-    @NotNull lateinit var host: String
-    @NotNull lateinit var port: String
-    @NotNull lateinit var connectionPoolSize: String
+@ConfigurationProperties(prefix = "chaincode")
+class ChaincodeProperties {
+    @NotNull lateinit var grpcUrl: String
+    @NotNull lateinit var url: String
+    @NotNull lateinit var apiKey: String
+    @NotNull lateinit var mnemonic: String
+    @NotNull lateinit var chainId: String
+    @NotNull var mainNet: Boolean = false
+    @NotNull var emptyIterationBackoffMS: Int = 1_000
+    @NotNull var txBatchSize: Int = 25
+    @NotNull var gasMultiplier: Double = 1.0
+    @NotNull var maxGasMultiplierPerDay: Int = 1000
 }
 
 @ConfigurationProperties(prefix = "elasticsearch")
@@ -80,17 +78,6 @@ class ElasticSearchProperties {
 @Validated
 class ReaperProperties {
     @NotNull @Pattern(regexp = "\\d{1,2}") lateinit var schedulerPoolSize: String
-}
-
-@ConfigurationProperties(prefix = "provenance.oauth")
-@Validated
-class ProvenanceOAuthProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var clientId: String
-    @NotNull lateinit var clientSecret: String
-    @NotNull lateinit var redirectUrl: String
-    @NotNull lateinit var identityUrl: String
-    @NotNull lateinit var ttlSeconds: Integer
 }
 
 abstract class BaseReaperProperties {

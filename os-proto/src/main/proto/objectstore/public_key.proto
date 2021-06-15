@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package objectstore;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "objectstore/util.proto";
+
+option java_package = "io.provenance.os.proto";
+option java_outer_classname = "PublicKeys";
+
+service PublicKeyService {
+    rpc Add(PublicKeyRequest) returns (PublicKeyResponse) {};
+}
+
+message PublicKeyRequest {
+    PublicKey public_key = 1;
+    string url = 2;
+    google.protobuf.Any metadata = 3;
+}
+
+message PublicKeyResponse {
+    UUID uuid = 1;
+    PublicKey public_key = 2;
+    string url = 3;
+    google.protobuf.Any metadata = 4;
+
+    google.protobuf.Timestamp created_at = 5;
+    google.protobuf.Timestamp updated_at = 6;
+}

@@ -1,7 +1,6 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import cosmos.auth.v1beta1.Auth
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
@@ -26,6 +25,7 @@ import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
+import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Future
@@ -46,7 +46,6 @@ data class ContractRequestWrapper(
 class ChaincodeInvokeService(
     private val accountProvider: Account,
     private val transactionStatusService: TransactionStatusService,
-    private val sc: SimpleClient,
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
 ) : IChaincodeInvokeService {
@@ -56,6 +55,18 @@ class ChaincodeInvokeService(
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
 
     private val accountInfo = provenanceGrpc.accountInfo()
+
+    // Optional gas multiplier tracking
+    private var gasMultiplierResetAt = OffsetDateTime.now()
+    private var gasMultiplierDailyCount = 0
+        get() {
+            if (gasMultiplierResetAt.plusDays(1) < OffsetDateTime.now()) {
+                log.info("resetting gasMultiplier daily count to 0")
+                field = 0
+                gasMultiplierResetAt = gasMultiplierResetAt.plusDays(1)
+            }
+            return field
+        }
 
     // private val queue = ConcurrentHashMap<UUID, BlockchainTransaction>()
 
@@ -100,9 +111,12 @@ class ChaincodeInvokeService(
                 provenanceGrpc.getLatestBlock()
                     .takeIf { it.block.header.height > currentBlockHeight }
                     ?.let {
-                        log.info("Clearing blockScopeIds")
                         currentBlockHeight = it.block.header.height
-                        blockScopeIds.clear()
+
+                        if (!blockScopeIds.isEmpty()) {
+                            log.debug("Clearing blockScopeIds")
+                            blockScopeIds.clear()
+                        }
                     }
             } catch (t: Throwable) {
                 log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
@@ -156,7 +170,7 @@ class ChaincodeInvokeService(
 
             // Skip the rest of the loop if there are no transactions to execute.
             if (batch.size == 0) {
-                log.info("No batch available, waiting...")
+                log.debug("No batch available, waiting...")
                 log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
                 continue
@@ -383,24 +397,36 @@ class ChaincodeInvokeService(
             }
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
-            batchTx(txBody).also {
+            batchTx(txBody, applyMultiplier = false).also {
                 if (it.txResponse.code != 0) {
                     throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                 }
 
                 log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
+
+            log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
             throw e
         }
     }
 
-    fun batchTx(body: TxBody): BroadcastTxResponse = synchronized(provenanceGrpc) {
+    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse = synchronized(provenanceGrpc) {
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
+
+        if (applyMultiplier && gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
+            log.info("setting gasMultiplier to ${chaincodeProperties.gasMultiplier} (current count = $gasMultiplierDailyCount)")
+            estimate.setGasMultiplier(chaincodeProperties.gasMultiplier)
+            gasMultiplierDailyCount++
+        } else if (!applyMultiplier) {
+            log.info("skipping gasMultiplier due to override")
+        } else {
+            log.info("skipping gasMultiplier due to daily limit")
+        }
 
         provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }

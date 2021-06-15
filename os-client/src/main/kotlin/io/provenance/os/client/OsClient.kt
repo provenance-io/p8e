@@ -1,23 +1,30 @@
 package io.provenance.os.client
 
-import com.google.protobuf.Empty
 import com.google.protobuf.Message
 import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.p8e.util.toByteString
-import io.p8e.util.toPublicKeyProto
+import io.p8e.util.toHex
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.util.CertificateUtil
 import io.provenance.os.domain.*
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.os.domain.inputstream.sign
-import io.provenance.os.proto.*
+import io.provenance.os.proto.BufferedStreamObserver
+import io.provenance.os.proto.InputStreamChunkedIterator
+import io.provenance.os.proto.MailboxServiceGrpc
+import io.provenance.os.proto.Mailboxes
+import io.provenance.os.proto.ObjectServiceGrpc
 import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
+import io.provenance.os.proto.PublicKeyServiceGrpc
+import io.provenance.os.proto.PublicKeys
 import io.provenance.os.util.base64Decode
+import io.provenance.os.util.toHexString
 import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
+import objectstore.Util
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -28,10 +35,14 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-open class OsClient(uri: URI) {
+open class OsClient(
+    uri: URI,
+    private val deadlineMs: Long
+) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
     private val publicKeyBlockingClient: PublicKeyServiceGrpc.PublicKeyServiceBlockingStub
+    private val mailboxBlockingClient: MailboxServiceGrpc.MailboxServiceBlockingStub
 
     init {
         val channel = ManagedChannelBuilder.forAddress(uri.host, uri.port)
@@ -49,6 +60,30 @@ open class OsClient(uri: URI) {
 
         objectAsyncClient = ObjectServiceGrpc.newStub(channel)
         publicKeyBlockingClient = PublicKeyServiceGrpc.newBlockingStub(channel)
+        mailboxBlockingClient = MailboxServiceGrpc.newBlockingStub(channel)
+    }
+
+    fun ack(uuid: UUID) {
+        val request = Mailboxes.AckRequest.newBuilder()
+            .setUuid(Util.UUID.newBuilder().setValue(uuid.toString()).build())
+            .build()
+
+        mailboxBlockingClient.ack(request)
+    }
+
+    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Sequence<Pair<UUID, DIMEInputStream>> {
+        val response = mailboxBlockingClient.get(
+            Mailboxes.GetRequest.newBuilder()
+                .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
+                .setMaxResults(maxResults)
+                .build()
+        )
+
+        return response.asSequence()
+            .map {
+                val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
+                Pair(UUID.fromString(it.uuid.value), dime)
+            }
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
@@ -73,7 +108,7 @@ open class OsClient(uri: URI) {
         val bytes = ByteArrayOutputStream()
 
         objectAsyncClient.get(
-            Objects.Sha512Request.newBuilder()
+            Objects.HashRequest.newBuilder()
                 .setHash(sha512.toByteString())
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
                 .build(),
@@ -123,7 +158,7 @@ open class OsClient(uri: URI) {
         )
 
         if (!finishLatch.await(deadlineSeconds, TimeUnit.SECONDS)) {
-            throw TimeoutException("No response received")
+            throw TimeoutException("Deadline exceeded waiting for object ${sha512.toHexString()} with public key ${publicKey.toHex()}")
         }
         if (error != null) {
             throw error!!
@@ -217,12 +252,13 @@ open class OsClient(uri: URI) {
     }
 
     fun createPublicKey(publicKey: PublicKey): PublicKeys.PublicKeyResponse? =
-        publicKeyBlockingClient.add(
-            PublicKeys.PublicKeyRequest.newBuilder()
-                .setPublicKey(publicKey.toPublicKeyProtoOS())
-                .setUrl("http://localhost") // todo: what is this supposed to be?
-                .build()
-        )
+        publicKeyBlockingClient.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .add(
+                PublicKeys.PublicKeyRequest.newBuilder()
+                    .setPublicKey(publicKey.toPublicKeyProtoOS())
+                    .setUrl("http://localhost") // todo: what is this supposed to be?
+                    .build()
+            )
 }
 
 class SingleResponseObserver<T> : StreamObserver<T> {

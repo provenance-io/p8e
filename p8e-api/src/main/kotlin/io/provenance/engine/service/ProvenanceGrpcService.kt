@@ -198,7 +198,12 @@ data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_
     }
 
     private val adjustment = feeAdjustment ?: DEFAULT_FEE_ADJUSTMENT
+    private var gasMultiplier = 1.0
 
-    val limit = (estimate * adjustment).roundUp()
-    val fees = (limit * DEFAULT_GAS_PRICE).roundUp()
+    fun setGasMultiplier(multiplier: Double) { gasMultiplier = multiplier }
+
+    val limit
+        get() = (estimate * adjustment * gasMultiplier).roundUp()
+    val fees
+        get() = (limit * DEFAULT_GAS_PRICE).roundUp()
 }

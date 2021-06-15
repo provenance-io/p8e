@@ -255,12 +255,13 @@ class RemoteClient(
     publicKey: PublicKey,
     channel: ManagedChannel,
     challengeResponseInterceptor: ChallengeResponseInterceptor,
-    indexClient: IndexClient
+    indexClient: IndexClient,
+    deadlineMs: Long
 ): EventMonitorClient(
     publicKey,
-    SigningAndEncryptionPublicKeysClient(channel, challengeResponseInterceptor),
-    ChaincodeClient(channel, challengeResponseInterceptor),
-    EnvelopeClient(channel, challengeResponseInterceptor),
+    SigningAndEncryptionPublicKeysClient(channel, challengeResponseInterceptor, deadlineMs),
+    ChaincodeClient(channel, challengeResponseInterceptor, deadlineMs),
+    EnvelopeClient(channel, challengeResponseInterceptor, deadlineMs),
     indexClient,
-    ObjectClient(channel, challengeResponseInterceptor)
+    ObjectClient(channel, challengeResponseInterceptor, deadlineMs)
 )
