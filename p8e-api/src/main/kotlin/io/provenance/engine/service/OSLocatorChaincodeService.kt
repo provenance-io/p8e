@@ -18,8 +18,8 @@ import io.provenance.engine.crypto.toBech32Data
 import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.metadata.v1.MsgBindOSLocatorRequest
 import io.provenance.metadata.v1.ObjectStoreLocator
-import io.provenance.p8e.shared.config.ChaincodeProperties
-import io.provenance.p8e.shared.crypto.Account
+import io.provenance.engine.config.ChaincodeProperties
+import io.provenance.engine.crypto.Account
 import io.provenance.p8e.shared.domain.AffiliateRecord
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService

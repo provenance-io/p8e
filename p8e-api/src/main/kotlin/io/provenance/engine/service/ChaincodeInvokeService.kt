@@ -404,8 +404,6 @@ class ChaincodeInvokeService(
 
                 log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
-
-            log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
             throw e
