@@ -1,4 +1,4 @@
-package io.provenance.p8e.shared.crypto
+package io.provenance.engine.crypto
 
 import io.p8e.crypto.Hash
 import io.p8e.crypto.Numeric

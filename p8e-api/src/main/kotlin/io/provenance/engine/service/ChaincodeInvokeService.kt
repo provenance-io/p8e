@@ -9,6 +9,7 @@ import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
 import io.p8e.util.*
+import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.util.toProv
@@ -17,8 +18,7 @@ import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
 import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
 import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
 import io.provenance.metadata.v1.ScopeSpecification
-import io.provenance.p8e.shared.config.ChaincodeProperties
-import io.provenance.p8e.shared.crypto.Account
+import io.provenance.engine.crypto.Account
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord

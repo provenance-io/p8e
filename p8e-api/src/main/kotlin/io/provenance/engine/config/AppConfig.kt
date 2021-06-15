@@ -11,7 +11,7 @@ import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.util.configureProvenance
-import io.provenance.p8e.shared.crypto.Account
+import io.provenance.engine.crypto.Account
 import io.provenance.engine.domain.RPCClient
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor

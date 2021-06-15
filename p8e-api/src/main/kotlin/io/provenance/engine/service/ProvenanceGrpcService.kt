@@ -19,8 +19,8 @@ import io.p8e.proto.ContractScope
 import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.toByteString
 import io.p8e.util.toPublicKeyProto
-import io.provenance.p8e.shared.config.ChaincodeProperties
-import io.provenance.p8e.shared.crypto.Account
+import io.provenance.engine.config.ChaincodeProperties
+import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.crypto.SignerFn
 import io.provenance.engine.crypto.SignerMeta
