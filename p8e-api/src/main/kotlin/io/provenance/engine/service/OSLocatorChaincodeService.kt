@@ -14,8 +14,8 @@ import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKey
 import io.provenance.engine.config.ObjectStoreLocatorProperties
 import io.provenance.engine.crypto.Bech32
-import io.provenance.engine.crypto.JavaSignerMeta
 import io.provenance.engine.crypto.toBech32Data
+import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.metadata.v1.MsgBindOSLocatorRequest
 import io.provenance.metadata.v1.ObjectStoreLocator
 import io.provenance.p8e.shared.config.ChaincodeProperties
@@ -87,7 +87,7 @@ class OSLocatorChaincodeService(
     fun recordOSLocator(affiliateKeyPair: KeyPair, affiliateAddress: String, gasEstimate: GasEstimate): ServiceOuterClass.BroadcastTxResponse {
         val accountInfo = provenanceGrpcService.accountInfo(affiliateAddress)
         val message = osLocatorMessage(accountInfo)
-        return provenanceGrpcService.batchTx(message.toTxBody(), accountInfo.accountNumber, accountInfo.sequence, gasEstimate, JavaSignerMeta(affiliateKeyPair)).also {
+        return provenanceGrpcService.batchTx(message.toTxBody(), accountInfo.accountNumber, accountInfo.sequence, gasEstimate, affiliateKeyPair.toSignerMeta()).also {
             log.info("recordOSLocator response $it")
         }
     }

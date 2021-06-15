@@ -42,15 +42,25 @@ object PbSigner {
     }
 }
 
-interface SignerMeta {
-    val compressedPublicKey: ByteArray
-    val sign: SignerFn
+data class SignerMeta(val compressedPublicKey: ByteArray, val sign: SignerFn) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as SignerMeta
+
+        if (!compressedPublicKey.contentEquals(other.compressedPublicKey)) return false
+        if (sign != other.sign) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = compressedPublicKey.contentHashCode()
+        result = 31 * result + sign.hashCode()
+        return result
+    }
 }
-class ECSignerMeta(keyPair: ECKeyPair) : SignerMeta {
-    override val compressedPublicKey: ByteArray = keyPair.getCompressedPublicKey()
-    override val sign: SignerFn = PbSigner.signerFor(keyPair)
-}
-class JavaSignerMeta(keyPair: KeyPair) : SignerMeta {
-    override val compressedPublicKey: ByteArray = (keyPair.public as BCECPublicKey).q.getEncoded(true)
-    override val sign: SignerFn = PbSigner.signerFor(keyPair)
-}
+
+fun ECKeyPair.toSignerMeta() = SignerMeta(this.getCompressedPublicKey(), PbSigner.signerFor(this))
+fun KeyPair.toSignerMeta() = SignerMeta((public as BCECPublicKey).q.getEncoded(true), PbSigner.signerFor(this))

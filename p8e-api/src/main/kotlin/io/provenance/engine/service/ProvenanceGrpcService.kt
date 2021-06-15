@@ -19,12 +19,12 @@ import io.p8e.proto.ContractScope
 import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.toByteString
 import io.p8e.util.toPublicKeyProto
-import io.provenance.engine.crypto.ECSignerMeta
 import io.provenance.p8e.shared.config.ChaincodeProperties
 import io.provenance.p8e.shared.crypto.Account
 import io.provenance.engine.crypto.PbSigner
 import io.provenance.engine.crypto.SignerFn
 import io.provenance.engine.crypto.SignerMeta
+import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
@@ -83,7 +83,7 @@ class ProvenanceGrpcService(
 
     private val bech32Address = accountProvider.bech32Address()
     private val p8eKeyPair = accountProvider.getKeyPair()
-    private val p8eSignerMeta = ECSignerMeta(p8eKeyPair)
+    private val p8eSignerMeta = p8eKeyPair.toSignerMeta()
 
     fun accountInfo(): Auth.BaseAccount = accountInfo(bech32Address)
 
