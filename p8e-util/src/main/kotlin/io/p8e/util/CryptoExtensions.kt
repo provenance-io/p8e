@@ -2,14 +2,9 @@ package io.p8e.util
 
 import io.p8e.proto.PK
 import io.provenance.p8e.encryption.ecies.ECUtils
-import org.bouncycastle.jce.ECNamedCurveTable
-import org.bouncycastle.jce.provider.BouncyCastleProvider
-import org.bouncycastle.jce.spec.ECPrivateKeySpec
 import org.bouncycastle.util.encoders.Hex
-import java.security.KeyFactory
 import java.security.PrivateKey
 import java.security.PublicKey
-import java.security.Security
 
 fun PK.PublicKey.toPublicKey(): PublicKey =
     this.let {
@@ -57,12 +52,3 @@ fun PrivateKey.computePublicKey() = ECUtils.toPublicKey(this)!!
 fun String.toPrivateKeyProto(): PK.PrivateKey = PK.PrivateKey.parseFrom(Hex.decode(this))
 
 fun String.toJavaPrivateKey() = toPrivateKeyProto().toPrivateKey()
-
-object ECKeyConverter {
-    init {
-        Security.addProvider(BouncyCastleProvider())
-    }
-
-    fun org.kethereum.model.PrivateKey.toJavaPrivateKey(): PrivateKey = KeyFactory.getInstance("EC", BouncyCastleProvider.PROVIDER_NAME)
-        .generatePrivate(ECPrivateKeySpec(key, ECNamedCurveTable.getParameterSpec("SecP256K1")))
-}

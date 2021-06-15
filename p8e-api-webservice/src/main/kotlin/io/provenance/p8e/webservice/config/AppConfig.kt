@@ -4,10 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import io.p8e.util.configureProvenance
 import io.provenance.os.client.OsClient
-import io.provenance.p8e.shared.config.ChaincodeProperties
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
-import io.provenance.p8e.shared.crypto.Account
 import io.provenance.p8e.shared.service.KeystoneService
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
@@ -16,8 +14,6 @@ import org.apache.http.impl.client.BasicCredentialsProvider
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
-import org.kethereum.bip39.model.MnemonicWords
-import org.kethereum.bip39.toSeed
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
@@ -28,7 +24,6 @@ import java.net.URI
 @Configuration
 @EnableCaching
 @EnableConfigurationProperties(value = [
-    ChaincodeProperties::class,
     ElasticSearchProperties::class,
     ObjectStoreProperties::class,
     ServiceProperties::class,
@@ -36,15 +31,6 @@ import java.net.URI
     ProvenanceKeystoneProperties::class,
 ])
 class AppConfig : WebMvcConfigurer {
-    @Bean
-    fun accountProvider(chaincodeProperties: ChaincodeProperties): Account {
-        return Account(
-            seed = MnemonicWords(chaincodeProperties.mnemonic).toSeed(),
-            pathString = if (chaincodeProperties.mainNet) Account.PROVENANCE_MAINNET_BIP44_PATH else Account.PROVENANCE_TESTNET_BIP44_PATH,
-            mainnet = chaincodeProperties.mainNet
-        ).childAccount(hardenAddress = false)
-    }
-
     @Bean
     fun objectMapper(): ObjectMapper {
         val module = SimpleModule()
