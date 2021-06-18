@@ -3,9 +3,11 @@ package io.provenance.p8e.encryption.experimental.extensions
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.model.AgreeKeyMechanism
 import com.fortanix.sdkms.v1.model.AgreeKeyRequest
+import com.fortanix.sdkms.v1.model.EllipticCurve
 import com.fortanix.sdkms.v1.model.KeyObject
 import com.fortanix.sdkms.v1.model.ObjectType
 import com.fortanix.sdkms.v1.model.SobjectDescriptor
+import com.fortanix.sdkms.v1.model.SobjectRequest
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.encryption.ecies.ProvenanceECIESCryptogram
@@ -81,16 +83,31 @@ fun EncryptionProtos.Audience.toCryptogram(): ProvenanceECIESCryptogram {
 
 fun String.toSecretKeySpecProv() = ProvenanceAESCrypt.secretKeySpecGenerate(Base64.getDecoder().decode(this))
 
-fun String.toAgreeKey(): KeyObject {
+fun String.toAgreeKey(transientKey: String): KeyObject {
        val keyUuid = this
        val request = AgreeKeyRequest().apply {
             privateKey = SobjectDescriptor().kid(keyUuid)
-            publicKey = SobjectDescriptor().kid(keyUuid)
+            publicKey = SobjectDescriptor().transientKey(transientKey)
             name = keyUuid
             keySize = ECUtils.AGREEKEY_SIZE
-            keyType = ObjectType.AES
+            keyType = ObjectType.OPAQUE
             mechanism = AgreeKeyMechanism.HELLMAN
             transient = true
         }
         return SecurityObjectsApi().agreeKey(request)
+}
+
+/**
+ * A transient security object will be created, meaning this security object is for one time use
+ * and will not be stored into SmartKey's repository.
+ */
+fun PublicKey.toTransientSecurityObject(): KeyObject {
+    val ephemeralPublicKey = this
+    val request = SobjectRequest().apply {
+        value = ephemeralPublicKey.encoded
+        ellipticCurve = EllipticCurve.SECP256K1
+        objType = ObjectType.EC
+        transient = true
+    }
+    return SecurityObjectsApi().importSecurityObject(request)
 }

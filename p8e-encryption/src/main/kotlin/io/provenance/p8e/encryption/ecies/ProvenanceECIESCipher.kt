@@ -2,10 +2,12 @@ package io.provenance.p8e.encryption.ecies
 
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.experimental.extensions.toAgreeKey
+import io.provenance.p8e.encryption.experimental.extensions.toTransientSecurityObject
 import io.provenance.p8e.encryption.kdf.ProvenanceHKDFSHA256
+import io.provenance.p8e.encryption.model.KeyProviders.SMARTKEY
+import io.provenance.p8e.encryption.model.KeyRef
 import org.slf4j.LoggerFactory
 import java.security.InvalidKeyException
-import java.security.PrivateKey
 import java.security.PublicKey
 import java.util.Arrays
 import javax.crypto.BadPaddingException
@@ -58,40 +60,6 @@ class ProvenanceECIESCipher {
     }
 
     /**
-     * SmartKey Version
-     */
-    @Throws(ProvenanceECIESEncryptException::class, IllegalArgumentException::class)
-    fun encrypt(data: ByteArray, publicKey: PublicKey, kid: String, additionalAuthenticatedData: String?): ProvenanceECIESCryptogram {
-        try {
-            val ephemeralKeyPair = ProvenanceKeyGenerator.generateKeyPair(publicKey)
-
-            val ephemeralDerivedSecretKey =
-                kid.toAgreeKey().kcv.let { ProvenanceHKDFSHA256.derive(it.toByteArray(), null, ECUtils.KDF_SIZE) }
-
-            // Encrypt the data
-            val encKeyBytes = Arrays.copyOf(ephemeralDerivedSecretKey, 32)
-            val encKey = ProvenanceAESCrypt.secretKeySpecGenerate(encKeyBytes)
-            val body = ProvenanceAESCrypt.encrypt(data, additionalAuthenticatedData, encKey)
-
-            // Compute MAC of the data
-            val macKeyBytes = Arrays.copyOfRange(ephemeralDerivedSecretKey, 32, 64)
-
-            val tag = ProvenanceAESCrypt.encrypt(macKeyBytes, additionalAuthenticatedData, encKey, true)
-
-            return ProvenanceECIESCryptogram(ephemeralPublicKey = ephemeralKeyPair.public, tag = tag!!, encryptedData = body!!)
-        } catch (e: InvalidKeyException) {
-            logger.error("Invalid key exception", e)
-            throw ProvenanceECIESEncryptException("Decryption error occurred", e)
-        } catch (e: BadPaddingException) {
-            logger.error("Bad padding ", e)
-            throw ProvenanceECIESEncryptException("Decryption error occurred", e)
-        } catch (e: IllegalBlockSizeException) {
-            logger.error("Illegal block size ", e)
-            throw ProvenanceECIESEncryptException("Decryption error occurred", e)
-        }
-    }
-
-    /**
      * Decrypt provided encrypted payload.
      *
      * @param payload {@code ProvenanceECIESCryptogram} Payload to be decrypted.
@@ -100,12 +68,20 @@ class ProvenanceECIESCipher {
      * @throws IllegalArgumentException In case decryption fails due to invalid life-cycle phase,
      */
     @Throws(ProvenanceECIESDecryptException::class)
-    fun decrypt(payload: ProvenanceECIESCryptogram, privateKey: PrivateKey, additionalAuthenticatedData: String?): ByteArray {
+    fun decrypt(payload: ProvenanceECIESCryptogram, keyRef: KeyRef, additionalAuthenticatedData: String?): ByteArray {
         try {
-            // Derive secret key
-            val secretKey = ProvenanceKeyGenerator.computeSharedKey(privateKey, payload.ephemeralPublicKey!!)
-            val ephemeralDerivedSecretKey = ProvenanceHKDFSHA256.derive(ECUtils.convertSharedSecretKeyToBytes(secretKey), null,
-                ECUtils.KDF_SIZE)
+
+            val ephemeralDerivedSecretKey = if(keyRef.type == SMARTKEY) {
+                // Create a transient security object out of the ephemeral public key from the payload.
+                val transientEphemeralSObj = payload.ephemeralPublicKey.toTransientSecurityObject()
+
+                // Compute the shared/agree key via SmartKey's API
+                val secretKey = keyRef.uuid.toString().toAgreeKey(transientEphemeralSObj.transientKey)
+                ProvenanceHKDFSHA256.derive(secretKey.value, null, ECUtils.KDF_SIZE)
+            } else {
+                val secretKey = ProvenanceKeyGenerator.computeSharedKey(keyRef.privateKey!!, payload.ephemeralPublicKey)
+                ProvenanceHKDFSHA256.derive(ECUtils.convertSharedSecretKeyToBytes(secretKey), null, ECUtils.KDF_SIZE)
+            }
 
             // Validate data MAC value
             val encKeyBytes = Arrays.copyOf(ephemeralDerivedSecretKey, 32)
@@ -120,33 +96,6 @@ class ProvenanceECIESCipher {
             // Decrypt the data
             return ProvenanceAESCrypt.decrypt(payload.encryptedData, encKey.encoded, additionalAuthenticatedData)
         } catch (e: InvalidKeyException) {
-            logger.error("invalid key ", e)
-            throw ProvenanceECIESDecryptException("Decryption error occurred", e)
-        } catch (e: IllegalBlockSizeException) {
-            logger.error("Illegal block size ", e)
-            throw ProvenanceECIESDecryptException("Decryption error occurred", e)
-        } catch (e: BadPaddingException) {
-            logger.error("Bad padding ", e)
-            throw ProvenanceECIESDecryptException("Decryption error occurred", e)
-        }
-    }
-
-    // SmartKey version
-    fun decrypt(payload: ProvenanceECIESCryptogram, kid: String, additionalAuthenticatedData: String?): ByteArray {
-        try {
-            //Key Checksum Value (KCV) is the checksum of a cryptographic key.[1] It is used to validate the key integrity or compare keys without knowing their actual values
-            val ephemeralDerivedSecretKey = ProvenanceHKDFSHA256.derive(kid.toAgreeKey().kcv.toByteArray(), null, ECUtils.KDF_SIZE)
-
-            val encKeyBytes = Arrays.copyOf(ephemeralDerivedSecretKey, 32)
-            val encKey = ProvenanceAESCrypt.secretKeySpecGenerate(encKeyBytes)
-            val macKeyBytes = Arrays.copyOfRange(ephemeralDerivedSecretKey, 32, 64)
-            val mac = ProvenanceAESCrypt.encrypt(macKeyBytes, additionalAuthenticatedData, encKey, true)
-            if (!Arrays.equals(mac, payload.tag)) {
-                logger.error("invalid mac ", IllegalArgumentException("Invalid MAC"))
-                throw ProvenanceECIESDecryptException("Invalid MAC", IllegalArgumentException("Invalid MAC"))
-            }
-            return ProvenanceAESCrypt.decrypt(payload.encryptedData, encKey.encoded, additionalAuthenticatedData)
-        }  catch (e: InvalidKeyException) {
             logger.error("invalid key ", e)
             throw ProvenanceECIESDecryptException("Decryption error occurred", e)
         } catch (e: IllegalBlockSizeException) {
