@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package p8e;
+
+import "p8e/public_key.proto";
+
+message P8eJob {
+  oneof job {
+    AddAffiliateOSLocator addAffiliateOSLocator = 1;
+  }
+}
+
+message AddAffiliateOSLocator {
+  PublicKey publicKey = 1;
+}

@@ -9,13 +9,13 @@ import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
 import io.p8e.util.*
-import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.ChaincodeProperties
-import io.provenance.engine.crypto.Account
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.util.PROV_METADATA_PREFIX_SCOPE_ADDR
 import io.provenance.engine.util.toAddress
 import io.provenance.engine.util.toProv
+import io.provenance.engine.crypto.Account
 import io.provenance.metadata.v1.*
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
@@ -192,7 +192,7 @@ class ChaincodeInvokeService(
 //                }.toTxBody()
 
                 // Send the transactions to the blockchain.
-                val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
+                val resp = batchTx(txBody)
 
                 if (resp.txResponse.code != 0) {
                     // adding extra raw logging during exceptional cases so that we can see what typical responses look like while this interface is new
@@ -358,7 +358,11 @@ class ChaincodeInvokeService(
                     it.toPublicKey(), chaincodeProperties.mainNet
                 )
             })
-            .addSigners(accountProvider.bech32Address())
+            .addAllSigners(env.signaturesList.map {
+                it.signer.signingPublicKey.toPublicKey().let {
+                    affiliateService.getAddress( it, chaincodeProperties.mainNet)
+                }
+            })
             .setScopeId(env.ref.scopeUuid.value.toUuidProv().toAddress(PROV_METADATA_PREFIX_SCOPE_ADDR).toByteString())
             .build().takeIf { env.affiliateSharesList.isNotEmpty() }
         // TODO what to do when this offer fails?
@@ -411,14 +415,12 @@ class ChaincodeInvokeService(
             }
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
-            synchronized(provenanceGrpc) {
-                batchTx(txBody, applyMultiplier = false).also {
-                    if (it.txResponse.code != 0) {
-                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
-                    }
-
-                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
+            batchTx(txBody, applyMultiplier = false).also {
+                if (it.txResponse.code != 0) {
+                    throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                 }
+
+                log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
@@ -426,7 +428,7 @@ class ChaincodeInvokeService(
         }
     }
 
-    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse {
+    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse = synchronized(provenanceGrpc) {
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
@@ -442,7 +444,7 @@ class ChaincodeInvokeService(
             log.info("skipping gasMultiplier due to daily limit")
         }
 
-        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
+        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
     /**
