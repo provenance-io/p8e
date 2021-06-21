@@ -109,22 +109,12 @@ object ProvenanceDIME {
     fun getECIESEncodedPayload(encryptionKeyRef: KeyRef, additionalAuthenticatedData: String = "", key: SecretKeySpec): Pair<String, ProvenanceECIESCryptogram> {
         val publicKeyEncodedStr = BaseEncoding.base64().encode(ECUtils.convertPublicKeyToBytes(encryptionKeyRef.publicKey))
 
-        // Encrypt any encryptionKeyRef with a null UUID the legacy way, as we do not know if the Affiliate will be a
-        // SmartKey managed key.
-        val provenanceECIESCryptogram = if(encryptionKeyRef.uuid == null || encryptionKeyRef.type == DATABASE) {
-            ProvenanceECIESCipher().encrypt(
-                BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
-                encryptionKeyRef.publicKey,
-                additionalAuthenticatedData
-            )
-        } else {
-            ProvenanceECIESCipher().encrypt(
-                BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
-                encryptionKeyRef.publicKey,
-                encryptionKeyRef.uuid.toString(),
-                additionalAuthenticatedData
-            )
-        }
+        val provenanceECIESCryptogram = ProvenanceECIESCipher().encrypt(
+            BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
+            encryptionKeyRef.publicKey,
+            additionalAuthenticatedData
+        )
+
         return Pair(publicKeyEncodedStr, provenanceECIESCryptogram)
     }
 
@@ -143,11 +133,7 @@ object ProvenanceDIME {
                 audience.encryptedDek.toString(Charsets.UTF_8),
                 encryptionKeyRef.publicKey.curveName())
 
-        return if(encryptionKeyRef.type == DATABASE) {
-            ProvenanceECIESCipher().decrypt(provenanceECIESCryptogram, encryptionKeyRef.privateKey!!, additionalAuthenticatedData)
-        } else {
-            ProvenanceECIESCipher().decrypt(provenanceECIESCryptogram, encryptionKeyRef.uuid.toString(), additionalAuthenticatedData)
-        }
+        return ProvenanceECIESCipher().decrypt(provenanceECIESCryptogram, encryptionKeyRef, additionalAuthenticatedData)
     }
 
     @Throws(IllegalStateException::class)
