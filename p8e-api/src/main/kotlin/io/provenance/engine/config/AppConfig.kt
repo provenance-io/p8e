@@ -16,7 +16,6 @@ import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.crypto.SignerFactory
-import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
@@ -51,7 +50,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cache.annotation.EnableCaching
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.context.annotation.Lazy
 import org.springframework.context.annotation.Scope
 import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.protobuf.ProtobufHttpMessageConverter

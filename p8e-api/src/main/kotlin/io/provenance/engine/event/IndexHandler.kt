@@ -23,6 +23,7 @@ import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestHighLevelClient
 import org.jetbrains.exposed.sql.transactions.transaction
+import org.slf4j.MDC
 import org.springframework.stereotype.Component
 import java.security.PublicKey
 import java.time.OffsetDateTime
@@ -54,6 +55,8 @@ class IndexHandler(
     }
 
     fun indexScope(p8eEvent: P8eEvent): EventStatus? = try {
+        MDC.clear()
+
         val indexScope = transaction { IndexScopeRecord.find(p8eEvent.toUuid()) }
         val keyPairs = transaction { affiliateService.getEncryptionKeyPairs() }
         val scope = indexScope.scope

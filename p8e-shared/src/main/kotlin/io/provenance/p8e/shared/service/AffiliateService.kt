@@ -240,7 +240,8 @@ class AffiliateService(
         AFFILIATE_BECH32_LOOKUP,
     ])
 
-    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
+    fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, authPublicKey: PublicKey, indexName: String? = null, alias: String? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
@@ -290,14 +291,7 @@ class AffiliateService(
                         require (response.isAcknowledged) { "ES index creation of $it was not successful" }
                     }
                 }
-
-                if (jwt != null && identityUuid != null) {
-                    keystoneService.registerKey(jwt, signingPublicKey.publicKey, ECUtils.LEGACY_DIME_CURVE, KeystoneKeyUsage.CONTRACT)
-                    registerKeyWithIdentity(it, identityUuid)
-                }
             }
-
-    fun registerKeyWithIdentity(affiliateRecord: AffiliateRecord, identityUuid: UUID) = AffiliateIdentityRecord.fromAffiliateRecord(affiliateRecord, identityUuid)
 
     fun attachServiceKeys(affiliatePublicKey: PublicKey, servicePublicKeys: List<PublicKey>) = servicePublicKeys.map { serviceKey ->
         AffiliateToServiceRecord.new(affiliatePublicKey.toHex()) {

@@ -241,7 +241,6 @@ class MailboxReaper(
                 }
             }.mapNotNull { (keyPair, result) ->
                 val (uuid, dimeInputStream) = result
-
                 val signer = transaction{ affiliateService.getSigner(keyPair.public) }
                 val encryptionKeyRef = transaction{ affiliateService.getEncryptionKeyRef(keyPair.public) }
 

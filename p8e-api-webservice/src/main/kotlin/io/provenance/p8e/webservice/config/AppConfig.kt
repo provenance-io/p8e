@@ -7,9 +7,6 @@ import com.fortanix.sdkms.v1.api.AuthenticationApi
 import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.auth.ApiKeyAuth
-import feign.Feign
-import feign.jackson.JacksonDecoder
-import feign.jackson.JacksonEncoder
 import io.p8e.crypto.SignerFactory
 import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
@@ -18,7 +15,6 @@ import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.config.SmartKeyProperties
 import io.provenance.p8e.shared.service.KeystoneService
-import io.provenance.p8e.webservice.service.KeyManagementService
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials

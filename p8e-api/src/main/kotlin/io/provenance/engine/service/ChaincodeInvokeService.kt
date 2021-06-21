@@ -114,7 +114,7 @@ class ChaincodeInvokeService(
                         currentBlockHeight = it.block.header.height
 
                         if (!blockScopeIds.isEmpty()) {
-                            log.info("Clearing blockScopeIds")
+                            log.debug("Clearing blockScopeIds")
                             blockScopeIds.clear()
                         }
                     }
@@ -398,7 +398,7 @@ class ChaincodeInvokeService(
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
             synchronized(provenanceGrpc) {
-                batchTx(txBody).also {
+                batchTx(txBody, applyMultiplier = false).also {
                     if (it.txResponse.code != 0) {
                         throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                     }
@@ -412,16 +412,18 @@ class ChaincodeInvokeService(
         }
     }
 
-    fun batchTx(body: TxBody): BroadcastTxResponse {
+    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse {
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
 
-        if (gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
+        if (applyMultiplier && gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
             log.info("setting gasMultiplier to ${chaincodeProperties.gasMultiplier} (current count = $gasMultiplierDailyCount)")
             estimate.setGasMultiplier(chaincodeProperties.gasMultiplier)
             gasMultiplierDailyCount++
+        } else if (!applyMultiplier) {
+            log.info("skipping gasMultiplier due to override")
         } else {
             log.info("skipping gasMultiplier due to daily limit")
         }

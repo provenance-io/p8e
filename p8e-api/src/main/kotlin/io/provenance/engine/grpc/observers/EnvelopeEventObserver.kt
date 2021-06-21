@@ -127,7 +127,10 @@ class EnvelopeEventObserver(
                         transaction { AffiliateConnectionRecord.heartbeat(publicKey, value.classname) }
                         queuer.queue(value)
                     } catch (t: Throwable) {
-                        queuer.streamObserver.onError(t.statusRuntimeException())
+                        try {
+                            queuer.streamObserver.onError(t.statusRuntimeException())
+                        } catch (t: Throwable) { /* do nothing if stream is already closed */ }
+
                         disconnect(ExceptionState(t))
                     }
                 }

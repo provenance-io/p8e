@@ -72,9 +72,7 @@ open class OsClient(
         mailboxBlockingClient.ack(request)
     }
 
-    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Collection<Pair<UUID, DIMEInputStream>> {
-        val mail = mutableListOf<Pair<UUID, DIMEInputStream>>()
-
+    fun mailboxGet(publicKey: PublicKey, maxResults: Int): Sequence<Pair<UUID, DIMEInputStream>> {
         val response = mailboxBlockingClient.get(
             Mailboxes.GetRequest.newBuilder()
                 .setPublicKey(ECUtils.convertPublicKeyToBytes(publicKey).toByteString())
@@ -82,12 +80,11 @@ open class OsClient(
                 .build()
         )
 
-        response.forEachRemaining {
-            val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
-            mail.add(Pair(UUID.fromString(it.uuid.value), dime))
-        }
-
-        return mail
+        return response.asSequence()
+            .map {
+                val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
+                Pair(UUID.fromString(it.uuid.value), dime)
+            }
     }
 
     fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
