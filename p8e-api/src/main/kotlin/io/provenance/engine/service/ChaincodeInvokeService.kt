@@ -13,15 +13,14 @@ import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.domain.TransactionStatusRecord
+import io.provenance.engine.util.PROV_METADATA_PREFIX_SCOPE_ADDR
+import io.provenance.engine.util.toAddress
 import io.provenance.engine.util.toProv
-import io.provenance.metadata.v1.Description
-import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
-import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
-import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
-import io.provenance.metadata.v1.ScopeSpecification
+import io.provenance.metadata.v1.*
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
+import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
@@ -40,7 +39,8 @@ data class ContractRequestWrapper(
     val executionUuid: UUID,
     val request: MsgP8eMemorializeContractRequest,
     val future: CompletableFuture<ContractTxResult>,
-)
+    val addDataAccessRequest: MsgAddScopeDataAccessRequest?,
+    )
 
 @Component
 class ChaincodeInvokeService(
@@ -48,6 +48,7 @@ class ChaincodeInvokeService(
     private val transactionStatusService: TransactionStatusService,
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
+    private val affiliateService: AffiliateService,
 ) : IChaincodeInvokeService {
     private val log = logger()
 
@@ -180,10 +181,15 @@ class ChaincodeInvokeService(
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
             try {
-                val txBody = batch.map {
+                val txBody = batch.flatMap {
                     it.attempts++
-                    it.request
+                    //TODO this might break the error index matching
+                    listOf(it.request, it.addDataAccessRequest).filterNotNull()
                 }.toTxBody()
+//                val txBody = batch.map {
+//                    it.attempts++
+//                    it.request
+//                }.toTxBody()
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
@@ -218,7 +224,6 @@ class ChaincodeInvokeService(
                     decrementSequenceNumber()
                     log.warn("Unexpected chain execution error", t)
                     val errorMessage = t.message ?: "Unexpected chain execution error"
-
                     val retryable = t.message?.contains("account sequence mismatch") == true
                     val matchIndex = t.message?.matchIndex()
 
@@ -229,7 +234,8 @@ class ChaincodeInvokeService(
                         retryable -> {
                             handleBatchRetry(errorMessage)
                         }
-                        else -> { // fail the whole batch
+
+                             else -> { // fail the whole batch
                             batch.map {
                                 it.future.completeExceptionally(t)
                                 it.executionUuid
@@ -344,11 +350,19 @@ class ChaincodeInvokeService(
             Contracts.ContractType.CHANGE_SCOPE,
             Contracts.ContractType.UNRECOGNIZED -> throw IllegalStateException("Unrecognized contract type of ${env.contract.typeValue} for envelope ${env.executionUuid.value}")
         }
-
         val future = CompletableFuture<ContractTxResult>()
 
+        val scopeDataAccessRequest = MsgAddScopeDataAccessRequest.newBuilder()
+            .addAllDataAccess(env.affiliateSharesList.map {
+                    affiliateService.getAddress(
+                    it.toPublicKey(), chaincodeProperties.mainNet
+                )
+            })
+            .addSigners(accountProvider.bech32Address())
+            .setScopeId(env.ref.scopeUuid.value.toUuidProv().toAddress(PROV_METADATA_PREFIX_SCOPE_ADDR).toByteString())
+            .build().takeIf { env.affiliateSharesList.isNotEmpty() }
         // TODO what to do when this offer fails?
-        queue.offer(ContractRequestWrapper(env.executionUuid.toUuidProv(), msg, future))
+        queue.offer(ContractRequestWrapper(env.executionUuid.toUuidProv(), msg, future, scopeDataAccessRequest))
 
         return future
     }

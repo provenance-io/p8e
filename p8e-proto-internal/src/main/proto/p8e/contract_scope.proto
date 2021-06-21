@@ -50,6 +50,8 @@ message Envelope {
     // Scope snapshot for executing
     Scope scope = 8;
 
+    repeated PublicKey affiliate_shares = 10;
+
     Status status = 9;
 
     enum Status {

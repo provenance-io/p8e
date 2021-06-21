@@ -22,8 +22,11 @@ import org.kethereum.crypto.decompressKey
 import org.kethereum.model.PublicKey
 import java.lang.Long.max
 import java.math.BigInteger
+import java.nio.ByteBuffer
+import java.util.*
 
 const val PROV_METADATA_PREFIX_CONTRACT_SPEC: Byte = 0x03
+const val PROV_METADATA_PREFIX_SCOPE_ADDR: Byte = 0x00
 
 fun PartyType.toProv() = when (this) {
     PartyType.SERVICER -> ProvenancePartyType.PARTY_TYPE_SERVICER
@@ -49,6 +52,15 @@ fun ContractSpec.toProvHash(): String {
 
     return String(provHash.base64Encode())
 }
+
+fun UUID.asBytes(): ByteArray {
+    val b = ByteBuffer.wrap(ByteArray(16))
+    b.putLong(mostSignificantBits)
+    b.putLong(leastSignificantBits)
+    return b.array()
+}
+
+fun UUID.toAddress(prefix: Byte): ByteArray = (listOf(prefix) + this.asBytes().toList()).toByteArray()
 
 fun ContractSpec.toProv(): io.provenance.metadata.v1.p8e.ContractSpec = io.provenance.metadata.v1.p8e.ContractSpec.parseFrom(toByteArray())
 
