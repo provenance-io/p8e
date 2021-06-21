@@ -8,11 +8,13 @@ buildscript {
     dependencies {
         classpath "org.springframework.boot:spring-boot-gradle-plugin:$springboot_version"
         classpath "org.jetbrains.kotlin:kotlin-allopen:$kotlin_version"
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.7'
     }
 }
 
 plugins {
     id 'java-library'
+    id 'com.google.protobuf'
 }
 
 apply plugin: 'kotlin-spring'
@@ -27,14 +29,28 @@ dependencies {
     implementation project(":p8e-common")
     implementation project(":p8e-encryption")
     implementation project(":os-client")
-    implementation project(":p8e-proto-internal")
+    compile project(":p8e-proto-internal")
 
     implementation "com.auth0:java-jwt:$jwt_version"
 
     implementation group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: bouncy_castle
 
+    // Kethereum dependencies
+    implementation "com.github.komputing:kbip44:0.1"
+    implementation "com.github.komputing:kbase58:0.1"
+    implementation "com.github.komputing.khex:core:$khex_version"
+    implementation "com.github.komputing.khex:extensions:$khex_version"
+    implementation "com.github.komputing.kethereum:bip32:$kethereum_version"
+    implementation "com.github.komputing.kethereum:bip39:$kethereum_version"
+    implementation "com.github.komputing.kethereum:model:$kethereum_version"
+    implementation "com.github.komputing.kethereum:extensions_kotlin:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_api:$kethereum_version"
+    implementation "com.github.komputing.kethereum:crypto_impl_bouncycastle:$kethereum_version"
+
     // GRPC
     implementation("io.grpc:grpc-protobuf:$grpc_version")
+    implementation("io.grpc:grpc-stub:$grpc_version")
     implementation "com.google.protobuf:protobuf-java-util:$protobuf_version"
     implementation("io.grpc:grpc-netty:$grpc_version")
 
@@ -53,6 +69,7 @@ dependencies {
     implementation "org.jetbrains.exposed:exposed-core:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-dao:$exposed_version"
     implementation "org.jetbrains.exposed:exposed-jdbc:$exposed_version"
+    implementation "org.jetbrains.exposed:exposed-jodatime:$exposed_version"
     implementation "com.zaxxer:HikariCP:$hikari_cp_version"
 
     // Spring
@@ -60,4 +77,10 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-starter-integration:$springboot_version"
     implementation "org.springframework.boot:spring-boot-starter-actuator:$springboot_version"
     implementation "org.springframework.boot:spring-boot-starter-validation:$springboot_version"
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:$protobuf_version"
+    }
 }

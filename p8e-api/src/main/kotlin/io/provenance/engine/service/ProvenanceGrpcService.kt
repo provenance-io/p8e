@@ -1,6 +1,7 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Any
+import com.google.protobuf.ByteString
 import com.google.protobuf.Message
 import cosmos.auth.v1beta1.Auth
 import cosmos.auth.v1beta1.QueryGrpc
@@ -17,18 +18,26 @@ import io.p8e.engine.threadedMap
 import io.p8e.proto.ContractScope
 import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.toByteString
+import io.p8e.util.toPublicKeyProto
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
+import io.provenance.engine.crypto.SignerFn
+import io.provenance.engine.crypto.SignerMeta
+import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
+import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.kethereum.crypto.getCompressedPublicKey
+import org.kethereum.model.ECKeyPair
+import org.kethereum.model.PublicKey
 import org.springframework.stereotype.Service
 import java.net.URI
+import java.security.KeyPair
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -44,10 +53,13 @@ class ProvenanceGrpcService(
 ) {
     companion object {
         val executor = ThreadPoolFactory.newFixedThreadPool(5, "prov-grpc-%d")
+        val DIRECT_SIGN_MODE = ModeInfo.newBuilder().setSingle(
+            ModeInfo.Single.newBuilder()
+                .setModeValue(Signing.SignMode.SIGN_MODE_DIRECT_VALUE)
+        )
     }
 
     private val channel =  URI(chaincodeProperties.grpcUrl).let { uri ->
-            Logger.getLogger("io.netty").setLevel(Level.ALL)
             NettyChannelBuilder.forAddress(uri.host, uri.port)
                 .also {
                     if (uri.scheme == "grpcs") {
@@ -70,11 +82,13 @@ class ProvenanceGrpcService(
     private val metadataQueryService = MetadataQueryGrpc.newBlockingStub(channel)
 
     private val bech32Address = accountProvider.bech32Address()
-    private val keyPair = accountProvider.getKeyPair()
-    private val signer = PbSigner.signerFor(keyPair)
+    private val p8eKeyPair = accountProvider.getKeyPair()
+    private val p8eSignerMeta = p8eKeyPair.toSignerMeta()
 
-    fun accountInfo(): Auth.BaseAccount = accountService.account(QueryOuterClass.QueryAccountRequest.newBuilder()
-            .setAddress(bech32Address)
+    fun accountInfo(): Auth.BaseAccount = accountInfo(bech32Address)
+
+    fun accountInfo(address: String): Auth.BaseAccount = accountService.account(QueryOuterClass.QueryAccountRequest.newBuilder()
+            .setAddress(address)
             .build()
         ).run { account.unpack(Auth.BaseAccount::class.java) }
 
@@ -84,7 +98,7 @@ class ProvenanceGrpcService(
 
     fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
-    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
+    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0), signer: SignerMeta = p8eSignerMeta): Tx {
         val authInfo = AuthInfo.newBuilder()
             .setFee(Fee.newBuilder()
                 .addAllAmount(listOf(
@@ -98,14 +112,10 @@ class ProvenanceGrpcService(
                 SignerInfo.newBuilder()
                     .setPublicKey(
                         Keys.PubKey.newBuilder()
-                            .setKey(keyPair.getCompressedPublicKey().toByteString())
+                            .setKey(signer.compressedPublicKey.toByteString())
                             .build().toAny()
                     )
-                    .setModeInfo(
-                        ModeInfo.newBuilder().setSingle(
-                            ModeInfo.Single.newBuilder()
-                                .setModeValue(Signing.SignMode.SIGN_MODE_DIRECT_VALUE)
-                        ))
+                    .setModeInfo(DIRECT_SIGN_MODE)
                     .setSequence(sequenceNumber)
                     .build()
             )).build()
@@ -117,7 +127,7 @@ class ProvenanceGrpcService(
             .setAccountNumber(accountNumber)
             .build()
             .toByteArray()
-            .let { signer(it) }
+            .let { signer.sign(it) }
             .map { it.signature.toByteString() }
 
         return Tx.newBuilder()
@@ -127,16 +137,16 @@ class ProvenanceGrpcService(
             .build()
     }
 
-    fun estimateTx(body: TxBody, accountNumber: Long, sequenceNumber: Long): GasEstimate =
-        signTx(body, accountNumber, sequenceNumber).let {
+    fun estimateTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, signer: SignerMeta = p8eSignerMeta): GasEstimate =
+        signTx(body, accountNumber, sequenceNumber, signer = signer).let {
             txService.simulate(SimulateRequest.newBuilder()
                 .setTx(it)
                 .build()
             )
         }.let { GasEstimate(it.gasInfo.gasUsed) }
 
-    fun batchTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, estimate: GasEstimate): BroadcastTxResponse =
-        signTx(body, accountNumber, sequenceNumber, estimate).run {
+    fun batchTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, estimate: GasEstimate, signer: SignerMeta = p8eSignerMeta): BroadcastTxResponse =
+        signTx(body, accountNumber, sequenceNumber, estimate, signer).run {
             TxRaw.newBuilder()
                 .setBodyBytes(body.toByteString())
                 .setAuthInfoBytes(authInfo.toByteString())
