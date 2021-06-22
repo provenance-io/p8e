@@ -7,9 +7,14 @@ import "p8e/public_key.proto";
 message P8eJob {
   oneof job {
     AddAffiliateOSLocator addAffiliateOSLocator = 1;
+    AddDataAccess addDataAccess = 2;
   }
 }
 
 message AddAffiliateOSLocator {
   PublicKey publicKey = 1;
+}
+
+message AddDataAccess {
+
 }

@@ -17,12 +17,7 @@ import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.engine.index.query.Operation
 import io.provenance.engine.index.query.OperationDeserializer
-import io.provenance.engine.service.DataDogMetricCollector
-import io.provenance.engine.service.JobHandlerService
-import io.provenance.engine.service.JobHandlerServiceFactory
-import io.provenance.engine.service.LogFileMetricCollector
-import io.provenance.engine.service.MetricsService
-import io.provenance.engine.service.OSLocatorChaincodeService
+import io.provenance.engine.service.*
 import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -217,9 +212,11 @@ class AppConfig : WebMvcConfigurer {
         }
 
     @Bean
-    fun jobHandlerServiceFactory(osLocatorChaincodeService: OSLocatorChaincodeService): JobHandlerServiceFactory = { payload ->
+    fun jobHandlerServiceFactory(osLocatorChaincodeService: OSLocatorChaincodeService,
+                                 memorializeChaincodeService: MemorializeChaincodeService): JobHandlerServiceFactory = { payload ->
         when (payload.jobCase) {
             Jobs.P8eJob.JobCase.ADDAFFILIATEOSLOCATOR -> osLocatorChaincodeService
+            Jobs.P8eJob.JobCase.MEMORIALIZEENVELOPE -> memorializeChaincodeService
             else -> throw IllegalArgumentException("No handler registered for job of type ${payload.jobCase.name}")
         }
     }

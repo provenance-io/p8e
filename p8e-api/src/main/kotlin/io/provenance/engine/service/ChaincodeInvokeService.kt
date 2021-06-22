@@ -181,15 +181,16 @@ class ChaincodeInvokeService(
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
             try {
-                val txBody = batch.flatMap {
-                    it.attempts++
-                    //TODO this might break the error index matching
-                    listOf(it.request, it.addDataAccessRequest).filterNotNull()
-                }.toTxBody()
-//                val txBody = batch.map {
+//                val txBody = batch.flatMap {
 //                    it.attempts++
-//                    it.request
+//                    //TODO this might break the error index matching
+//                    listOf(it.request, it.addDataAccessRequest).filterNotNull()
 //                }.toTxBody()
+                // TODO send to job here instead
+                val txBody = batch.map {
+                    it.attempts++
+                    it.request
+                }.toTxBody()
 
                 // Send the transactions to the blockchain.
                 val resp = batchTx(txBody)
