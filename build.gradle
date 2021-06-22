@@ -64,6 +64,16 @@ allprojects {
         )
     }
 
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier = 'javadoc'
+        from javadoc.destinationDir
+    }
+
     compileKotlin {
         kotlinOptions {
             jvmTarget = "1.8"
@@ -99,15 +109,17 @@ allprojects {
         def moduleName = it.name
 
         apply plugin: 'maven-publish'
+        apply plugin: 'signing'
+
 
         publishing {
             repositories {
                 maven {
-                    name = "GitHubPackages"
-                    url = "https://maven.pkg.github.com/provenance-io/p8e"
+                    name = "MavenCentral"
+                    url = version == '1.0-SNAPSHOT' ? "https://s01.oss.sonatype.org/content/repositories/snapshots/" : "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
                     credentials {
-                        username = System.getenv("GITHUB_ACTOR")
-                        password = System.getenv("GITHUB_TOKEN")
+                        username = System.getenv("OSSRH_USERNAME")
+                        password = System.getenv("OSSRH_PASSWORD")
                     }
                 }
             }
@@ -119,7 +131,47 @@ allprojects {
                     version = version
 
                     from components.java
+
+                    artifact javadocJar
+                    artifact sourcesJar
+
+                    pom {
+                        name = 'Provenance Contract Execution'
+                        description = 'A collection of services and libraries that iteract and run Provenance Java based contracts.'
+                        url = 'https://provenance.io'
+
+                        licenses {
+                            license {
+                                name = 'The Apache License, Version 2.0'
+                                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                            }
+                        }
+
+                        developers {
+                            developer {
+                                id = 'scirner22'
+                                name = 'Stephen Cirner'
+                                email = 'scirner@figure.com'
+                            }
+                        }
+
+                        scm {
+                            connection = 'git@github.com:provenance-io/p8e.git'
+                            developerConnection = 'git@github.com:provenance-io/p8e.git'
+                            url = 'https://github.com/provenance-io/p8e'
+                        }
+                    }
                 }
+            }
+        }
+
+        signing {
+            sign publishing.publications.maven
+        }
+
+        javadoc {
+            if(JavaVersion.current().isJava9Compatible()) {
+                options.addBooleanOption('html5', true)
             }
         }
     }
