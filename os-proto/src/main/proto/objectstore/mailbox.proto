@@ -4,7 +4,7 @@ package objectstore;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
-import "util.proto";
+import "objectstore/util.proto";
 
 option java_package = "io.provenance.os.proto";
 option java_outer_classname = "Mailboxes";
