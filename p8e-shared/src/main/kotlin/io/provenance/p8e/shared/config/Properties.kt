@@ -25,4 +25,5 @@ class ProvenanceKeystoneProperties {
 @ConfigurationProperties(prefix = "smartkey")
 class SmartKeyProperties {
     var apiKey: String? = null
+    var groupId: String? = null
 }
