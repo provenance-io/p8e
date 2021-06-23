@@ -5,7 +5,7 @@ import com.fortanix.sdkms.v1.model.*
 import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toUuidProv
 import io.provenance.p8e.encryption.model.ExternalKeyRef
-import io.provenance.p8e.shared.extension.logger
+import io.provenance.p8e.shared.config.SmartKeyProperties
 import org.springframework.stereotype.Service
 import java.security.KeyPair
 import java.util.*
@@ -16,12 +16,16 @@ enum class KeyUsageType(val options: List<KeyOperations>) {
 }
 
 @Service
-class KeyManagementService(private val securityObjectsApi: SecurityObjectsApi) {
+class KeyManagementService(
+    private val securityObjectsApi: SecurityObjectsApi,
+    private val smartKeyProperties: SmartKeyProperties
+) {
     fun importKey(keyPair: KeyPair, name: String?, keyUsageType: KeyUsageType): ExternalKeyRef =
         importOrGenerateKey(SobjectRequest()
             .objType(ObjectType.EC)
             .value(keyPair.private.encoded)
             .keyOps(keyUsageType.options)
+            .groupId(smartKeyProperties.groupId)
             .name(name)
         )
 
@@ -30,6 +34,7 @@ class KeyManagementService(private val securityObjectsApi: SecurityObjectsApi) {
             .objType(ObjectType.EC)
             .ellipticCurve(EllipticCurve.SECP256K1)
             .keyOps(keyUsageType.options)
+            .groupId(smartKeyProperties.groupId)
             .name(name)
         )
 
