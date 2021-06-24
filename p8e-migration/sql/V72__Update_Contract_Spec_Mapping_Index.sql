@@ -1,2 +1,0 @@
-DROP INDEX contract_spec_hash_scope_unq_idx;
-CREATE UNIQUE INDEX contract_spec_hash_scope_unq_idx ON contract_spec_mapping (hash,scope_specification_uuid,provenance_hash);
