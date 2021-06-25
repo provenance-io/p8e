@@ -8,6 +8,7 @@ import org.jetbrains.exposed.dao.id.EntityID
 import org.jetbrains.exposed.dao.id.UUIDTable
 import org.jetbrains.exposed.sql.Expression
 import org.jetbrains.exposed.sql.QueryBuilder
+import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.append
 import org.jetbrains.exposed.sql.jodatime.CurrentDateTime
@@ -44,12 +45,12 @@ open class JobEntityClass : UUIDEntityClass<JobRecord>(JobTable) {
         retryAfterSeconds = retryAfterInterval.toSeconds().toInt()
     }
 
-    fun pollOne(): JobRecord? = find {
+    fun poll(limit: Int): Collection<JobRecord> = find {
         (JobTable.status eq JobStatus.CREATED) or (
             (JobTable.status inList listOf(JobStatus.IN_PROGRESS, JobStatus.ERROR)) and
             (CurrentDateTime() greater DateAddSeconds(JobTable.updated, JobTable.retryAfterSeconds))
         )
-    }.forUpdate().firstOrNull()?.also {
+    }.forUpdate().limit(limit).orderBy(JobTable.updated to SortOrder.ASC).toList().onEach {
         it.status = JobStatus.IN_PROGRESS
         it.updated = OffsetDateTime.now()
     }
