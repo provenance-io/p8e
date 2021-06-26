@@ -9,6 +9,7 @@ import io.provenance.engine.batch.MailboxMeta
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.service.AffiliateService
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
 import java.security.PublicKey
 import java.util.UUID
@@ -32,27 +33,25 @@ class MailboxService(
         log.info("Fragmenting env:{}", env.getUuid())
 
         val signer = affiliateService.getSigner(publicKey)
-        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         val invokerPublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
 
         // if the invoker public key does not match the encryption or signing public key, then error.
-        if (invokerPublicKey != encryptionKeyRef.publicKey && invokerPublicKey != signer.getPublicKey()) {
-            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionKeyRef.publicKey.toHex()}")
+        if (invokerPublicKey != encryptionPublicKey && invokerPublicKey != signer.getPublicKey()) {
+            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionPublicKey.toHex()}")
             return
         }
 
         val scopeOwners = env.scope.partiesList
             .filter { it.hasSigner() }
             .map { it.signer.encryptionPublicKey.toPublicKey() }
-            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
 
         val additionalAudiences = env.contract.recitalsList
             .filter { it.hasSigner() }
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
             .map { it.signer.encryptionPublicKey.toPublicKey() }
-            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
             .plus(scopeOwners)
 
@@ -60,7 +59,7 @@ class MailboxService(
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            encryptionKeyRef = encryptionKeyRef,
+            encryptionPublicKey = encryptionPublicKey,
             signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_REQUEST
@@ -80,7 +79,6 @@ class MailboxService(
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
             .map { it.signer.encryptionPublicKey.toPublicKey() }
             .filterNot { audiencePublicKeyFilter.contains(it) }
-            .map { affiliateService.getEncryptionKeyRef(it) }
             .toSet()
             .run { error(publicKey, this, error) }
     }
@@ -92,16 +90,16 @@ class MailboxService(
      * @param [audiencesPublicKey] Public key(s) to send mail to
      * @param [error] The envelope error to return
      */
-    fun error(publicKey: PublicKey, audiencesPublicKey: Collection<KeyRef>, error: EnvelopeError) {
+    fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
         val signer = affiliateService.getSigner(publicKey)
-        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = error,
-            encryptionKeyRef = encryptionKeyRef,
+            encryptionPublicKey = encryptionPublicKey,
             signer = signer,
             additionalAudiences = audiencesPublicKey.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
@@ -117,15 +115,14 @@ class MailboxService(
     fun result(publicKey: PublicKey, env: Envelope) {
         log.info("Returning fragment result env:{}", env.getUuid())
 
-        val additionalAudiencePublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
-        val additionalAudiences = setOf(affiliateService.getEncryptionKeyRef(additionalAudiencePublicKey))
+        val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
         val signer = affiliateService.getSigner(publicKey)
-        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            encryptionKeyRef = encryptionKeyRef,
+            encryptionPublicKey = encryptionPublicKey,
             signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_RESPONSE

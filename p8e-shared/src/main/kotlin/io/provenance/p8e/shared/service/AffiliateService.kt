@@ -15,6 +15,7 @@ import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.shared.extension.isActive
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.encryption.model.ExternalKeyRef
+import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.encryption.model.KeyProviders.SMARTKEY
 import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.domain.*
@@ -70,14 +71,10 @@ class AffiliateService(
      */
     fun getSigner(publicKey: PublicKey): SignerImpl {
         val affiliateRecord = get(publicKey)
-        return if(affiliateRecord?.keyType == SMARTKEY) {
-            signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString()))
-        } else {
-            signerFactory.getSigner(
-                SignerFactoryParam.PenParam(
-                    KeyPair(affiliateRecord?.publicKey?.value?.toJavaPublicKey(), affiliateRecord?.privateKey?.toJavaPrivateKey())
-                )
-            )
+        return when(affiliateRecord?.keyType) {
+            SMARTKEY -> signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString()))
+            DATABASE -> signerFactory.getSigner(SignerFactoryParam.PenParam(KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey!!.toJavaPrivateKey())))
+            else -> throw UnsupportedOperationException("Unsupported signer type found ${affiliateRecord?.keyType?.name}.")
         }
     }
 

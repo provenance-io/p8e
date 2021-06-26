@@ -195,10 +195,10 @@ class EnvelopeEventObserver(
 
                 // auth with the auth_public_key, and we will set the connected key with the signing.
                 connectedKey.set(affiliateRecord.publicKey.value.toPublicKeyProto())
+            }
 
-                queuers.computeIfAbsent(queuerKey!!) {
-                    queuer
-                }
+            queuers.computeIfAbsent(queuerKey!!) {
+                queuer
             }
         }
         return streamObserver

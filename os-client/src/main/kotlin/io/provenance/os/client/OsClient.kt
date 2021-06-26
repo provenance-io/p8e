@@ -27,6 +27,7 @@ import io.provenance.os.util.toHexString
 import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import objectstore.Util
+import org.bouncycastle.asn1.tsp.EncryptionInfo
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -170,9 +171,9 @@ open class OsClient(
 
     fun put(
         message: Message,
-        encryptionKeyRef: KeyRef,
+        encryptionPublicKey: PublicKey,
         signer: SignerImpl,
-        additionalAudiences: Set<KeyRef> = setOf(),
+        additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID()
     ): Objects.ObjectResponse {
@@ -180,7 +181,7 @@ open class OsClient(
 
         return put(
             ByteArrayInputStream(bytes),
-            encryptionKeyRef,
+            encryptionPublicKey,
             signer,
             bytes.size.toLong(),
             additionalAudiences,
@@ -191,10 +192,10 @@ open class OsClient(
 
     fun put(
         inputStream: InputStream,
-        encryptionKeyRef: KeyRef,
+        encryptionPublicKey: PublicKey,
         signer: SignerImpl,
         contentLength: Long,
-        additionalAudiences: Set<KeyRef> = setOf(),
+        additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
         deadlineSeconds: Long = 60L
@@ -205,7 +206,7 @@ open class OsClient(
 
         val dime = ProvenanceDIME.createDIME(
             payload = signatureInputStream,
-            ownerEncryptionKeyRef = encryptionKeyRef,
+            ownerEncryptionPublicKey = encryptionPublicKey,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
             processingAudienceKeys = listOf()
         )

@@ -26,7 +26,6 @@ import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.domain.AffiliateSharePublicKeys
 import io.provenance.p8e.shared.service.AffiliateService
 import java.io.ByteArrayInputStream
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
@@ -133,13 +132,12 @@ class ContractEngine(
                         .plus(contract.recitalsList.map { it.signer.signingPublicKey })
                         .map { it.toPublicKey() }
                         .let { it + affiliateService.getSharePublicKeys(it).value }
-                        .map { affiliateService.getEncryptionKeyRef(it) }
                         .toSet()
                     
-                    log.debug("Change scope ownership - adding ${audience.map { it.publicKey.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
+                    log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
                     this.getScopeData(encryptionKeyRef, definitionService, scope, signer)
-                        .threadedMap(executor) { definitionService.save(encryptionKeyRef, it, signer, audience) }
+                        .threadedMap(executor) { definitionService.save(encryptionKeyRef.publicKey, it, signer, audience) }
                 } else { }
             }
             Contracts.ContractType.FACT_BASED, Contracts.ContractType.UNRECOGNIZED -> Unit
@@ -182,18 +180,14 @@ class ContractEngine(
                 )
             }
 
-            val contractAudienceRef = contract.toAudience(scope, shares).map {
-                affiliateService.getEncryptionKeyRef(it)
-            }.toSet()
-
             ResultSetter {
                 conditionBuilder.result = signAndStore(
                     definitionService,
                     prerequisite.fact.name,
                     result,
-                    contractAudienceRef,
+                    contract.toAudience(scope, shares),
                     signer,
-                    encryptionKeyRef,
+                    encryptionKeyRef.publicKey,
                     scope
                 )
             }
@@ -228,18 +222,14 @@ class ContractEngine(
                         )
                     }
 
-                    val contractAudienceRef = contract.toAudience(scope, shares).map {
-                        affiliateService.getEncryptionKeyRef(it)
-                    }.toSet()
-
                     ResultSetter {
                         considerationBuilder.result = signAndStore(
                             definitionService,
                             function.fact.name,
                             result,
-                            contractAudienceRef,
+                            contract.toAudience(scope, shares),
                             signer,
-                            encryptionKeyRef,
+                            encryptionKeyRef.publicKey,
                             scope
                         )
                     }
@@ -303,13 +293,13 @@ class ContractEngine(
         definitionService: DefinitionService,
         name: String,
         message: Message,
-        audiences: Set<KeyRef>,
+        audiences: Set<PublicKey>,
         signer: SignerImpl,
-        encryptionKeyRef: KeyRef,
+        encryptionPublicKey: PublicKey,
         scope: Scope?
     ): ExecutionResult {
         val sha512 = definitionService.save(
-            encryptionKeyRef,
+            encryptionPublicKey,
             message,
             signer,
             audiences

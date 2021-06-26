@@ -1,5 +1,6 @@
 package io.provenance.p8e.shared.util
 
+import com.fortanix.sdkms.v1.ApiException
 import com.fortanix.sdkms.v1.api.AuthenticationApi
 import io.provenance.p8e.shared.extension.logger
 import org.springframework.scheduling.annotation.Scheduled
@@ -21,9 +22,12 @@ class SmartKeyAuthRefresh(
      */
     @Scheduled(fixedRate = REFRESH_RATE)
     fun refreshSmartKeyAuthToken() {
-        if(authenticationApi.apiClient != null) {
+        try {
             log.debug("refreshing SmartKey auth session")
             authenticationApi.refresh()
+        } catch (e: ApiException) {
+            // SmartKey is not enabled.
+            log.debug("SmartKey API not enabled :${e.message}")
         }
     }
 }

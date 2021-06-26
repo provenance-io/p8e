@@ -185,7 +185,7 @@ class MailboxReaper(
                         )
                         // TODO - do we need to handle only-once processing for mailing errors?
                         .also {
-                            mailboxService.error(item.publicKey, listOf(affiliateService.getEncryptionKeyRef(ownerAudience.publicKey.toPublicKey())), it)
+                            mailboxService.error(item.publicKey, listOf(ownerAudience.publicKey.toPublicKey()), it)
                         }
             }
         }

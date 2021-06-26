@@ -256,39 +256,39 @@ class DefinitionService(
     }
 
     fun save(
-        encryptionKeyRef: KeyRef,
+        encryptionPublicKey: PublicKey,
         msg: ByteArray,
         signer: SignerImpl,
-        audience: Set<KeyRef> = setOf()
+        audience: Set<PublicKey> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.sha512()
         }
         return osClient.put(
             ByteArrayInputStream(msg),
-            encryptionKeyRef,
+            encryptionPublicKey,
             signer,
             msg.size.toLong(),
             audience
         ).also {
-            putCache[PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.base64Sha512())] = true
+            putCache[PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())] = true
         }.hash.toByteArray()
     }
 
     fun <T : Message> save(
-        encryptionKeyRef: KeyRef,
+        encryptionPublicKey: PublicKey,
         msg: T,
         signer: SignerImpl,
-        audience: Set<KeyRef> = setOf()
+        audience: Set<PublicKey> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.map { it.publicKey }.toMutableSet().plus(encryptionKeyRef.publicKey), msg.toByteArray().base64Sha512())
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.toByteArray().base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.toByteArray().sha512()
         }
         return osClient.put(
             msg,
-            encryptionKeyRef,
+            encryptionPublicKey,
             signer,
             additionalAudiences = audience
         ).also {

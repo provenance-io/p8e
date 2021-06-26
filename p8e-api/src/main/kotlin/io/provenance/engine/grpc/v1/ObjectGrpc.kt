@@ -46,29 +46,22 @@ class ObjectGrpc(
         val msg = request.message.toByteArray()
         val signer = transaction { affiliateService.getSigner(publicKey()) }
         val affiliateShares = transaction { affiliateService.getSharePublicKeys(request.toAudience().plus(publicKey())) }
-        val encryptionKeyRef = transaction { affiliateService.getEncryptionKeyRef(publicKey()) }
+        val encryptionPublicKey = transaction { affiliateService.getEncryptionPublicKey(publicKey())}
 
-        // Update the dime's audience list to use the encryption key ref, so we has accessibility
-        // to the audience's UUID as well, if SmartKey is used.
+        // Update the dime's audience list to use encryption public keys.
         val audience = request.toAudience().plus(affiliateShares.value).map {
             transaction {
                 try {
-                    affiliateService.getEncryptionKeyRef(it)
+                    affiliateService.getEncryptionKeyPair(it).public
                 } catch(t: Throwable) {
-                   // if key is not found in the affiliate table just setup the KeyRef with what was in the request,
-                   // with nullable fields, to upload to OS as audience members.
-                   KeyRef(
-                       publicKey = it,
-                       null,
-                       null,
-                       type = encryptionKeyRef.type // take whatever the encryptionKeyRef is
-                   )
+                    // if key is not found in the affiliate table just return what was in the request
+                    it
                 }
             }
         }.toSet()
 
         DefinitionService(osClient)
-            .save(encryptionKeyRef, msg, signer, audience)
+            .save(encryptionPublicKey, msg, signer, audience)
             .toProto()
             .complete(responseObserver)
     }

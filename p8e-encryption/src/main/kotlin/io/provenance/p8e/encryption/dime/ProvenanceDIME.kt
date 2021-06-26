@@ -96,8 +96,8 @@ object ProvenanceDIME {
                 .build()
     }
 
-    fun getOwnerAudience(ownerEncryptionKeyRef: KeyRef, additionalAuthenticatedData: String = "", key: SecretKeySpec, payloadId: Int): Audience {
-        val (publicKeyEncodedStrForOwner, provenanceECIESCryptogramForOwner) = getECIESEncodedPayload(ownerEncryptionKeyRef, additionalAuthenticatedData, key)
+    fun getOwnerAudience(ownerEncryptionPublicKey: PublicKey, additionalAuthenticatedData: String = "", key: SecretKeySpec, payloadId: Int): Audience {
+        val (publicKeyEncodedStrForOwner, provenanceECIESCryptogramForOwner) = getECIESEncodedPayload(ownerEncryptionPublicKey, additionalAuthenticatedData, key)
         return createAudience(contextType = EncryptionProtos.ContextType.SUBMISSION,
                 ephemeralPubKey = provenanceECIESCryptogramForOwner.ephemeralPublicKey!!,
                 encryptedDEK = BaseEncoding.base64().encode(provenanceECIESCryptogramForOwner.encryptedData).toByteArray(Charsets.UTF_8),
@@ -106,12 +106,12 @@ object ProvenanceDIME {
                 tag = BaseEncoding.base64().encode(provenanceECIESCryptogramForOwner.tag).toByteArray(Charsets.UTF_8))
     }
 
-    fun getECIESEncodedPayload(encryptionKeyRef: KeyRef, additionalAuthenticatedData: String = "", key: SecretKeySpec): Pair<String, ProvenanceECIESCryptogram> {
-        val publicKeyEncodedStr = BaseEncoding.base64().encode(ECUtils.convertPublicKeyToBytes(encryptionKeyRef.publicKey))
+    fun getECIESEncodedPayload(publicKey: PublicKey, additionalAuthenticatedData: String = "", key: SecretKeySpec): Pair<String, ProvenanceECIESCryptogram> {
+        val publicKeyEncodedStr = BaseEncoding.base64().encode(ECUtils.convertPublicKeyToBytes(publicKey))
 
         val provenanceECIESCryptogram = ProvenanceECIESCipher().encrypt(
             BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
-            encryptionKeyRef.publicKey,
+            publicKey,
             additionalAuthenticatedData
         )
 
@@ -226,13 +226,13 @@ object ProvenanceDIME {
                    payloadId: Int = 0,
                    payloadText: String,
                    additionalAuthenticatedData: String = "",
-                   ownerEncryptionKeyRef: KeyRef,
+                   ownerEncryptionPublicKey: PublicKey,
                    metadata: Map<String, String> = emptyMap(),
-                   additionalAudience: Map<EncryptionProtos.ContextType, Set<KeyRef>> = emptyMap(),
+                   additionalAudience: Map<EncryptionProtos.ContextType, Set<PublicKey>> = emptyMap(),
                    additionalAudienceAuthenticatedData: Map<EncryptionProtos.ContextType, Set<Pair<PublicKey, String>>> = emptyMap(),
                    additionalDEKS: Map<String, SecretKeySpec> = emptyMap(),
                    additionalDEKSAuthenticatedData: Map<String, String> = emptyMap(),
-                   processingAudienceKeys: List<KeyRef>,
+                   processingAudienceKeys: List<PublicKey>,
                    providedDEK: SecretKeySpec? = null,
                    legacyEncoding: Boolean = true
     ): DIMEProcessingModel {
@@ -244,8 +244,8 @@ object ProvenanceDIME {
 
         val audienceList = mutableListOf<Audience>()
         val processingScopedAudienceList = mutableListOf<Audience>()
-        processingAudienceKeys.forEach { keyRef ->
-            val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(keyRef, additionalAuthenticatedData, key)
+        processingAudienceKeys.forEach { publicKey ->
+            val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(publicKey, additionalAuthenticatedData, key)
               val audience = createAudience(contextType = EncryptionProtos.ContextType.PROCESSING
                     , ephemeralPubKey = provenanceECIESCryptogram.ephemeralPublicKey
                     , encryptedDEK = BaseEncoding.base64().encode(provenanceECIESCryptogram.encryptedData).toByteArray(Charsets.UTF_8)
@@ -257,9 +257,9 @@ object ProvenanceDIME {
         }
 
         additionalAudience.forEach { additionalAudienceEncryptionKeyRef ->
-            additionalAudienceEncryptionKeyRef.value.forEach { keyRef ->
-                val additionalAudienceAAD = additionalAudienceAuthenticatedData[additionalAudienceEncryptionKeyRef.key]?.find { aadData -> aadData.first == keyRef.publicKey }?.second
-                val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(keyRef, additionalAudienceAAD ?: "", key)
+            additionalAudienceEncryptionKeyRef.value.forEach { audiencePublicKey ->
+                val additionalAudienceAAD = additionalAudienceAuthenticatedData[additionalAudienceEncryptionKeyRef.key]?.find { aadData -> aadData.first == audiencePublicKey }?.second
+                val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(audiencePublicKey, additionalAudienceAAD ?: "", key)
                 val audience = createAudience(contextType = additionalAudienceEncryptionKeyRef.key
                         , ephemeralPubKey = provenanceECIESCryptogram.ephemeralPublicKey
                         , encryptedDEK = BaseEncoding.base64().encode(provenanceECIESCryptogram.encryptedData).toByteArray(Charsets.UTF_8)
@@ -297,7 +297,7 @@ object ProvenanceDIME {
             payloadIdForDEKS++
         }
 
-        val owner = getOwnerAudience(ownerEncryptionKeyRef, additionalAuthenticatedData, key, payloadId)
+        val owner = getOwnerAudience(ownerEncryptionPublicKey, additionalAuthenticatedData, key, payloadId)
 
         //add the owner to the audience.. ??
         audienceList.add(owner)
@@ -323,11 +323,11 @@ object ProvenanceDIME {
                    payloadId: Int = 0,
                    payload: InputStream,
                    additionalAuthenticatedData: String = "",
-                   ownerEncryptionKeyRef: KeyRef,
+                   ownerEncryptionPublicKey: PublicKey,
                    metadata: Map<String, String> = emptyMap(),
-                   additionalAudience: Map<EncryptionProtos.ContextType, Set<KeyRef>> = emptyMap(),
+                   additionalAudience: Map<EncryptionProtos.ContextType, Set<PublicKey>> = emptyMap(),
                    additionalAudienceAuthenticatedData: Map<EncryptionProtos.ContextType, Set<Pair<PublicKey, String>>> = emptyMap(),
-                   processingAudienceKeys: List<KeyRef>,
+                   processingAudienceKeys: List<PublicKey>,
                    providedDEK: SecretKeySpec? = null
     ): DIMEStreamProcessingModel {
 
@@ -356,9 +356,9 @@ object ProvenanceDIME {
         }
 
         additionalAudience.forEach {
-            it.value.forEach { keyRef ->
-                val additionalAudienceAAD = additionalAudienceAuthenticatedData[it.key]?.find { aadData -> aadData.first == keyRef.publicKey }?.second
-                val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(keyRef, additionalAudienceAAD ?: "", key)
+            it.value.forEach { audiencePublicKey ->
+                val additionalAudienceAAD = additionalAudienceAuthenticatedData[it.key]?.find { aadData -> aadData.first == audiencePublicKey }?.second
+                val (publicKeyEncodedStr, provenanceECIESCryptogram) = getECIESEncodedPayload(audiencePublicKey, additionalAudienceAAD ?: "", key)
                 val audience = createAudience(
                     contextType = it.key,
                     ephemeralPubKey = provenanceECIESCryptogram.ephemeralPublicKey,
@@ -372,7 +372,7 @@ object ProvenanceDIME {
             }
         }
 
-        val owner = getOwnerAudience(ownerEncryptionKeyRef, additionalAuthenticatedData, key, payloadId)
+        val owner = getOwnerAudience(ownerEncryptionPublicKey, additionalAuthenticatedData, key, payloadId)
 
         //add the owner to the audience.. ??
         audienceList.add(owner)

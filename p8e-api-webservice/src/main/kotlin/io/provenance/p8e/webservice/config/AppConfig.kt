@@ -108,7 +108,7 @@ class AppConfig : WebMvcConfigurer {
                 auth.apiKeyPrefix = "Bearer"
             }
         } else {
-            null // SmartKey is not initialized.
+            ApiClient() // SmartKey is not initialized.
         }
     }
 
