@@ -71,10 +71,11 @@ class AffiliateService(
      */
     fun getSigner(publicKey: PublicKey): SignerImpl {
         val affiliateRecord = get(publicKey)
-        return when(affiliateRecord?.keyType) {
+            .orThrowNotFound("Affiliate Record Not found")
+
+        return when(affiliateRecord.keyType) {
             SMARTKEY -> signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString()))
             DATABASE -> signerFactory.getSigner(SignerFactoryParam.PenParam(KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey!!.toJavaPrivateKey())))
-            else -> throw UnsupportedOperationException("Unsupported signer type found ${affiliateRecord?.keyType?.name}.")
         }
     }
 
