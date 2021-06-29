@@ -28,10 +28,9 @@ import java.net.URI
     ObjectStoreProperties::class,
     ServiceProperties::class,
     JwtProperties::class,
-    ProvenanceKeystoneProperties::class
+    ProvenanceKeystoneProperties::class,
 ])
 class AppConfig : WebMvcConfigurer {
-
     @Bean
     fun objectMapper(): ObjectMapper {
         val module = SimpleModule()

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package p8e;
+
+import "p8e/public_key.proto";
+
+message P8eJob {
+  oneof job {
+    AddAffiliateOSLocator addAffiliateOSLocator = 1;
+    MsgAddScopeDataAccessRequest msgAddScopeDataAccessRequest = 2;
+  }
+}
+
+message AddAffiliateOSLocator {
+  PublicKey publicKey = 1;
+}
+
+message MsgAddScopeDataAccessRequest {
+  // scope MetadataAddress for updating data access
+  bytes scope_id = 1;
+
+  // AccAddress addresses to be added to scope
+  repeated string data_access = 2;
+  // signers is the list of address of those signing this request.
+  repeated string signers = 3;
+
+  PublicKey publicKey = 4;
+}

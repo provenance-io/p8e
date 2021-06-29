@@ -9,11 +9,11 @@ import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
 import io.p8e.util.*
-import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.asBech32PublicKey
 import io.provenance.engine.crypto.toSignerMeta
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.util.PROV_METADATA_PREFIX_SCOPE_ADDR
 import io.provenance.engine.util.toAddress
@@ -43,7 +43,6 @@ data class ContractRequestWrapper(
     val executionUuid: UUID,
     val request: MsgP8eMemorializeContractRequest,
     val future: CompletableFuture<ContractTxResult>,
-    val addDataAccessRequest: MsgAddScopeDataAccessRequest?,
     )
 
 @Component
@@ -52,14 +51,13 @@ class ChaincodeInvokeService(
     private val transactionStatusService: TransactionStatusService,
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
-    private val affiliateService: AffiliateService,
 ) : IChaincodeInvokeService {
     private val log = logger()
 
     private val objectMapper = ObjectMapper().configureProvenance()
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
 
-    private val accountInfo = provenanceGrpc.accountInfo("tp1vz99nyd2er8myeugsr4xm5duwhulhp5arsr9wt")
+    private val accountInfo = provenanceGrpc.accountInfo()
 
     // Optional gas multiplier tracking
     private var gasMultiplierResetAt = OffsetDateTime.now()
@@ -185,22 +183,12 @@ class ChaincodeInvokeService(
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
             try {
-                log.info("*this is the account info^")
-                log.info(accountInfo.toString())
-                val txBody = batch.flatMap {
+                val txBody = batch.map {
                     it.attempts++
-                    //TODO this might break the error index matching
-//                    listOf(it.request, it.addDataAccessRequest).filterNotNull()
-                    listOf(it.addDataAccessRequest).filterNotNull()
+                    it.request
                 }.toTxBody()
-//                val txBody = batch.map {
-//                    it.attempts++
-//                    //TODO this might break the error index matching
-//                    it.request
-//                }.toTxBody()
-
                 // Send the transactions to the blockchain.
-                val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
+                val resp = batchTx(txBody)
 
                 if (resp.txResponse.code != 0) {
                     // adding extra raw logging during exceptional cases so that we can see what typical responses look like while this interface is new
@@ -359,32 +347,9 @@ class ChaincodeInvokeService(
             Contracts.ContractType.UNRECOGNIZED -> throw IllegalStateException("Unrecognized contract type of ${env.contract.typeValue} for envelope ${env.executionUuid.value}")
         }
         val future = CompletableFuture<ContractTxResult>()
-//        TODO COMPLETE THIS Set up dataAccessMsg to be offered to the queue. Can be null.
 
-        val scopeDataAccessRequest = MsgAddScopeDataAccessRequest.newBuilder()
-            .addAllDataAccess(env.affiliateSharesList.map {
-                    affiliateService.getAddress(
-                    it.toPublicKey(), chaincodeProperties.mainNet
-                )
-            })
-//            .addSigners(accountProvider.bech32Address())
-            .addAllSigners(env.signaturesList.map {
-                it.signer.signingPublicKey.toPublicKey().let {
-                    affiliateService.getAddress( it, chaincodeProperties.mainNet)
-                }
-            })
-            .setScopeId(env.ref.scopeUuid.value.toUuidProv().toAddress(PROV_METADATA_PREFIX_SCOPE_ADDR).toByteString())
-            .build().takeIf { env.affiliateSharesList.isNotEmpty() }
-
-        // Later, check the scope and add if it doesn't already exist.
-        // When get to the point of creating that message, ask pierce for converting to provenance address.
         // TODO what to do when this offer fails?
-        log.info("Below is scope uuid")
-        log.info("THIS IS THE MESSAGE THAT IS BEING ADDED TO THE QUEUE")
-        log.info(msg.toString())
-        log.info("###########################################################")
-        log.info(scopeDataAccessRequest.toString())
-        queue.offer(ContractRequestWrapper(env.executionUuid.toUuidProv(), msg, future, scopeDataAccessRequest))
+        queue.offer(ContractRequestWrapper(env.executionUuid.toUuidProv(), msg, future))
 
         return future
     }
@@ -433,14 +398,12 @@ class ChaincodeInvokeService(
             }
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
-            synchronized(provenanceGrpc) {
-                batchTx(txBody, applyMultiplier = false).also {
-                    if (it.txResponse.code != 0) {
-                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
-                    }
-
-                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
+            batchTx(txBody, applyMultiplier = false).also {
+                if (it.txResponse.code != 0) {
+                    throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                 }
+
+                log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
@@ -448,12 +411,11 @@ class ChaincodeInvokeService(
         }
     }
 
-    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse {
+    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse = synchronized(provenanceGrpc) {
         val accountNumber = accountInfo.accountNumber
-        val sequenceNumber = 0L//getAndIncrementSequenceNumber()
+        val sequenceNumber = getAndIncrementSequenceNumber()
 
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
-
         if (applyMultiplier && gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
             log.info("setting gasMultiplier to ${chaincodeProperties.gasMultiplier} (current count = $gasMultiplierDailyCount)")
             estimate.setGasMultiplier(chaincodeProperties.gasMultiplier)
@@ -463,8 +425,8 @@ class ChaincodeInvokeService(
         } else {
             log.info("skipping gasMultiplier due to daily limit")
         }
-        var affiliateKeyPair = KeyPair("0A41046C57E9E25101D5E553AE003E2F79025E389B51495607C796B4E95C0A94001FBC24D84CD0780819612529B803E8AD0A397F474C965D957D33DD64E642B756FBC4".toJavaPublicKey(), "0A2071E487C3FB00642F1863D57749F32D94F13892FA68D02049F7EA9E8FC58D6E63".toJavaPrivateKey())
-        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate, affiliateKeyPair.toSignerMeta())
+        // TODO this is the hardcoded way to force the update through
+        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate )
     }
 
     /**

@@ -37,6 +37,7 @@ class AffiliateService(
     private val osClient: OsClient,
     private val keystoneService: KeystoneService,
     private val esClient: RestHighLevelClient,
+    private val osLocatorService: OSLocatorService,
 ) {
 
     companion object {
@@ -162,6 +163,9 @@ class AffiliateService(
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionKeyPair.public)
+                // todo: which key needs to be registered? encryption or signing?
+                // seems like scope will have signing, but object store will only know encryption...
+                osLocatorService.registerAffiliate(encryptionKeyPair.public)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {

@@ -1,27 +1,18 @@
 package io.provenance.engine.util
 
-import com.google.protobuf.Any
 import io.p8e.proto.*
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.ContractSpecs.PartyType
 import io.p8e.proto.Util
 import io.p8e.util.*
-import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.asBech32PublicKey
-import io.provenance.engine.crypto.toBech32Data
-import io.provenance.engine.service.toAny
 import io.provenance.metadata.v1.*
 import io.provenance.metadata.v1.PartyType as ProvenancePartyType
 import io.provenance.metadata.v1.p8e.SignatureSet
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import io.provenance.p8e.shared.service.AffiliateService
-import org.bouncycastle.util.encoders.Hex
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.kethereum.crypto.decompressKey
-import org.kethereum.model.PublicKey
 import java.lang.Long.max
-import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.util.*
 

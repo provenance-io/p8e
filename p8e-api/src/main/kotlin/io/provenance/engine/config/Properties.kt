@@ -29,6 +29,12 @@ class ObjectStoreProperties {
     var key: String? = null
 }
 
+@ConfigurationProperties(prefix = "objectstore.locator")
+@Validated
+class ObjectStoreLocatorProperties {
+    @NotNull lateinit var url: String
+}
+
 @ConfigurationProperties(prefix = "event.stream")
 @Validated
 class EventStreamProperties {
@@ -72,17 +78,6 @@ class ElasticSearchProperties {
 @Validated
 class ReaperProperties {
     @NotNull @Pattern(regexp = "\\d{1,2}") lateinit var schedulerPoolSize: String
-}
-
-@ConfigurationProperties(prefix = "provenance.oauth")
-@Validated
-class ProvenanceOAuthProperties {
-    @NotNull lateinit var url: String
-    @NotNull lateinit var clientId: String
-    @NotNull lateinit var clientSecret: String
-    @NotNull lateinit var redirectUrl: String
-    @NotNull lateinit var identityUrl: String
-    @NotNull lateinit var ttlSeconds: Integer
 }
 
 abstract class BaseReaperProperties {
