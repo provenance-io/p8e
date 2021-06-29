@@ -124,7 +124,7 @@ class IndexHandler(
                                 ), RequestOptions.DEFAULT
                             )
                             // If the env is the invoker, create the data access message and put into a job.
-                            if(envelope.isInvoker == true) {
+                            if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
                                 val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
                                     affiliateService.getAddress(
                                         it.toPublicKey(), chaincodeProperties.mainNet
@@ -133,7 +133,7 @@ class IndexHandler(
                                 val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
                                 // Only perform job if data access will be updated
                                 if (envelopeDataAccess.any { it !in existingScopeDataAccess }) {
-                                    val scopeDataAccessRequest = p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
+                                    p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
                                         .addAllDataAccess(envelopeDataAccess)
                                         .addAllSigners(envelope.data.result.signaturesList.map {
                                             it.signer.signingPublicKey.toPublicKey().let {
@@ -147,10 +147,7 @@ class IndexHandler(
                                         )
                                         .setPublicKey(envelope.data.input.contract.invoker.encryptionPublicKey)
                                         .build().takeIf { envelope.data.input.affiliateSharesList.isNotEmpty() }
-                                    if (scopeDataAccessRequest != null) {
-                                        //Adding add data access to job
-                                        dataAccessService.addDataAccess(scopeDataAccessRequest)
-                                    }
+                                        ?.let { dataAccessService.addDataAccess(it) }
                                 }
                             }
                         } else {
