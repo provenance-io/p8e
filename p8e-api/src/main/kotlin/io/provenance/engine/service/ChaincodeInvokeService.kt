@@ -10,24 +10,21 @@ import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
 import io.p8e.util.*
 import io.provenance.engine.config.ChaincodeProperties
-import io.provenance.engine.crypto.Account
-import io.provenance.engine.crypto.asBech32PublicKey
-import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.TransactionStatusRecord
-import io.provenance.engine.util.PROV_METADATA_PREFIX_SCOPE_ADDR
-import io.provenance.engine.util.toAddress
 import io.provenance.engine.util.toProv
-import io.provenance.metadata.v1.*
+import io.provenance.metadata.v1.Description
+import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
+import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
+import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
+import io.provenance.metadata.v1.ScopeSpecification
+import io.provenance.engine.crypto.Account
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
-import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.kethereum.crypto.toAddress
 import org.springframework.stereotype.Component
-import java.security.KeyPair
 import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -43,7 +40,7 @@ data class ContractRequestWrapper(
     val executionUuid: UUID,
     val request: MsgP8eMemorializeContractRequest,
     val future: CompletableFuture<ContractTxResult>,
-    )
+)
 
 @Component
 class ChaincodeInvokeService(
@@ -187,6 +184,7 @@ class ChaincodeInvokeService(
                     it.attempts++
                     it.request
                 }.toTxBody()
+
                 // Send the transactions to the blockchain.
                 val resp = batchTx(txBody)
 
@@ -220,6 +218,7 @@ class ChaincodeInvokeService(
                     decrementSequenceNumber()
                     log.warn("Unexpected chain execution error", t)
                     val errorMessage = t.message ?: "Unexpected chain execution error"
+
                     val retryable = t.message?.contains("account sequence mismatch") == true
                     val matchIndex = t.message?.matchIndex()
 
@@ -230,8 +229,7 @@ class ChaincodeInvokeService(
                         retryable -> {
                             handleBatchRetry(errorMessage)
                         }
-
-                             else -> { // fail the whole batch
+                        else -> { // fail the whole batch
                             batch.map {
                                 it.future.completeExceptionally(t)
                                 it.executionUuid
@@ -346,6 +344,7 @@ class ChaincodeInvokeService(
             Contracts.ContractType.CHANGE_SCOPE,
             Contracts.ContractType.UNRECOGNIZED -> throw IllegalStateException("Unrecognized contract type of ${env.contract.typeValue} for envelope ${env.executionUuid.value}")
         }
+
         val future = CompletableFuture<ContractTxResult>()
 
         // TODO what to do when this offer fails?
@@ -416,6 +415,7 @@ class ChaincodeInvokeService(
         val sequenceNumber = getAndIncrementSequenceNumber()
 
         val estimate = provenanceGrpc.estimateTx(body, accountNumber, sequenceNumber)
+
         if (applyMultiplier && gasMultiplierDailyCount < chaincodeProperties.maxGasMultiplierPerDay) {
             log.info("setting gasMultiplier to ${chaincodeProperties.gasMultiplier} (current count = $gasMultiplierDailyCount)")
             estimate.setGasMultiplier(chaincodeProperties.gasMultiplier)
@@ -425,8 +425,8 @@ class ChaincodeInvokeService(
         } else {
             log.info("skipping gasMultiplier due to daily limit")
         }
-        // TODO this is the hardcoded way to force the update through
-        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate )
+
+        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
     /**
