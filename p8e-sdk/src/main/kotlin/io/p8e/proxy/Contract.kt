@@ -443,8 +443,6 @@ class Contract<T: P8eContract>(
                 this.stagedContract.toAudience(envelope.scope)
         )
 
-        permissionUpdater.saveConstructorArguments()
-
         // Build the envelope for this execution
         this.executionEnvelope = envelope.toBuilder()
             .setExecutionUuid(this.stagedExecutionUuid)
@@ -459,13 +457,15 @@ class Contract<T: P8eContract>(
             .clearSignatures()
             .build()
 
+        permissionUpdater.saveConstructorArguments()
+
         // TODO This probably should be removed since we can't on the fly install specs. It would have
         // to get saved during bootstrap addSpec
         saveSpec(contractManager)
 
-        executed.set(true)
-
         permissionUpdater.saveProposedFacts(this.stagedExecutionUuid.toUuidProv(), this.stagedProposedProtos)
+
+        executed.set(true)
 
         return this.executionEnvelope
     }
@@ -719,7 +719,14 @@ class Contract<T: P8eContract>(
             execute(this.packageContract())
         }
     } catch (t: Throwable) {
-        Either.Left(P8eError.PreExecutionError(t))
+        Either.Left(
+            P8eError.PreExecutionError(
+                t,
+                isFragment = isFragment,
+                contract = this.stagedContract,
+                envelope = if (this.executionEnvelope != Envelope.getDefaultInstance()) this.executionEnvelope else this.envelope,
+            )
+        )
     }
 
     private fun execute(
