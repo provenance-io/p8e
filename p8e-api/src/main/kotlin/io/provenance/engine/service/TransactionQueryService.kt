@@ -1,5 +1,7 @@
 package io.provenance.engine.service
 
+import cosmos.base.abci.v1beta1.Abci
+import io.grpc.StatusRuntimeException
 import io.provenance.engine.domain.*
 import org.springframework.stereotype.Service
 
@@ -7,19 +9,19 @@ open class TransactionQueryError(message: String): Throwable(message)
 class TransactionNotFoundError(message: String): TransactionQueryError(message)
 
 @Service
-class TransactionQueryService(val rpcClient: RPCClient) {
+class TransactionQueryService(
+    private val rpcClient: RPCClient,
+    private val provenanceGrpcService: ProvenanceGrpcService,
+) {
     @Throws(TransactionQueryError::class)
-    fun fetchTransaction(hash: String): GetTxResult {
-        return rpcClient.getTransaction(hash).let {
-            if (it.error != null) {
-                val message = "${it.error.message} - ${it.error.data}"
-                if (it.result?.txResult == null) {
-                    throw TransactionNotFoundError(message)
-                }
-                throw TransactionQueryError(message)
+    fun fetchTransaction(hash: String): Abci.TxResponse {
+        return try {
+            provenanceGrpcService.getTx(hash)
+        } catch (e: StatusRuntimeException) {
+            if (e.status.description?.contains("not found") != false) {
+                throw TransactionNotFoundError(e.status?.description ?: "Transaction $hash not found")
             }
-
-            it.result!!
+            throw TransactionQueryError(e.message ?: "Transaction $hash query error")
         }
     }
 
