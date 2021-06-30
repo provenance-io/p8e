@@ -88,18 +88,6 @@ open class OsClient(
             }
     }
 
-    fun get(uri: String, publicKey: PublicKey): DIMEInputStream {
-        if (uri.isEmpty()) {
-            throw IllegalArgumentException("Empty uri passed.")
-        }
-        val u = URI(uri)
-        if (u.scheme != "object") {
-            throw IllegalArgumentException("Unable to retrieve object for URI with scheme ${u.scheme}")
-        }
-
-        return get(u.path.substring(1).base64Decode(), publicKey)
-    }
-
     fun get(sha512: ByteArray, publicKey: PublicKey, deadlineSeconds: Long = 60L): DIMEInputStream {
         if (sha512.size != 64) {
             throw IllegalArgumentException("Provided SHA-512 must be byte array of size 64, found size: ${sha512.size}")

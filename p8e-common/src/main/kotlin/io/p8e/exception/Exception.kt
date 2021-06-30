@@ -4,6 +4,7 @@ import io.grpc.StatusException
 import io.grpc.Metadata
 import io.grpc.StatusRuntimeException
 import io.p8e.proto.ContractScope
+import io.p8e.proto.Contracts.Contract
 import io.p8e.util.*
 
 sealed class P8eError {
@@ -15,7 +16,7 @@ sealed class P8eError {
     data class ProtoParse(val message: String) : P8eError()
     data class NotFound(val message: String) : P8eError()
     data class ExecutionError(val envelopeError: ContractScope.EnvelopeError) : P8eError()
-    data class PreExecutionError(val t: Throwable) : P8eError()
+    data class PreExecutionError(val t: Throwable, val isFragment: Boolean, val contract: Contract, val envelope: ContractScope.Envelope) : P8eError()
     data class Unknown(val t: Throwable) : P8eError()
 
     companion object {
