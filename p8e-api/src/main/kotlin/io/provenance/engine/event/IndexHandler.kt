@@ -18,6 +18,12 @@ import io.provenance.p8e.shared.domain.EnvelopeRecord
 import io.provenance.p8e.shared.index.ScopeEventType
 import io.provenance.p8e.shared.util.P8eMDC
 import io.p8e.proto.Util.UUID
+import io.provenance.engine.config.ChaincodeProperties
+import io.provenance.engine.service.ProvenanceGrpcService
+import io.provenance.engine.util.PROV_METADATA_PREFIX_SCOPE_ADDR
+import io.provenance.engine.util.toAddress
+import io.provenance.metadata.v1.MsgAddScopeDataAccessRequest
+import io.provenance.p8e.shared.service.DataAccessService
 import org.elasticsearch.action.DocWriteRequest.OpType
 import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.client.RequestOptions
@@ -25,6 +31,7 @@ import org.elasticsearch.client.RestHighLevelClient
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.slf4j.MDC
 import org.springframework.stereotype.Component
+import java.security.KeyPair
 import java.security.PublicKey
 import java.time.OffsetDateTime
 import kotlin.math.max
@@ -46,8 +53,11 @@ class IndexHandler(
     private val esClient: RestHighLevelClient,
     private val eventService: EventService,
     private val protoIndexer: ProtoIndexer,
-    private val affiliateService: AffiliateService
-) {
+    private val affiliateService: AffiliateService,
+    private val dataAccessService: DataAccessService,
+    private val chaincodeProperties: ChaincodeProperties,
+    private val provenanceGrpcService: ProvenanceGrpcService,
+    ) {
     private val log = logger()
 
     init {
@@ -97,7 +107,6 @@ class IndexHandler(
                     } as ContractScope.RecordGroup
 
                     val document = baseDocument.copy(classname = recordGroup.classname, specification = recordGroup.specification)
-
                     transaction {
                         with(scope.lastEvent) {
                             EnvelopeRecord.findByExecutionUuid(
@@ -114,6 +123,10 @@ class IndexHandler(
                                     envelope.data.result.contract.recitalsList.map { it.signer.encryptionPublicKey.toPublicKey().toSha512Hex() }
                                 ), RequestOptions.DEFAULT
                             )
+                            // If the env is the invoker, create the data access message and put into a job.
+                            if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
+                                updateDataAccess(envelope)
+                            }
                         } else {
                             log.warn("Skipping ES indexing for stale scope")
                         }
@@ -168,5 +181,35 @@ class IndexHandler(
         request.id(this.scopeUuid.value)
         request.opType(OpType.INDEX)
         return request
+    }
+
+    private fun updateDataAccess(envelope: EnvelopeRecord) {
+        val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
+            affiliateSharePublicKey ->
+            affiliateService.getAddress(
+                affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
+            )
+        }
+        val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
+        // Only perform job if data access will be updated
+        if (envelopeDataAccess.any { it !in existingScopeDataAccess }) {
+            p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
+                .addAllDataAccess(envelopeDataAccess)
+                .addAllSigners(envelope.data.result.signaturesList.map {
+                    signature ->
+                    signature.signer.signingPublicKey.toPublicKey().let {
+                        signerPublicKey ->
+                        affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
+                    }
+                })
+                .setScopeId(
+                    envelope.data.input.ref.scopeUuid.value.toUuidProv().toAddress(
+                        PROV_METADATA_PREFIX_SCOPE_ADDR
+                    ).toByteString()
+                )
+                .setPublicKey(envelope.data.input.contract.invoker.encryptionPublicKey)
+                .build().takeIf { envelope.data.input.affiliateSharesList.isNotEmpty() }
+                ?.let { dataAccessService.addDataAccess(it) }
+        }
     }
 }

@@ -28,6 +28,7 @@ import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
+import io.provenance.metadata.v1.ScopeResponse
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
@@ -39,10 +40,11 @@ import org.springframework.stereotype.Service
 import java.net.URI
 import java.security.KeyPair
 import java.util.concurrent.TimeUnit
-import java.util.logging.Level
-import java.util.logging.Logger
 import cosmos.base.tendermint.v1beta1.ServiceGrpc as NodeGrpc
 import cosmos.tx.v1beta1.ServiceGrpc as TxGrpc
+import cosmos.bank.v1beta1.QueryGrpc as BankQueryGrpc
+import cosmos.bank.v1beta1.QueryOuterClass.QueryAllBalancesRequest
+import cosmos.base.v1beta1.CoinOuterClass.Coin
 import io.provenance.metadata.v1.QueryGrpc as MetadataQueryGrpc
 
 @Service
@@ -75,6 +77,7 @@ class ProvenanceGrpcService(
                 .keepAliveTimeout(20, TimeUnit.SECONDS)
                 .build()
         }
+    private val bankClient = BankQueryGrpc.newBlockingStub(channel)
 
     private val txService = TxGrpc.newBlockingStub(channel)
     private val accountService = QueryGrpc.newBlockingStub(channel)
@@ -161,14 +164,7 @@ class ProvenanceGrpcService(
         }
 
     fun retrieveScope(address: String): ContractScope.Scope {
-        val scopeResponse = metadataQueryService.scope(
-            ScopeRequest.newBuilder()
-                .setScopeId(address)
-                .setIncludeSessions(true)
-                .setIncludeRecords(true)
-                .build()
-        )
-
+        val scopeResponse = retrieveScopeData(address)
         val contractSpecHashLookup = scopeResponse.sessionsList
             .map { it.contractSpecIdInfo.contractSpecAddr }
             .toSet()
@@ -181,6 +177,21 @@ class ProvenanceGrpcService(
 
         return scopeResponse.toP8e(contractSpecHashLookup, affiliateService)
     }
+
+    fun retrieveScopeData(address: String): ScopeResponse {
+        val scopeResponse = metadataQueryService.scope(
+            ScopeRequest.newBuilder()
+                .setScopeId(address)
+                .setIncludeSessions(true)
+                .setIncludeRecords(true)
+                .build()
+        )
+
+        return scopeResponse
+    }
+
+    fun getAccountCoins(bech32Address: String): List<Coin> =
+        bankClient.allBalances(QueryAllBalancesRequest.newBuilder().setAddress(bech32Address).build()).balancesList
 }
 
 fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()

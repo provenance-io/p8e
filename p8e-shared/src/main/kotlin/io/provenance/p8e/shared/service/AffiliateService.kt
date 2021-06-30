@@ -107,7 +107,7 @@ class AffiliateService(
     }
 
     @Cacheable(PUBLIC_KEY_TO_ADDRESS)
-    private fun getAddress(publicKey: PublicKey, mainNet: Boolean): String =
+    fun getAddress(publicKey: PublicKey, mainNet: Boolean): String =
         publicKey.let {
             (it as BCECPublicKey).q.getEncoded(true)
         }.let {

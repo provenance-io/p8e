@@ -60,8 +60,10 @@ class EnvelopeService(
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
         val pen = Pen(signingKeyPair.private, signingKeyPair.public)
 
+        val affiliateShares = affiliateService.getShares(publicKey);
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
+            .addAllAffiliateShares(affiliateShares.map{ it.publicKey.toPublicKeyProto() })
                 .apply {
                     if(env.contract.startTime == Timestamp.getDefaultInstance()) {
                         contractBuilder.startTime = OffsetDateTime.now().toProtoTimestampProv()
