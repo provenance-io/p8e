@@ -334,7 +334,7 @@ class ContractManager(
      *
      * @param contractClazz subclass of P8eContract that represents the original contract
      * @param executionUuid the execution id of the original contract
-     * @param isFragment flag identifying if the original contract execution was requested (true) or initiated (false)
+     * @param isFragment flag identifying whether this contract is to be a response to a previous execution request (true) or a new execution (false)
      */
     fun <T: P8eContract> loadContract(
         contractClazz: Class<T>,
@@ -354,8 +354,8 @@ class ContractManager(
 
     /**
      * Returns a new Contract object that can be configured and executed. This Contract represents a contract
-     * based on a previously executed Contract that did not complete successfully. The envelope will contain
-     * a different execution uuid than was originally associated with the Envelope when it failed execution.
+     * based on a previously executed Contract that completed successfully. The envelope will contain
+     * a different execution uuid than was originally associated with the Envelope when it completed execution.
      *
      * @param contractClazz subclass of P8eContract that represents the original contract
      * @param executionUuid the execution id of the original contract
