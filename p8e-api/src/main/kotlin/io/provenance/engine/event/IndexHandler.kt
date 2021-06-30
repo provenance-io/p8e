@@ -125,30 +125,7 @@ class IndexHandler(
                             )
                             // If the env is the invoker, create the data access message and put into a job.
                             if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
-                                val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
-                                    affiliateService.getAddress(
-                                        it.toPublicKey(), chaincodeProperties.mainNet
-                                    )
-                                }
-                                val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
-                                // Only perform job if data access will be updated
-                                if (envelopeDataAccess.any { it !in existingScopeDataAccess }) {
-                                    p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
-                                        .addAllDataAccess(envelopeDataAccess)
-                                        .addAllSigners(envelope.data.result.signaturesList.map {
-                                            it.signer.signingPublicKey.toPublicKey().let {
-                                                affiliateService.getAddress(it, chaincodeProperties.mainNet)
-                                            }
-                                        })
-                                        .setScopeId(
-                                            envelope.data.input.ref.scopeUuid.value.toUuidProv().toAddress(
-                                                PROV_METADATA_PREFIX_SCOPE_ADDR
-                                            ).toByteString()
-                                        )
-                                        .setPublicKey(envelope.data.input.contract.invoker.encryptionPublicKey)
-                                        .build().takeIf { envelope.data.input.affiliateSharesList.isNotEmpty() }
-                                        ?.let { dataAccessService.addDataAccess(it) }
-                                }
+                                updateDataAccess(envelope)
                             }
                         } else {
                             log.warn("Skipping ES indexing for stale scope")
@@ -204,5 +181,36 @@ class IndexHandler(
         request.id(this.scopeUuid.value)
         request.opType(OpType.INDEX)
         return request
+    }
+
+    private fun updateDataAccess(envelope: EnvelopeRecord) {
+        val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
+            affiliateSharePublicKey ->
+            affiliateService.getAddress(
+                affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
+//                it.toPublicKey(), chaincodeProperties.mainNet
+            )
+        }
+        val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
+        // Only perform job if data access will be updated
+        if (envelopeDataAccess.any { it !in existingScopeDataAccess }) {
+            p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
+                .addAllDataAccess(envelopeDataAccess)
+                .addAllSigners(envelope.data.result.signaturesList.map {
+                    signature ->
+                    signature.signer.signingPublicKey.toPublicKey().let {
+                        signerPublicKey ->
+                        affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
+                    }
+                })
+                .setScopeId(
+                    envelope.data.input.ref.scopeUuid.value.toUuidProv().toAddress(
+                        PROV_METADATA_PREFIX_SCOPE_ADDR
+                    ).toByteString()
+                )
+                .setPublicKey(envelope.data.input.contract.invoker.encryptionPublicKey)
+                .build().takeIf { envelope.data.input.affiliateSharesList.isNotEmpty() }
+                ?.let { dataAccessService.addDataAccess(it) }
+        }
     }
 }

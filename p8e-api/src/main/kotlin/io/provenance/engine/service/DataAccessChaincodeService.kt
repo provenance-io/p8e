@@ -21,6 +21,9 @@ import p8e.Jobs
 import java.security.KeyPair
 import java.security.PublicKey
 
+// One to One Billion ratio from hash to nhash
+private const val HASH_TO_NHASH = 1000000000L
+
 @Service
 class DataAccessChaincodeService(
     private val chaincodeProperties: ChaincodeProperties,
@@ -54,9 +57,11 @@ class DataAccessChaincodeService(
             )
 
         // perform and wait for hash transfer to complete if account has less than 10 hash
-        if (provenanceGrpcService.getAccountCoins(affiliateAddress)[0].amount.toLong() / 1000000000 < 10) {
+        if ((provenanceGrpcService.getAccountCoins(affiliateAddress).find {it.denom == "nhash"}?.amount?.toLong()
+                ?: 0L) / HASH_TO_NHASH < 10
+        ) {
             waitForTx {
-                transferHash(affiliateAccount.address, 10000000000)
+                transferHash(affiliateAccount.address, 100 * HASH_TO_NHASH)
             }
         }
         val resp = provenanceGrpcService.batchTx(
