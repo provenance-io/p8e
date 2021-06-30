@@ -328,17 +328,45 @@ class ContractManager(
 //            }
 //    }
 
+
+    /**
+     * Returns an existing Contract object that can be configured and executed.
+     *
+     * @param contractClazz subclass of P8eContract that represents the original contract
+     * @param executionUuid the execution id of the original contract
+     * @param isFragment flag identifying whether this contract is to be a response to a previous execution request (true) or a new execution (false)
+     */
     fun <T: P8eContract> loadContract(
-        clazz: Class<T>,
-        executionUuid: UUID
+        contractClazz: Class<T>,
+        executionUuid: UUID,
+        isFragment: Boolean
     ): Contract<T> {
         return Contract(
             this,
             client,
-            dehydrateSpec(clazz),
+            dehydrateSpec(contractClazz),
             client.getContract(executionUuid),
-            clazz,
-            contractClassExecutor(clazz),
+            contractClazz,
+            contractClassExecutor(contractClazz),
+            isFragment
+        )
+    }
+
+    /**
+     * Returns a new Contract object that can be configured and executed. This Contract represents a contract
+     * based on a previously executed Contract that completed successfully. The envelope will contain
+     * a different execution uuid than was originally associated with the Envelope when it completed execution.
+     *
+     * @param contractClazz subclass of P8eContract that represents the original contract
+     * @param executionUuid the execution id of the original contract
+     */
+    fun <T: P8eContract> loadContract(
+        contractClazz: Class<T>,
+        executionUuid: UUID
+    ): Contract<T> {
+        return loadContract(
+            contractClazz,
+            executionUuid,
             false
         ).also {
             it.newExecution()
