@@ -334,7 +334,7 @@ class ContractManager(
      *
      * @param contractClazz subclass of P8eContract that represents the original contract
      * @param executionUuid the execution id of the original contract
-     * @param isFragment flag identifying if the original contract execution was requested (true)
+     * @param isFragment flag identifying if the original contract execution was requested (true) or initiated (false)
      */
     fun <T: P8eContract> loadContract(
         contractClazz: Class<T>,
