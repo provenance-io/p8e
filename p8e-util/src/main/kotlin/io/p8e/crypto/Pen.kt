@@ -66,7 +66,8 @@ class Pen(
 
     override fun sign(): ByteArray {
         signature.update(aggregatedData)
-        return signature.sign()
+        // null out the aggregatedData value to reset for next verify/sign
+        return signature.sign().also { aggregatedData = null }
     }
 
     override fun update(data: ByteArray) = signature.update(data)
@@ -85,7 +86,6 @@ class Pen(
                  */
                 if(objSizeIndexer == OBJECT_SIZE_BYTES) {
                     objSizeIndexer = (off + res)
-                    aggregatedData = null
                     aggregatedData = if (aggregatedData == null) {
                         data.copyOfRange(off, off + res)
                     } else {
@@ -104,19 +104,19 @@ class Pen(
     override fun verify(signatureBytes: ByteArray): Boolean {
         signature.update(aggregatedData)
 
-        // Reset the object size indexer.
-        objSizeIndexer = OBJECT_SIZE_BYTES
+        // Reset the object size indexer and null out the aggregatedData value.
+        objSizeIndexer = OBJECT_SIZE_BYTES.also { aggregatedData = null }
 
         return signature.verify(signatureBytes)
     }
 
     override fun initVerify(publicKey: PublicKey) {
-        signature.apply { initVerify(publicKey) }
+        signature.initVerify(publicKey)
         verifying = true
     }
 
     override fun initSign() {
-        signature.apply { initSign(keyPair.private) }
+        signature.initSign(keyPair.private)
         verifying = false
     }
 
