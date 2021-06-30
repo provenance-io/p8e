@@ -5,6 +5,9 @@ import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl.Companion.OBJECT_SIZE_BYTES
+import io.p8e.crypto.SignerImpl.Companion.PROVIDER
+import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common
 import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
@@ -48,16 +51,6 @@ class SmartKeySigner(
 
     init {
         Security.addProvider(BouncyCastleProvider())
-    }
-
-    companion object {
-        // Algo must match Provenance-object-store
-        val SIGN_ALGO = "SHA512withECDSA"
-        val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
-
-        //The size of the object bytes that are signed at bootstrap time is 32768.
-        //The data pulled from the dime input stream breaks the data into chunks of 8192.
-        val OBJECT_SIZE_BYTES = 8192 * 4
     }
 
     private var signature: Signature? = null

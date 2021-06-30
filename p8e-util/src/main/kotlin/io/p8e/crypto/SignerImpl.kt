@@ -3,10 +3,19 @@ package io.p8e.crypto
 import com.google.protobuf.Message
 import io.p8e.proto.Common
 import io.p8e.proto.PK
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.PublicKey
-import java.security.Signature
-
 interface SignerImpl {
+
+    companion object{
+        // Algo must match Provenance-object-store
+        val SIGN_ALGO = "SHA512withECDSA"
+        val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
+
+        //The size of the object bytes that are signed at bootstrap time is 32768.
+        //The data pulled from the dime input stream breaks the data into chunks of 8192.
+        val OBJECT_SIZE_BYTES = 8192 * 4
+    }
 
     /**
      * signer function implementation will be done by specific signers.
