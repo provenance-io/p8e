@@ -188,7 +188,6 @@ class IndexHandler(
             affiliateSharePublicKey ->
             affiliateService.getAddress(
                 affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
-//                it.toPublicKey(), chaincodeProperties.mainNet
             )
         }
         val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
