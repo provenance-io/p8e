@@ -45,12 +45,12 @@ class OSLocatorChaincodeService(
     override fun handle(payload: Jobs.P8eJob) {
         val job = payload.addAffiliateOSLocator
         val publicKey = job.publicKey.toPublicKey()
-        val affiliateAddress = publicKey.toBech32Address(chaincodeProperties.mainNet)
+        val affiliateAddress = affiliateService.getAddress(publicKey, chaincodeProperties.mainNet)
 
         logger().info("Handling os locator job for public key ${publicKey.toHex()}")
 
         val affiliate = transaction { affiliateService.get(publicKey) }.orThrowNotFound("Affiliate with public key ${publicKey.toHex()} not found")
-        val affiliateKeyPair = KeyPair(affiliate.publicKey.value.toJavaPublicKey(), affiliate.privateKey.toJavaPrivateKey())
+        val affiliateKeyPair = KeyPair(affiliate.encryptionPublicKey.toJavaPublicKey(), affiliate.encryptionPrivateKey.toJavaPrivateKey())
 
         // estimate amount of hash needed for locator request
         val p8eAccountInfo = provenanceGrpcService.accountInfo(p8eAccount.bech32Address())
@@ -130,14 +130,4 @@ class OSLocatorChaincodeService(
         }
         throw Exception("Failed to fetch transaction after $maxAttempts attempts [hash = $txHash]")
     }
-
-    // todo: this should really be somewhere more shared... but p8e-util where other key conversion extensions are doesn't have the Hash class...
-    private fun PublicKey.toBech32Address(mainNet: Boolean): String =
-        (this as BCECPublicKey).q.getEncoded(true)
-            .let {
-                Hash.sha256hash160(it)
-            }.let {
-                val prefix = if (mainNet) Bech32.PROVENANCE_MAINNET_ACCOUNT_PREFIX else Bech32.PROVENANCE_TESTNET_ACCOUNT_PREFIX
-                it.toBech32Data(prefix).address
-            }
 }

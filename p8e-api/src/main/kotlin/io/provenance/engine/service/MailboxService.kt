@@ -7,9 +7,11 @@ import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.provenance.engine.batch.MailboxMeta
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.shared.domain.JobRecord
 import io.provenance.p8e.shared.service.AffiliateService
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
+import p8e.Jobs
 import java.security.PublicKey
 import java.util.UUID
 
@@ -54,6 +56,8 @@ class MailboxService(
             .toSet()
             .plus(scopeOwners)
 
+        registerAffiliatesWithObjectStore(encryptionKeyPair.public, additionalAudiences)
+
         // Mail the actual contract
         osClient.put(
             uuid = UUID.randomUUID(),
@@ -86,20 +90,23 @@ class MailboxService(
      * Send envelope error to audience(s).
      *
      * @param [PublicKey] The owner of the message
-     * @param [audiencesPublicKey] Public key(s) to send mail to
+     * @param [audiencePublicKeys] Public key(s) to send mail to
      * @param [error] The envelope error to return
      */
-    fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
+    fun error(publicKey: PublicKey, audiencePublicKeys: Collection<PublicKey>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
         val signingKeyPair = transaction { affiliateService.getSigningKeyPair(publicKey) }
+        val encryptionKeyPair = transaction { affiliateService.getEncryptionKeyPair(publicKey) }
+
+        registerAffiliatesWithObjectStore(encryptionKeyPair.public, audiencePublicKeys)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = error,
             ownerPublicKey = publicKey,
             signingKeyPair = signingKeyPair,
-            additionalAudiences = audiencesPublicKey.toSet(),
+            additionalAudiences = audiencePublicKeys.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
         )
     }
@@ -117,6 +124,8 @@ class MailboxService(
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
         val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
 
+        registerAffiliatesWithObjectStore(encryptionKeyPair.public, additionalAudiences)
+
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
@@ -125,5 +134,14 @@ class MailboxService(
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_RESPONSE
         )
+    }
+
+    private fun registerAffiliatesWithObjectStore(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>) {
+        JobRecord.create(Jobs.P8eJob.newBuilder()
+            .setResolveAffiliateOSLocators(Jobs.ResolveAffiliateOSLocators.newBuilder()
+                .setLocalAffiliate(publicKey.toPublicKeyProto())
+                .addAllRemoteAffiliates(audiencesPublicKey.map { it.toPublicKeyProto() })
+            )
+            .build())
     }
 }

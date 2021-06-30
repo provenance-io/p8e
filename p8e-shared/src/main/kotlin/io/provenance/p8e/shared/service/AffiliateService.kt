@@ -107,7 +107,7 @@ class AffiliateService(
     }
 
     @Cacheable(PUBLIC_KEY_TO_ADDRESS)
-    private fun getAddress(publicKey: PublicKey, mainNet: Boolean): String =
+    fun getAddress(publicKey: PublicKey, mainNet: Boolean): String =
         publicKey.let {
             (it as BCECPublicKey).q.getEncoded(true)
         }.let {
@@ -162,9 +162,7 @@ class AffiliateService(
     fun save(signingKeyPair: KeyPair, encryptionKeyPair: KeyPair, indexName: String? = null, alias: String? = null): AffiliateRecord = AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public)
-                // todo: which key needs to be registered? encryption or signing?
-                // seems like scope will have signing, but object store will only know encryption...
+                osClient.createPublicKey(encryptionKeyPair.public, "http://localhost") // todo: get object store to accept null/missing
                 osLocatorService.registerAffiliate(encryptionKeyPair.public)
 
                 // create index in ES if it doesn't already exist

@@ -27,6 +27,7 @@ import io.provenance.engine.crypto.SignerMeta
 import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
+import io.provenance.metadata.v1.OSLocatorRequest
 import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
@@ -181,6 +182,10 @@ class ProvenanceGrpcService(
 
         return scopeResponse.toP8e(contractSpecHashLookup, affiliateService)
     }
+
+    fun getOSLocatorByAddress(address: String) = metadataQueryService.oSLocator(OSLocatorRequest.newBuilder()
+        .setOwner(address)
+        .build()).locator
 }
 
 fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()

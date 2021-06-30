@@ -69,6 +69,9 @@ dependencies {
     implementation project(":event-stream")
     implementation project(":os-client")
 
+    // Provenance Dependencies
+    implementation "io.provenance.objectstore.locator:os-locator-sdk:$os_locator_sdk_version"
+
     // Kethereum utilities
     implementation "com.github.komputing:kbip44:0.1"
     implementation "com.github.komputing:kbase58:0.1"
