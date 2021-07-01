@@ -65,7 +65,11 @@ class Pen(
     }
 
     override fun sign(): ByteArray {
-        signature.update(aggregatedData)
+        // Only update if the aggregated data is not null
+        if(aggregatedData != null) {
+            signature.update(aggregatedData)
+        }
+
         // null out the aggregatedData value to reset for next verify/sign
         return signature.sign().also { aggregatedData = null }
     }
