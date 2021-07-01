@@ -4,6 +4,7 @@ import arrow.core.Either
 import com.google.protobuf.Message
 import io.p8e.annotations.Fact
 import io.p8e.annotations.Input
+import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.proto.Common.DefinitionSpec.Type
 import io.p8e.proto.Common.ProvenanceReference
@@ -12,15 +13,14 @@ import io.p8e.proto.Contracts.ProposedFact
 import io.p8e.proto.ProtoUtil
 import io.p8e.spec.P8eContract
 import io.p8e.util.ContractDefinitionException
+import io.provenance.p8e.encryption.model.KeyRef
 import java.lang.reflect.Method
 import java.lang.reflect.Parameter
-import java.security.KeyPair
-import java.security.PublicKey
 import kotlin.Function
 
 class Function<T: P8eContract>(
-    keyPair: KeyPair,
-    private val signingPublicKey: PublicKey,
+    private val encryptionKeyRef: KeyRef,
+    private val signer: SignerImpl,
     definitionService: DefinitionService,
     private val contract: T,
     val considerationBuilder: ConsiderationProto.Builder,
@@ -32,7 +32,7 @@ class Function<T: P8eContract>(
         ?: throw ContractDefinitionException("${contract.javaClass.name}.${method.name} must have the ${Fact::class.java.name} annotation.")
 
     private val methodParameters = getFunctionParameters(
-        keyPair,
+        encryptionKeyRef,
         considerationBuilder,
         method,
         facts,
@@ -48,7 +48,7 @@ class Function<T: P8eContract>(
     }
 
     private fun getFunctionParameters(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         considerationProto: ConsiderationProto.Builder,
         method: Method,
         facts: List<FactInstance>,
@@ -57,9 +57,10 @@ class Function<T: P8eContract>(
         val proposed = considerationProto.inputsList
             .map { proposedFact ->
                 val message = definitionService.loadProto(
-                    keyPair,
+                    encryptionKeyRef,
                     proposedFact.let(::proposedFactToDef),
-                    signaturePublicKey = signingPublicKey
+                    signer = signer,
+                    signaturePublicKey = signer.getPublicKey()
                 )
                 FactInstance(
                     proposedFact.name,

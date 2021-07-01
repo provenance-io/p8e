@@ -6,6 +6,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor.JavaType.*
 import com.google.protobuf.Message
 import io.p8e.classloader.ClassLoaderCache
 import io.p8e.classloader.MemoryClassLoader
+import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.proto.ContractScope.Record
 import io.p8e.proto.ContractScope.Scope
@@ -15,7 +16,10 @@ import io.provenance.os.client.OsClient
 import io.p8e.proto.IndexProto.Index
 import io.p8e.proto.IndexProto.Index.Behavior
 import io.p8e.proto.IndexProto.Index.Behavior.*
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.extension.logger
+import io.provenance.p8e.shared.service.AffiliateService
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.io.ByteArrayInputStream
 import java.security.KeyPair
@@ -29,7 +33,7 @@ class ProtoIndexer(
     private val messageIndexDescriptor = Index.getDefaultInstance().descriptorForType.file.findExtensionByName("message_index")
     private val _definitionService = DefinitionService(osClient)
 
-    fun indexFields(scope: Scope, keyPairs: Map<String, KeyPair>): Map<String, Any> =
+    fun indexFields(scope: Scope, keyPairs: Map<String, KeyPair>, affiliateService: AffiliateService): Map<String, Any> =
         scope.recordGroupList
             // find all record groups where there's at least one party member that's an affiliate on this p8e instance
             .filter { group -> group.partiesList.any { keyPairs.containsKey(it.signer.encryptionPublicKey.toHex()) } }
@@ -41,8 +45,12 @@ class ProtoIndexer(
                             .first { keyPairs.containsKey(it.encryptionPublicKey.toHex()) }
                             .let { keyPairs.getValue(it.encryptionPublicKey.toHex()) }
 
+                        // Need a reference of the signer that is used to verify signatures.
+                        val signer = transaction { affiliateService.getSigner(keyPair.public) }
+                        val encryptionKeyRef = transaction { affiliateService.getEncryptionKeyRef(keyPair.public) }
+
                         // Try to re-use MemoryClassLoader if possible for caching reasons
-                        val spec = _definitionService.loadProto(keyPair, group.specification, ContractSpec::class.java.name) as ContractSpec
+                        val spec = _definitionService.loadProto(encryptionKeyRef, group.specification, ContractSpec::class.java.name, signer) as ContractSpec
 
                         val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}-${spec.considerationSpecsList.first().outputSpec.spec.resourceLocation.ref.hash}"
                         val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -50,12 +58,13 @@ class ProtoIndexer(
                         }
 
                         val definitionService = DefinitionService(osClient, memoryClassLoader)
-                        loadAllJars(keyPair, definitionService, spec)
+                        loadAllJars(encryptionKeyRef, definitionService, spec, signer)
 
                         fact.resultName to indexFields(
                             definitionService,
-                            keyPair,
-                            fact
+                            encryptionKeyRef,
+                            fact,
+                            signer
                         )
                     }
             }.filter { it.second != null }
@@ -65,8 +74,9 @@ class ProtoIndexer(
     @Suppress("UNCHECKED_CAST")
     fun <T: Message> indexFields(
         definitionService: DefinitionService,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         t: T,
+        signer: SignerImpl,
         indexParent: Boolean? = null
     ): Map<String, Any>? {
         val message = when(t) {
@@ -76,9 +86,10 @@ class ProtoIndexer(
                 } else {
                     definitionService.forThread {
                         definitionService.loadProto(
-                            keyPair,
+                            encryptionKeyRef,
                             t.resultHash,
-                            t.classname
+                            t.classname,
+                            signer
                         )
                     }
                 }
@@ -102,10 +113,11 @@ class ProtoIndexer(
                         for (i in 0 until list.size) {
                                 getValue(
                                     definitionService,
-                                    keyPair,
+                                    encryptionKeyRef,
                                     fieldDescriptor,
                                     doIndex,
-                                    list[i]
+                                    list[i],
+                                    signer
                                 )?.let(resultList::add)
                         }
                         fieldDescriptor.jsonName to resultList.takeIf { it.isNotEmpty() }
@@ -114,18 +126,20 @@ class ProtoIndexer(
                         fieldDescriptor.jsonName to (message.getField(fieldDescriptor) as Map<String, *>).mapValues { value ->
                             getValue(
                                 definitionService,
-                                keyPair,
+                                encryptionKeyRef,
                                 fieldDescriptor,
                                 doIndex,
-                                message.getField(fieldDescriptor)
+                                message.getField(fieldDescriptor),
+                                signer
                             )
                         }.takeIf { it.entries.any { it.value != null } }
                     else -> fieldDescriptor.jsonName to getValue(
                         definitionService,
-                        keyPair,
+                        encryptionKeyRef,
                         fieldDescriptor,
                         doIndex,
-                        message.getField(fieldDescriptor)
+                        message.getField(fieldDescriptor),
+                        signer
                     )
                 }
             }.filter { it.second != null }
@@ -136,10 +150,11 @@ class ProtoIndexer(
 
     private fun getValue(
         definitionService: DefinitionService,
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         fieldDescriptor: FieldDescriptor,
         doIndex: Boolean,
-        value: Any
+        value: Any,
+        signer: SignerImpl
     ): Any? {
         // Get value for primitive types, on MESSAGE recurse, else empty list
         return when (fieldDescriptor.javaType) {
@@ -154,8 +169,9 @@ class ProtoIndexer(
             MESSAGE -> {
                 indexFields(
                     definitionService,
-                    keyPair,
+                    encryptionKeyRef,
                     value as Message,
+                    signer,
                     doIndex
                 )
             }
@@ -198,9 +214,10 @@ class ProtoIndexer(
     }
 
     private fun loadAllJars(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
-        spec: ContractSpec
+        spec: ContractSpec,
+        signer: SignerImpl
     ) {
         mutableListOf(spec.definition)
             .apply {
@@ -215,8 +232,9 @@ class ProtoIndexer(
                 )
             }.forEach {
                 definitionService.addJar(
-                    keyPair,
-                    it
+                    encryptionKeyRef,
+                    it,
+                    signer
                 )
             }
     }

@@ -1,7 +1,6 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Timestamp
-import io.p8e.crypto.Pen
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope.*
 import io.p8e.proto.ContractScope.Envelope.Status
@@ -15,7 +14,6 @@ import io.p8e.proto.Events.P8eEvent.Event.ENVELOPE_MAILBOX_OUTBOUND
 import io.p8e.proto.PK
 import io.p8e.util.*
 import io.provenance.p8e.shared.domain.EnvelopeRecord
-import io.provenance.p8e.shared.domain.EnvelopeTable
 import io.provenance.p8e.shared.domain.ScopeRecord
 import io.provenance.engine.extension.*
 import io.provenance.engine.grpc.v1.toEvent
@@ -24,6 +22,7 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.shared.util.P8eMDC
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.security.PublicKey
 import java.time.Duration
@@ -38,7 +37,7 @@ class EnvelopeService(
     private val mailboxService: MailboxService,
     private val envelopeStateEngine: EnvelopeStateEngine,
     private val eventService: EventService,
-    private val metricsService: MetricsService,
+    private val metricsService: MetricsService
 ) {
     private val log = logger()
 
@@ -55,10 +54,8 @@ class EnvelopeService(
         }
 
         log.info("Handling envelope")
-
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-        val pen = Pen(signingKeyPair.private, signingKeyPair.public)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
 
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
@@ -90,13 +87,15 @@ class EnvelopeService(
                         )
                 }.build()
 
-        val result = timed("EnvelopeService_contractEngine_handle") {
-            ContractEngine(osClient, affiliateService).handle(
-                keyPair = encryptionKeyPair,
-                signingKeyPair = signingKeyPair,
-                envelope = envelope,
-                pen = pen
-            )
+        val result =
+            timed("EnvelopeService_contractEngine_handle") {
+                transaction {
+                    ContractEngine(osClient, affiliateService).handle(
+                        encryptionKeyRef,
+                        envelope = envelope,
+                        signer = signer
+                    )
+                }
         }
 
         return envelope.wrap(result)
@@ -203,17 +202,17 @@ class EnvelopeService(
         if (record.data.hasExecutedTime())
             return record
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
-        val pen = Pen(signingKeyPair.private, signingKeyPair.public)
+        val signer = affiliateService.getSigner(publicKey)
+        val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey)
 
         timed("EnvelopeService_contractEngine_handle") {
-            ContractEngine(osClient, affiliateService).handle(
-                encryptionKeyPair,
-                signingKeyPair,
-                envelope = record.data.input,
-                pen = pen
-            )
+            transaction {
+                ContractEngine(osClient, affiliateService).handle(
+                    encryptionKeyRef,
+                    envelope = record.data.input,
+                    signer = signer
+                )
+            }
         }.also { result ->
             envelopeStateEngine.onHandleExecute(record, result)
 

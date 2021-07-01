@@ -9,7 +9,7 @@ import io.provenance.pbc.clients.tx.TxPreparer
 data class AccountInfo(
         val address: String = "",
         val coins: List<Coin> = emptyList(),
-        val public_key: StdPubKey = StdPubKey("", ByteArray(0)),
+        val public_key: StdPubKey? = StdPubKey("", ByteArray(0)),
         val account_number: Int = 0, // todo: change back to UInt once https://github.com/FasterXML/jackson-module-kotlin/issues/396 fixed
         val sequence: Int = 0 // todo: change back to UInt once https://github.com/FasterXML/jackson-module-kotlin/issues/396 fixed
 )

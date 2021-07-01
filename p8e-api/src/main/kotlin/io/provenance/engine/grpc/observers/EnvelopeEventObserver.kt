@@ -38,7 +38,7 @@ class EnvelopeEventObserver(
     private val affiliateService: AffiliateService
 ): StreamObserver<EnvelopeEvent> {
 
-    private val connectedKey = AtomicReference<PK.PublicKey>(PK.PublicKey.getDefaultInstance())
+    private val connectedKey = AtomicReference(PK.PublicKey.getDefaultInstance())
     private var queuerKey: EnvelopeObserverKey? = null
 
     override fun onNext(value: EnvelopeEvent) {
@@ -173,15 +173,15 @@ class EnvelopeEventObserver(
         val publicKey = if(value.publicKey.hasEncryptionPublicKey()) value.publicKey.encryptionPublicKey.toPublicKey() else value.publicKey.signingPublicKey.toPublicKey()
 
         val streamObserver = timed("affiliate_connect") {
-            transaction {
                 // Verify that this is a known affiliate
+            transaction {
                 val affiliateRecord = affiliateService.get(publicKey)
                     ?: throw AffiliateConnectionException("Unable to find affiliate with requested public key: [${publicKey.toHex()}]")
 
                 // Lock and mark connected or blow up
                 val affiliateConnection = AffiliateConnectionRecord.findOrCreateForUpdate(
-                        affiliateRecord.publicKey.value.toJavaPublicKey(),
-                        value.classname
+                    affiliateRecord.publicKey.value.toJavaPublicKey(),
+                    value.classname
                 )
 
                 if (affiliateConnection.connectionStatus == CONNECTED) {
@@ -190,16 +190,17 @@ class EnvelopeEventObserver(
 
                 affiliateConnection.connectionStatus = CONNECTED
                 affiliateConnection.lastHeartbeat = OffsetDateTime.now()
+
+                logger().debug("GRPC Connected: [affiliate = ${queuerKey!!.publicKey.toHex()}, classname = ${queuerKey!!.classname}, action = ${value.action}, ip = ${clientIp()}]")
+
+                // auth with the auth_public_key, and we will set the connected key with the signing.
+                connectedKey.set(affiliateRecord.publicKey.value.toPublicKeyProto())
             }
 
-            logger().debug("GRPC Connected: [affiliate = ${queuerKey!!.publicKey.toHex()}, classname = ${queuerKey!!.classname}, action = ${value.action}, ip = ${clientIp()}]")
-
-            connectedKey.set(publicKey.toPublicKeyProto())
             queuers.computeIfAbsent(queuerKey!!) {
                 queuer
             }
         }
-
         return streamObserver
     }
 

@@ -4,19 +4,20 @@ import com.google.protobuf.Message
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.p8e.classloader.MemoryClassLoader
+import io.p8e.crypto.SignerImpl
 import io.p8e.proto.Common.DefinitionSpec
 import io.p8e.proto.Common.Location
 import io.p8e.proto.Contracts.Fact
 import io.p8e.util.*
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.DIME
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.StringWriter
 import java.lang.reflect.Method
-import java.security.KeyPair
 import java.security.PublicKey
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
@@ -44,14 +45,16 @@ class DefinitionService(
     private val parseFromCache = ConcurrentHashMap<String, Method>()
 
     fun addJar(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ) {
         return get(
-            keyPair,
+            encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
     }
@@ -62,14 +65,16 @@ class DefinitionService(
     ) = memoryClassLoader.addJar(hash, inputStream)
 
     fun loadClass(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Class<*> {
         return get(
-            keyPair,
+            encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
             .let {
@@ -84,55 +89,63 @@ class DefinitionService(
     }
 
     fun loadProto(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         location: Location,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
-            keyPair,
+            encryptionKeyRef,
             location.ref.hash,
             location.classname,
+            signer,
             signaturePublicKey
         )
     }
 
     fun loadProto(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
-            keyPair,
+            encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
+            signer,
             signaturePublicKey
         )
     }
 
     fun loadProto(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         fact: Fact,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
-            keyPair,
+            encryptionKeyRef,
             fact.dataLocation.ref.hash,
             fact.dataLocation.classname,
+            signer,
             signaturePublicKey
         )
     }
 
     fun loadProto(
-        keyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         hash: String,
         classname: String,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             get(
-                keyPair,
+                encryptionKeyRef,
                 hash,
                 classname,
+                signer,
                 signaturePublicKey
             ),
             classname
@@ -163,23 +176,22 @@ class DefinitionService(
     }
 
     fun get(
-        encryptionKeyPair: KeyPair,
+        encryptionKeyRef: KeyRef,
         hash: String,
         classname: String,
+        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): InputStream {
-
-        //byteCache caches via signing public key
-        return byteCache.computeIfAbsent(ByteCacheKey(encryptionKeyPair.public, hash)) {
+        return byteCache.computeIfAbsent(ByteCacheKey(encryptionKeyRef.publicKey, hash)) {
             val item = try {
-                osClient.get(hash.base64Decode(), encryptionKeyPair.public)
+                osClient.get(hash.base64Decode(), encryptionKeyRef.publicKey)
             } catch (e: StatusRuntimeException) {
                 if (e.status.code == Status.Code.NOT_FOUND) {
                     throw NotFoundException(
                         """
                             Unable to find object
                             [classname: $classname]
-                            [public key: ${encryptionKeyPair.public.toHex()}]
+                            [public key: ${encryptionKeyRef.publicKey.toHex()}]
                             [hash: $hash]
                         """.trimIndent()
                     )
@@ -198,9 +210,9 @@ class DefinitionService(
                             .map { it.publicKey.toString(Charsets.UTF_8) }
                             .contains(publicKeyToPem(publicKey))
                     }?.let { publicKey ->
-                        dimeInputStream.getDecryptedPayload(encryptionKeyPair, publicKey)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyRef, publicKey, signer)
                     }.or {
-                        dimeInputStream.getDecryptedPayload(encryptionKeyPair)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyRef, signer)
                     }.use { signatureInputStream ->
                         signatureInputStream.readAllBytes()
                             .also {
@@ -209,7 +221,7 @@ class DefinitionService(
                                         """
                                             Object was fetched but we're unable to verify item signature
                                             [classname: $classname]
-                                            [public key: ${encryptionKeyPair.public.toHex()}]
+                                            [encryption public key: ${encryptionKeyRef.publicKey.toHex()}]
                                             [signing public key: ${signaturePublicKey?.toHex()}]
                                             [hash: $hash]
                                         """.trimIndent()
@@ -222,7 +234,7 @@ class DefinitionService(
             // Drop the setting of additional audiences in cache to a thread to avoid recursive update
             thread {
                 updateCache(
-                    encryptionKeyPair.public,
+                    encryptionKeyRef.publicKey,
                     item.dime,
                     hash,
                     bytes
@@ -236,7 +248,7 @@ class DefinitionService(
                     """
                         Unable to find contract definition
                         [classname: $classname]
-                        [public key: ${encryptionKeyPair.public.toHex()}]
+                        [public key: ${encryptionKeyRef.publicKey.toHex()}]
                         [hash: $hash]
                     """.trimIndent()
                 )
@@ -244,40 +256,40 @@ class DefinitionService(
     }
 
     fun save(
-        keyPair: KeyPair,
+        encryptionPublicKey: PublicKey,
         msg: ByteArray,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         audience: Set<PublicKey> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.base64Sha512())
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.sha512()
         }
         return osClient.put(
             ByteArrayInputStream(msg),
-            keyPair.public,
-            signingKeyPair,
+            encryptionPublicKey,
+            signer,
             msg.size.toLong(),
             audience
         ).also {
-            putCache[PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.base64Sha512())] = true
+            putCache[PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())] = true
         }.hash.toByteArray()
     }
 
     fun <T : Message> save(
-        keyPair: KeyPair,
+        encryptionPublicKey: PublicKey,
         msg: T,
-        signingKeyPair: KeyPair,
+        signer: SignerImpl,
         audience: Set<PublicKey> = setOf()
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(keyPair.public), msg.toByteArray().base64Sha512())
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.toByteArray().base64Sha512())
         if (putCache[putCacheKey] == true) {
             return msg.toByteArray().sha512()
         }
         return osClient.put(
             msg,
-            keyPair.public,
-            signingKeyPair,
+            encryptionPublicKey,
+            signer,
             additionalAudiences = audience
         ).also {
             putCache[putCacheKey] = true

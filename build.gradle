@@ -49,6 +49,8 @@ allprojects {
         implementation 'org.slf4j:log4j-over-slf4j:1.7.30'
         implementation "javax.inject:javax.inject:1"
 
+        implementation "com.fortanix:sdkms-client:3.23.1408"
+
         testImplementation group: 'org.mockito', name: 'mockito-core', version: '3.8.0'
         testImplementation 'com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0'
         testImplementation 'org.mockito:mockito-inline:3.8.0'

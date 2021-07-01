@@ -7,6 +7,7 @@ import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.provenance.engine.batch.MailboxMeta
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.service.AffiliateService
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
@@ -31,14 +32,14 @@ class MailboxService(
     fun fragment(publicKey: PublicKey, env: Envelope) {
         log.info("Fragmenting env:{}", env.getUuid())
 
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         val invokerPublicKey = env.contract.invoker.encryptionPublicKey.toPublicKey()
 
         // if the invoker public key does not match the encryption or signing public key, then error.
-        if (invokerPublicKey != encryptionKeyPair.public && invokerPublicKey != signingKeyPair.public ) {
-            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionKeyPair.public.toHex()}")
+        if (invokerPublicKey != encryptionPublicKey && invokerPublicKey != signer.getPublicKey()) {
+            log.error("Invoker publicKey: ${invokerPublicKey.toHex()} does not match application public key: ${encryptionPublicKey.toHex()}")
             return
         }
 
@@ -58,8 +59,8 @@ class MailboxService(
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            ownerPublicKey = encryptionKeyPair.public,
-            signingKeyPair = signingKeyPair,
+            encryptionPublicKey = encryptionPublicKey,
+            signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_REQUEST
         )
@@ -92,13 +93,14 @@ class MailboxService(
     fun error(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
-        val signingKeyPair = transaction { affiliateService.getSigningKeyPair(publicKey) }
+        val signer = affiliateService.getSigner(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = error,
-            ownerPublicKey = publicKey,
-            signingKeyPair = signingKeyPair,
+            encryptionPublicKey = encryptionPublicKey,
+            signer = signer,
             additionalAudiences = audiencesPublicKey.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
         )
@@ -114,14 +116,14 @@ class MailboxService(
         log.info("Returning fragment result env:{}", env.getUuid())
 
         val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
-        val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey)
+        val signer = affiliateService.getSigner(publicKey)
+        val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
-            ownerPublicKey = encryptionKeyPair.public,
-            signingKeyPair = signingKeyPair,
+            encryptionPublicKey = encryptionPublicKey,
+            signer = signer,
             additionalAudiences = additionalAudiences,
             metadata = MailboxMeta.MAILBOX_RESPONSE
         )
