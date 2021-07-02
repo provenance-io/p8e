@@ -12,12 +12,17 @@ option java_outer_classname = "Affiliate";
 
 service AffiliateService {
     rpc Register (AffiliateRegisterRequest) returns (google.protobuf.Empty) {};
+    rpc Shares (google.protobuf.Empty) returns (AffiliateSharesResponse) {};
     rpc WhitelistClass (AffiliateContractWhitelist) returns (google.protobuf.Empty) {};
 }
 
 message AffiliateRegisterRequest {
     PrivateKey signing_private_key = 1;
     PrivateKey encryption_private_key = 2;
+}
+
+message AffiliateSharesResponse {
+    repeated PublicKey shares = 1;
 }
 
 message AffiliateContractWhitelist {

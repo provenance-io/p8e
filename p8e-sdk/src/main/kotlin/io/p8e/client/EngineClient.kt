@@ -29,6 +29,7 @@ import io.p8e.util.toPublicKeyProto
 import io.p8e.util.toOffsetDateTimeProv
 import io.p8e.util.toProtoTimestampProv
 import io.p8e.util.toProtoUuidProv
+import io.p8e.util.toPublicKey
 import io.provenance.p8e.encryption.ecies.ECUtils
 import java.io.InputStream
 import java.lang.reflect.Method
@@ -42,6 +43,8 @@ interface P8eClient {
     fun addSpec(contractSpec: List<ContractSpec>, specMapping: List<SpecMapping>, scopeSpec: List<ScopeSpec>)
 
     fun register(enc: Affiliate.AffiliateRegisterRequest)
+
+    fun shares(): List<PublicKey>
 
     fun whitelistClass(whitelist: AffiliateContractWhitelist)
 
@@ -118,6 +121,9 @@ abstract class EventMonitorClient(
     }
 
     override fun register(enc: Affiliate.AffiliateRegisterRequest) = signingAndEncryptionPublicKeysClient.register(enc)
+
+    override fun shares() = signingAndEncryptionPublicKeysClient.shares().sharesList
+        .map { it.toPublicKey() }
 
     override fun whitelistClass(whitelist: AffiliateContractWhitelist) = signingAndEncryptionPublicKeysClient.whitelistClass(whitelist)
 

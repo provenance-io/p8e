@@ -255,12 +255,6 @@ class AffiliateService(
             .whitelistData
     }
 
-    fun getSharePublicKeys(publicKeys: Collection<PublicKey>): AffiliateSharePublicKeys =
-        AffiliateShareRecord.findByAffiliates(publicKeys)
-            .map { it.typedPublicKey() }
-            .toSet()
-            .let(::AffiliateSharePublicKeys)
-
     fun getShares(affiliatePublicKey: PublicKey): List<AffiliateShareRecord> = AffiliateShareRecord.findByAffiliate(affiliatePublicKey).toList()
 
     fun addShare(affiliatePublicKey: PublicKey, publicKey: PublicKey) = AffiliateShareRecord.insert(affiliatePublicKey, publicKey)

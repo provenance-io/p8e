@@ -6,15 +6,16 @@ import io.p8e.grpc.complete
 import io.p8e.grpc.publicKey
 import io.p8e.proto.Affiliate
 import io.p8e.proto.Affiliate.AffiliateContractWhitelist
+import io.p8e.proto.Affiliate.AffiliateSharesResponse
 import io.p8e.proto.AffiliateServiceGrpc.AffiliateServiceImplBase
 import io.p8e.util.computePublicKey
 import io.p8e.util.toHex
 import io.p8e.util.toPrivateKey
+import io.p8e.util.toPublicKeyProto
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.p8e.shared.service.AffiliateService
-import io.provenance.engine.service.MailboxService
 import io.provenance.p8e.shared.util.P8eMDC
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.lognet.springboot.grpc.GRpcService
@@ -41,11 +42,6 @@ class AffiliateGrpc(
 
         log.info("Saving affiliate encryption key: ${ecPublicKey.toHex()}")
 
-        // TODO rethink this in decentralized system
-        // if (mailboxService.encryptionPublicKeyExists(ecPublicKey)) {
-        //     throw IllegalArgumentException("Derived encryption public key [${ecPublicKey.toHex()}] is not allowed, please choose another.")
-        // }
-
         transaction {
             affiliateService.save(
                 signingKeyPair = KeyPair(publicKey, privateKey),
@@ -53,6 +49,21 @@ class AffiliateGrpc(
             )
         }
         responseObserver.complete()
+    }
+
+    override fun shares(
+        request: Empty,
+        responseObserver: StreamObserver<AffiliateSharesResponse>
+    ) {
+        // TODO public key needs to be the authenticated public key
+        val sharePublicKeys = transaction { affiliateService.getShares(publicKey()).map { it.publicKey } }
+
+        responseObserver.onNext(
+            AffiliateSharesResponse.newBuilder()
+                .addAllShares(sharePublicKeys.map { it.toPublicKeyProto() })
+                .build()
+        )
+        responseObserver.onCompleted()
     }
 
     override fun whitelistClass(
