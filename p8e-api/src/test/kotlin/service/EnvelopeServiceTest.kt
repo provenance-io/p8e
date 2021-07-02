@@ -1,13 +1,14 @@
 package service
 
 import helper.TestUtils
-import io.p8e.crypto.Pen
+import io.p8e.crypto.SignerFactory
 import io.p8e.engine.ContractEngine
 import io.p8e.proto.ContractScope
 import io.p8e.util.*
 import io.provenance.engine.service.*
 import io.provenance.os.client.OsClient
 import io.provenance.os.domain.inputstream.DIMEInputStream
+import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.shared.domain.*
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -49,7 +50,7 @@ class EnvelopeServiceTest {
 
     lateinit var dimeInputStream: DIMEInputStream
 
-    lateinit var pen: Pen
+    lateinit var signerFactory: SignerFactory
 
     val ecKeys: KeyPair = TestUtils.generateKeyPair()
 
@@ -81,6 +82,10 @@ class EnvelopeServiceTest {
                 it[encryptionPrivateKey] = ecKeys.private.toHex()
                 it[active] = true
                 it[indexName] = "scopes"
+                it[signingKeyUuid] = UUID.randomUUID()
+                it[encryptionKeyUuid] = UUID.randomUUID()
+                it[keyType] = DATABASE
+                it[authPublicKey] = ecKeys.public.toHex()
             }
         }
 
@@ -96,7 +101,7 @@ class EnvelopeServiceTest {
 
         envelopeStateEngine = EnvelopeStateEngine()
 
-        pen = Pen(signingKeys.private, signingKeys.public)
+        signerFactory = Mockito.mock(SignerFactory::class.java)
 
         envelopeService = EnvelopeService(
             affiliateService = affiliateService,
@@ -576,6 +581,10 @@ class EnvelopeServiceTest {
                 it[encryptionPrivateKey] = secondKeyPair.private.toHex()
                 it[active] = true
                 it[indexName] = "scopes"
+                it[signingKeyUuid] = UUID.randomUUID()
+                it[encryptionKeyUuid] = UUID.randomUUID()
+                it[keyType] = DATABASE
+                it[authPublicKey] = secondKeyPair.public.toHex()
             }
 
             val scopeRecord2 = ScopeRecord.new {

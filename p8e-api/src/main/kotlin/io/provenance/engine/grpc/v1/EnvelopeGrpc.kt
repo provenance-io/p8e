@@ -369,8 +369,8 @@ class EnvelopeGrpc(
 
 fun String.toPublicKeyProtoSet(affiliateService: AffiliateService): SigningAndPublicKey {
     return SigningAndPublicKey(
-        affiliateService.getEncryptionKeyPair(this.toJavaPublicKey()).public.toPublicKeyProto(),
-        affiliateService.getSigningKeyPair(this.toJavaPublicKey()).public.toPublicKeyProto()
+        affiliateService.getEncryptionPublicKey(this.toJavaPublicKey()).toPublicKeyProto(),
+        affiliateService.getSigningPublicKey(this.toJavaPublicKey()).toPublicKeyProto()
     )
 }
 
