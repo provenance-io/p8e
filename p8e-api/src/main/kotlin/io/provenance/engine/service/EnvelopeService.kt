@@ -15,7 +15,6 @@ import io.p8e.proto.Events.P8eEvent.Event.ENVELOPE_MAILBOX_OUTBOUND
 import io.p8e.proto.PK
 import io.p8e.util.*
 import io.provenance.p8e.shared.domain.EnvelopeRecord
-import io.provenance.p8e.shared.domain.EnvelopeTable
 import io.provenance.p8e.shared.domain.ScopeRecord
 import io.provenance.engine.extension.*
 import io.provenance.engine.grpc.v1.toEvent
@@ -60,37 +59,35 @@ class EnvelopeService(
         val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
         val pen = Pen(signingKeyPair.private, signingKeyPair.public)
 
-        val affiliateShares = affiliateService.getShares(publicKey);
         // Update the envelope for invoker and recitals with correct signing and encryption keys.
         val envelope = env.toBuilder()
-            .addAllAffiliateShares(affiliateShares.map{ it.publicKey.toPublicKeyProto() })
-                .apply {
-                    if(env.contract.startTime == Timestamp.getDefaultInstance()) {
-                        contractBuilder.startTime = OffsetDateTime.now().toProtoTimestampProv()
-                    }
-                    contractBuilder
-                        .clearInvoker()
-                        .setInvoker(
-                            PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                .setEncryptionPublicKey(affiliateService.getEncryptionKeyPair(env.contract.invoker.encryptionPublicKey.toPublicKey()).public.toPublicKeyProto())
-                                .setSigningPublicKey(affiliateService.getSigningKeyPair(env.contract.invoker.signingPublicKey.toPublicKey()).public.toPublicKeyProto())
-                                .build()
-                        )
-                        .clearRecitals()
-                        .addAllRecitals(
-                            env.contract.recitalsList.map {
-                                it.toBuilder()
-                                    .setSignerRole(it.signerRole)
-                                    .setAddress(it.address)
-                                    .setSigner(
-                                        PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                            .setSigningPublicKey(affiliateService.getSigningKeyPair(it.signer.signingPublicKey.toPublicKey()).public.toPublicKeyProto())
-                                            .setEncryptionPublicKey(affiliateService.getEncryptionKeyPair(it.signer.encryptionPublicKey.toPublicKey()).public.toPublicKeyProto())
-                                            .build()
-                                    ).build()
-                            }
-                        )
-                }.build()
+            .apply {
+                if(env.contract.startTime == Timestamp.getDefaultInstance()) {
+                    contractBuilder.startTime = OffsetDateTime.now().toProtoTimestampProv()
+                }
+                contractBuilder
+                    .clearInvoker()
+                    .setInvoker(
+                        PK.SigningAndEncryptionPublicKeys.newBuilder()
+                            .setEncryptionPublicKey(affiliateService.getEncryptionKeyPair(env.contract.invoker.encryptionPublicKey.toPublicKey()).public.toPublicKeyProto())
+                            .setSigningPublicKey(affiliateService.getSigningKeyPair(env.contract.invoker.signingPublicKey.toPublicKey()).public.toPublicKeyProto())
+                            .build()
+                    )
+                    .clearRecitals()
+                    .addAllRecitals(
+                        env.contract.recitalsList.map {
+                            it.toBuilder()
+                                .setSignerRole(it.signerRole)
+                                .setAddress(it.address)
+                                .setSigner(
+                                    PK.SigningAndEncryptionPublicKeys.newBuilder()
+                                        .setSigningPublicKey(affiliateService.getSigningKeyPair(it.signer.signingPublicKey.toPublicKey()).public.toPublicKeyProto())
+                                        .setEncryptionPublicKey(affiliateService.getEncryptionKeyPair(it.signer.encryptionPublicKey.toPublicKey()).public.toPublicKeyProto())
+                                        .build()
+                                ).build()
+                        }
+                    )
+            }.build()
 
         val result = timed("EnvelopeService_contractEngine_handle") {
             ContractEngine(osClient, affiliateService).handle(

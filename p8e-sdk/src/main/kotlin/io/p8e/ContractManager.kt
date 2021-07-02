@@ -57,6 +57,7 @@ import java.security.KeyPair
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.time.Duration
+import java.time.Instant
 import java.time.OffsetDateTime
 import java.util.ServiceLoader
 import java.util.UUID
@@ -90,7 +91,7 @@ class ContractManager(
         /**
          * Create a new ContractManager for a given Party
          */
-        fun create(keyPair: KeyPair, url: String? = null, deadlineMs: Long = 60000): ContractManager {
+        fun create(keyPair: KeyPair, url: String? = null, deadlineMs: Long = 60_000): ContractManager {
             val apiUrl = url ?: System.getenv("API_URL") ?: "http://localhost:8080/engine"
             val uri = URI(apiUrl)
             val customTrustStore = System.getenv("TRUST_STORE_PATH")?.let(::File)
@@ -153,6 +154,22 @@ class ContractManager(
     private val actualHeartbeatConnections = ConcurrentHashMap<HeartbeatConnectionKey, EnvelopeEvent>()
     private val heartbeatExecutor = ThreadPoolFactory.newScheduledThreadPool(1, "heartbeat-%d")
     private val heartbeatManagerExecutor = ThreadPoolFactory.newScheduledThreadPool(1, "heartbeat-manager-%d")
+
+    private var shares: List<PublicKey>? = null
+    private var sharesFetchTime = Instant.now()
+
+    fun affiliateShares(): List<PublicKey> =
+        if (shares == null) {
+            shares = client.shares()
+            sharesFetchTime = Instant.now()
+            shares!!
+        } else if (Instant.now().minusSeconds(10 * 60).isAfter(sharesFetchTime)) {
+            shares = client.shares()
+            sharesFetchTime = java.time.Instant.now()
+            shares!!
+        } else {
+            shares!!
+        }
 
     init {
         val logger = LogFactory.getLog("org.apache.http.wire")

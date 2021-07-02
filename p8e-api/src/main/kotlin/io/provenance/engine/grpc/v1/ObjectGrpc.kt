@@ -45,10 +45,8 @@ class ObjectGrpc(
         val msg = request.message.toByteArray()
         val encryptionKeyPair = transaction { affiliateService.getEncryptionKeyPair(publicKey()) }
         val signingKeyPair = transaction { affiliateService.getSigningKeyPair(publicKey()) }
-        val affiliateShares = transaction { affiliateService.getSharePublicKeys(request.toAudience().plus(publicKey())) }
 
-        // Update the dime's audience list to use encryption public keys.
-        val audience = request.toAudience().plus(affiliateShares.value).map {
+        val audience = request.toAudience().map {
             transaction {
                 try {
                     affiliateService.getEncryptionKeyPair(it).public

@@ -437,16 +437,13 @@ class Contract<T: P8eContract>(
 
         this.stagedContract = populateContract()
 
-        val permissionUpdater = PermissionUpdater(
-                contractManager,
-                this.stagedContract,
-                this.stagedContract.toAudience(envelope.scope)
-        )
-
-        permissionUpdater.saveConstructorArguments()
-
         // Build the envelope for this execution
         this.executionEnvelope = envelope.toBuilder()
+            .also { builder ->
+                if (builder.affiliateSharesCount == 0) {
+                    builder.addAllAffiliateShares(contractManager.affiliateShares().map { it.toPublicKeyProto() })
+                }
+            }
             .setExecutionUuid(this.stagedExecutionUuid)
             .setContract(this.stagedContract)
             .also { builder ->
@@ -459,8 +456,17 @@ class Contract<T: P8eContract>(
             .clearSignatures()
             .build()
 
+        val permissionUpdater = PermissionUpdater(
+            contractManager,
+            this.stagedContract,
+            this.stagedContract.toAudience(executionEnvelope, envelope.scope)
+        )
+
+        permissionUpdater.saveConstructorArguments()
+
         // TODO This probably should be removed since we can't on the fly install specs. It would have
         // to get saved during bootstrap addSpec
+        // TODO get affiliate shares on the specs before save to object-store
         saveSpec(contractManager)
 
         executed.set(true)
@@ -471,7 +477,7 @@ class Contract<T: P8eContract>(
     }
 
     fun saveSpec(contractManager: ContractManager) {
-        contractManager.saveProto(spec, audience = stagedContract.toAudience(envelope.scope))
+        contractManager.saveProto(spec, audience = stagedContract.toAudience(this.executionEnvelope, envelope.scope))
     }
 
     fun isCompleted(): Boolean {
@@ -761,12 +767,13 @@ class Contract<T: P8eContract>(
         }
     }
 
-    private fun Contracts.Contract.toAudience(scope: Scope): Set<PublicKey> {
+    private fun Contracts.Contract.toAudience(envelope: Envelope, scope: Scope): Set<PublicKey> {
         return recitalsList.plus(scope.partiesList)
             .filter { it.hasSigner() }
             .map { it.signer.encryptionPublicKey.publicKeyBytes }
             .filterNot { it.isEmpty }
             .map { ECUtils.convertBytesToPublicKey(it.toByteArray()) }
+            .plus(envelope.affiliateSharesList.map { it.toPublicKey() })
             .toSet()
     }
 

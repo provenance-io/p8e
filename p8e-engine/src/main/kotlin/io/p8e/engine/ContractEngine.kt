@@ -72,7 +72,6 @@ class ContractEngine(
                 keyPair,
                 memoryClassLoader,
                 pen,
-                affiliateService.getSharePublicKeys(listOf(keyPair.public)),
                 scope,
                 signingKeyPair,
                 spec
@@ -86,7 +85,6 @@ class ContractEngine(
         keyPair: KeyPair,
         memoryClassLoader: MemoryClassLoader,
         pen: Pen,
-        shares: AffiliateSharePublicKeys,
         scope: Scope?,
         signingKeyPair: KeyPair,
         spec: ContractSpec
@@ -125,23 +123,24 @@ class ContractEngine(
         contract.validateAgainst(spec)
 
         when (contract.type!!) {
-            Contracts.ContractType.CHANGE_SCOPE -> {
-                if (scope != null &&
-                    envelope.status == Envelope.Status.CREATED &&
-                    contract.invoker.encryptionPublicKey == keyPair.public.toPublicKeyProto()
-                ) {
-                    val audience = scope.partiesList.map { it.signer.signingPublicKey }
-                        .plus(contract.recitalsList.map { it.signer.signingPublicKey })
-                        .map { it.toPublicKey() }
-                        .let { it + affiliateService.getSharePublicKeys(it).value }
-                        .toSet()
+            // Contracts.ContractType.CHANGE_SCOPE -> {
+            //     if (scope != null &&
+            //         envelope.status == Envelope.Status.CREATED &&
+            //         contract.invoker.encryptionPublicKey == keyPair.public.toPublicKeyProto()
+            //     ) {
+            //         val audience = scope.partiesList.map { it.signer.signingPublicKey }
+            //             .plus(contract.recitalsList.map { it.signer.signingPublicKey })
+            //             .map { it.toPublicKey() }
+            //             .let { it + affiliateService.getSharePublicKeys(it).value }
+            //             .toSet()
 
-                    log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
+            //         log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
-                    this.getScopeData(keyPair, definitionService, scope)
-                        .threadedMap(executor) { definitionService.save(keyPair, it, signingKeyPair, audience) }
-                } else { }
-            }
+            //         this.getScopeData(keyPair, definitionService, scope)
+            //             .threadedMap(executor) { definitionService.save(keyPair, it, signingKeyPair, audience) }
+            //     } else { }
+            // }
+            Contracts.ContractType.CHANGE_SCOPE -> throw IllegalStateException("CHANGE_SCOPE contract type is not implemented")
             Contracts.ContractType.FACT_BASED, Contracts.ContractType.UNRECOGNIZED -> Unit
         } as Unit
 
@@ -187,7 +186,7 @@ class ContractEngine(
                     definitionService,
                     prerequisite.fact.name,
                     result,
-                    contract.toAudience(scope, shares),
+                    contract.toAudience(envelope, scope),
                     signingKeyPair,
                     keyPair,
                     scope
@@ -228,7 +227,7 @@ class ContractEngine(
                             definitionService,
                             function.fact.name,
                             result,
-                            contract.toAudience(scope, shares),
+                            contract.toAudience(envelope, scope),
                             signingKeyPair,
                             keyPair,
                             scope
@@ -342,9 +341,8 @@ class ContractEngine(
 
 data class ResultSetter(val setter: () -> Unit)
 
-fun Contract.toAudience(scope: Scope?, shares: AffiliateSharePublicKeys): Set<PublicKey> = recitalsList
+fun Contract.toAudience(envelope: Envelope, scope: Scope?): Set<PublicKey> = recitalsList
     .filter { it.hasSigner() }
-    //.map { it.signer.encryptionPublicKeyPem }
     .map { it.signer.encryptionPublicKey }
     .plus(
         scope?.partiesList
@@ -354,7 +352,7 @@ fun Contract.toAudience(scope: Scope?, shares: AffiliateSharePublicKeys): Set<Pu
             ?: listOf()
     )
     .map { ECUtils.convertBytesToPublicKey(it.publicKeyBytes.toByteArray()) }
-    .plus(shares.value)
+    .plus(envelope.affiliateSharesList.map { it.toPublicKey() })
     .toSet()
 
 fun<T, K> Collection<T>.threadedMap(executor: ExecutorService, fn: (T) -> K): Collection<K> =

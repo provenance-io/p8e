@@ -1,7 +1,9 @@
 package io.p8e.grpc.client
 
+import com.google.protobuf.Empty
 import io.grpc.ManagedChannel
 import io.p8e.proto.Affiliate
+import io.p8e.proto.Affiliate.AffiliateSharesResponse
 import io.p8e.proto.AffiliateServiceGrpc
 import java.util.concurrent.TimeUnit
 
@@ -18,6 +20,11 @@ class SigningAndEncryptionPublicKeysClient (
     ) {
         client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
             .register(request)
+    }
+
+    fun shares() : AffiliateSharesResponse {
+        return client.withDeadlineAfter(deadlineMs, TimeUnit.MILLISECONDS)
+            .shares(Empty.getDefaultInstance())
     }
 
     fun whitelistClass(
