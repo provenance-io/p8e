@@ -1,32 +1,25 @@
 package io.provenance.engine.index
 
-import io.p8e.proto.ContractScope
+import cosmos.base.abci.v1beta1.Abci
 import io.p8e.proto.ContractScope.Scope
-import io.p8e.util.base64Decode
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.EventStreamProperties
 import io.provenance.engine.domain.EventStreamRecord
-import io.provenance.engine.domain.GetTxResult
 import io.provenance.engine.domain.TransactionStatusRecord
-import io.provenance.engine.domain.TxResult
 import io.provenance.engine.service.ProvenanceGrpcService
 import io.provenance.engine.service.TransactionNotFoundError
 import io.provenance.engine.service.TransactionQueryService
 import org.jetbrains.exposed.sql.transactions.transaction
 import io.provenance.engine.service.TransactionStatusService
 import io.provenance.engine.stream.ScopeStream
-import io.provenance.engine.stream.domain.Attribute
-import io.provenance.engine.stream.domain.Event
-import io.provenance.engine.stream.domain.StreamEvent
 import io.provenance.p8e.shared.index.ScopeEvent
 import io.provenance.p8e.shared.index.isScopeEventType
 import io.provenance.p8e.shared.index.toEventType
 import io.provenance.p8e.shared.util.P8eMDC
 import io.provenance.p8e.shared.util.toBlockHeight
 import io.provenance.p8e.shared.util.toTransactionHashes
-import org.springframework.http.HttpStatus
 import java.time.OffsetDateTime
 
 @Component
@@ -77,21 +70,17 @@ class TxErrorReaper(
         }
     }
 
-    private fun GetTxResult.isErrored() = txResult?.code != null && txResult?.code > 0
+    private fun Abci.TxResponse.isErrored() = code > 0
 
-    private fun GetTxResult.isSuccessful() = txResult?.code == 0
+    private fun Abci.TxResponse.isSuccessful() = height > 0 && code == 0
 
-    private fun GetTxResult.getError() = txResult?.log ?: "Unknown Error"
+    private fun  Abci.TxResponse.getError() = rawLog ?: "Unknown Error"
 
-    private fun GetTxResult.scopeEvents(): List<Event> = txResult?.events?.filter { it.type.isScopeEventType() } ?: emptyList()
+    private fun Abci.TxResponse.scopeEvents(): List<Abci.StringEvent> = logsList.flatMap { it.eventsList }.filter { it.type.isScopeEventType() }
 
-    private fun Event.findScope(): Scope = attributes.find { it.key == "scope_addr" }?.let {
+    private fun Abci.StringEvent.findScope(): Scope = attributesList.find { it.key == "scope_addr" }?.let {
         provenanceGrpcService.retrieveScope(it.value!!.removeSurrounding("\""))
     } ?: throw IllegalStateException("Event does not contain a scope")
 
-    private fun Event.toScopeEvent(txHash: String): ScopeEvent = ScopeEvent(txHash, findScope(), type.toEventType())
-
-    // We only call this after we find a matching "key" so it should be safe to convert to non nullable
-    private fun Attribute.toScope(): Scope = value!!.base64Decode().let { Scope.parseFrom(it) }
-        ?: throw IllegalStateException("Event attribute does not contain a scope")
+    private fun Abci.StringEvent.toScopeEvent(txHash: String): ScopeEvent = ScopeEvent(txHash, findScope(), type.toEventType())
 }

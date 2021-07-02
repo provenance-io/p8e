@@ -224,6 +224,7 @@ class MailboxReaper(
 
         log.debug("Polling mailbox reaper inbound")
 
+        // TODO catch status runtime exceptions and don't rethrow
         transaction { affiliateService.getEncryptionKeyPairs() }
             .flatMap { entry ->
                 try {
@@ -240,7 +241,10 @@ class MailboxReaper(
                 }
             }.mapNotNull { (keyPair, result) ->
                 val (uuid, dimeInputStream) = result
-                dimeInputStream.getDecryptedPayload(keyPair).use {
+                val signer = transaction{ affiliateService.getSigner(keyPair.public) }
+                val encryptionKeyRef = transaction{ affiliateService.getEncryptionKeyRef(keyPair.public) }
+
+                dimeInputStream.getDecryptedPayload(encryptionKeyRef, signer).use {
                     // TODO EXISTING - double check readAllBytes is safe for our use case
                     val bytes = it.readAllBytes()
 

@@ -15,6 +15,7 @@ import io.p8e.util.toByteString
 import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
 import io.provenance.engine.grpc.v1.AuthenticationGrpc
 import io.provenance.engine.service.AuthenticationService
+import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.shared.domain.AffiliateRecord
 import io.provenance.p8e.shared.domain.AffiliateTable
 import io.provenance.p8e.shared.service.AffiliateService
@@ -28,6 +29,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito
 import java.security.KeyPair
+import java.util.UUID
 
 @Suppress("UNCHECKED_CAST")
 class AuthenticationServiceTest {
@@ -70,6 +72,10 @@ class AuthenticationServiceTest {
                     encryptionPrivateKey = keyPair.private.toHex()
                     indexName = "test"
                     alias = "test"
+                    signingKeyUuid = UUID.randomUUID()
+                    encryptionKeyUuid = UUID.randomUUID()
+                    keyType = DATABASE
+                    authPublicKey = keyPair.public.toHex()
                 }
         }
 

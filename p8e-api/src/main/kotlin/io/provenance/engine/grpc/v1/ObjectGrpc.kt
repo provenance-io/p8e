@@ -23,6 +23,7 @@ import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.p8e.shared.util.P8eMDC
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.lognet.springboot.grpc.GRpcService
@@ -43,9 +44,9 @@ class ObjectGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         val msg = request.message.toByteArray()
-        val encryptionKeyPair = transaction { affiliateService.getEncryptionKeyPair(publicKey()) }
-        val signingKeyPair = transaction { affiliateService.getSigningKeyPair(publicKey()) }
+        val signer = transaction { affiliateService.getSigner(publicKey()) }
         val affiliateShares = transaction { affiliateService.getSharePublicKeys(request.toAudience().plus(publicKey())) }
+        val encryptionPublicKey = transaction { affiliateService.getEncryptionPublicKey(publicKey())}
 
         // Update the dime's audience list to use encryption public keys.
         val audience = request.toAudience().plus(affiliateShares.value).map {
@@ -60,7 +61,7 @@ class ObjectGrpc(
         }.toSet()
 
         DefinitionService(osClient)
-            .save(encryptionKeyPair, msg, signingKeyPair, audience)
+            .save(encryptionPublicKey, msg, signer, audience)
             .toProto()
             .complete(responseObserver)
     }
@@ -74,14 +75,15 @@ class ObjectGrpc(
         log.debug("ObjectLoadRequest ${request.uri}")
 
         transaction {
-            val signaturePublicKey = affiliateService.getSigningKeyPair(publicKey()).public
-            val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey())
+            val signer = affiliateService.getSigner(publicKey())
+            val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey())
 
             DefinitionService(osClient).get(
-                encryptionKeyPair,
+                encryptionKeyRef,
                 request.uri,
                 "<raw fetch - classname not included>",
-                signaturePublicKey = signaturePublicKey
+                signer = signer,
+                signaturePublicKey = signer.getPublicKey()
             ).readAllBytes()
         }?.let { bytes ->
             ObjectLoadResponse.newBuilder()
@@ -100,9 +102,9 @@ class ObjectGrpc(
         log.debug("ObjectLoadJsonRequest ${request.hash}")
 
         transaction {
-            val signingKeyPair = transaction{ affiliateService.getSigningKeyPair(publicKey()) }
-            val encryptionKeyPair = affiliateService.getEncryptionKeyPair(publicKey())
-            val spec = DefinitionService(osClient).loadProto(encryptionKeyPair, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signingKeyPair.public) as ContractSpecs.ContractSpec
+            val signer = affiliateService.getSigner(publicKey())
+            val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey())
+            val spec = DefinitionService(osClient).loadProto(encryptionKeyRef, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signer, signer.getPublicKey()) as ContractSpecs.ContractSpec
 
             val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}"
             val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -111,10 +113,10 @@ class ObjectGrpc(
 
             DefinitionService(osClient, memoryClassLoader).run {
                 // spec.definition is the contract uberjar
-                addJar(encryptionKeyPair, spec.definition)
+                addJar(encryptionKeyRef, spec.definition, signer)
 
                 forThread {
-                    loadProto(encryptionKeyPair, request.hash, request.classname, signingKeyPair.public)
+                    loadProto(encryptionKeyRef, request.hash, request.classname, signer, signer.getPublicKey())
                 }.toJsonString()
             }
         }?.let { json ->
