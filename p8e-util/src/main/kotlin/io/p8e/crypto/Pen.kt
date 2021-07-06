@@ -106,7 +106,9 @@ class Pen(
     override fun update(data: Byte) { signature.update(data) }
 
     override fun verify(signatureBytes: ByteArray): Boolean {
-        signature.update(aggregatedData)
+        if(aggregatedData != null) {
+            signature.update(aggregatedData)
+        }
 
         // Reset the object size indexer and null out the aggregatedData value.
         objSizeIndexer = OBJECT_SIZE_BYTES.also { aggregatedData = null }
