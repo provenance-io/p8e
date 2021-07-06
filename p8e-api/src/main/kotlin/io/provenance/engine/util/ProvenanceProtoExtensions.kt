@@ -93,7 +93,7 @@ fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
 
 // Extensions for marshalling data back to P8e
 
-fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, affiliateService: AffiliateService): ContractScope.Scope = ContractScope.Scope.newBuilder()
+fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, scopeSpecificationName: String, affiliateService: AffiliateService): ContractScope.Scope = ContractScope.Scope.newBuilder()
     .setUuid(scope.scopeIdInfo.scopeUuid.toProtoUuidProv())
     .addAllParties(scope.scope.ownersList.map { it.toP8e(affiliateService) })
     .addAllRecordGroup(sessionsList.map { session ->
@@ -110,7 +110,7 @@ fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, affiliateSe
             .setAudit(session.session.audit.toP8e())
             .build()
     })
-    .setScopeSpecificationName(transaction { ScopeSpecificationRecord.findById(scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv())!!.name })
+    .setScopeSpecificationName(scopeSpecificationName)
     .setLastEvent(sessionsList.lastSession()?.let { session ->
         ContractScope.Event.newBuilder()
             .setExecutionUuid(Contracts.ContractState.parseFrom(session.session.context).executionUuid)
