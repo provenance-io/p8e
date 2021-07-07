@@ -5,7 +5,6 @@ import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
 import com.google.protobuf.Message
-import io.p8e.crypto.SignerImpl.Companion.OBJECT_SIZE_BYTES
 import io.p8e.crypto.SignerImpl.Companion.PROVIDER
 import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common
@@ -59,9 +58,6 @@ class SmartKeySigner(
     private var verifying: Boolean = false
     private var keyUuid: String? = null
 
-    private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
-    private var aggregatedData: ByteArray? = null
-
     fun instance(keyUuid: String): SmartKeySigner {
         this.keyUuid = keyUuid
         return this
@@ -84,41 +80,14 @@ class SmartKeySigner(
     }
 
     override fun update(data: ByteArray, off: Int, res: Int) {
-        // If off is less then res, these are the data that we care about.
-        if(off < res) {
-            if(!verifying) {
-                val dataSample = data.copyOfRange(off, off+res)
-                signatureRequest?.data = dataSample
-            } else {
-                /**
-                 * The downstream (data verification) chunks the data into data size of 8192.
-                 * The data needs to be aggregated to its signing size of 32768 before the
-                 * data can be validated.
-                 */
-                if(objSizeIndexer == OBJECT_SIZE_BYTES) {
-                    objSizeIndexer = (off + res)
-                    aggregatedData = null
-                    aggregatedData = if (aggregatedData == null) {
-                        data.copyOfRange(off, off + res)
-                    } else {
-                        aggregatedData?.plus(data.copyOfRange(off, off + res))
-                    }
-                } else {
-                    objSizeIndexer += (off + res)
-                    aggregatedData = aggregatedData?.plus(data.copyOfRange(off, off + res))
-                }
-            }
+        if(!verifying) {
+            signatureRequest?.data = data.copyOfRange(off, res)
+        } else {
+            signature?.update(data, off, res)
         }
     }
 
-    override fun verify(signatureBytes: ByteArray): Boolean {
-        signature?.update(aggregatedData)
-
-        // Reset the object size indexer.
-        objSizeIndexer = OBJECT_SIZE_BYTES
-
-        return signature?.verify(signatureBytes)!!
-    }
+    override fun verify(signatureBytes: ByteArray): Boolean = signature?.verify(signatureBytes)!!
 
     override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
 

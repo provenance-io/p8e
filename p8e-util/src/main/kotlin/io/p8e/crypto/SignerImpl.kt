@@ -11,10 +11,6 @@ interface SignerImpl {
         // Algo must match Provenance-object-store
         val SIGN_ALGO = "SHA512withECDSA"
         val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
-
-        //The size of the object bytes that are signed at bootstrap time is 32768.
-        //The data pulled from the dime input stream breaks the data into chunks of 8192.
-        val OBJECT_SIZE_BYTES = 8192 * 4
     }
 
     /**
