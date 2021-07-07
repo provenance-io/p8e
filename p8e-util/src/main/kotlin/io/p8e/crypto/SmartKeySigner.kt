@@ -44,6 +44,8 @@ import java.security.Signature
  * operating in a public, private, or hybrid cloud.
  */
 class SmartKeySigner(
+    private val keyUuid: String,
+    private val publicKey: PublicKey,
     private val signAndVerifyApi: SignAndVerifyApi
 ): SignerImpl {
 
@@ -55,16 +57,6 @@ class SmartKeySigner(
     private var signatureRequest: SignRequest? = null
 
     private var verifying: Boolean = false
-    private var keyUuid: String? = null
-
-    // AffiliateService will pass in a non-null signing public key to instantiate the signer
-    private var publicKey: PublicKey? = null
-
-    fun instance(keyUuid: String, publicKey: PublicKey): SmartKeySigner {
-        this.keyUuid = keyUuid
-        this.publicKey = publicKey
-        return this
-    }
 
     /**
      * Using the local java security signature instance to verify data.

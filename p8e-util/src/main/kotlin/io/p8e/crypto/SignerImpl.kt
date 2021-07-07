@@ -5,6 +5,7 @@ import io.p8e.proto.Common
 import io.p8e.proto.PK
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.PublicKey
+
 interface SignerImpl {
 
     companion object{
