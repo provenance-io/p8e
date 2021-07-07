@@ -55,7 +55,7 @@ class Pen(
             .signatureBuilderOf(String(signature.sign().base64Encode()))
             .setSigner(signer())
             .build()
-            .takeIf { verify(data, it) }
+            .takeIf { verify(keyPair.public, data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
@@ -79,10 +79,10 @@ class Pen(
         signature.initSign(keyPair.private)
     }
 
-    override fun verify(data: ByteArray, signature: Common.Signature): Boolean =
+    override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean =
         Signature.getInstance(signature.algo, signature.provider)
             .apply {
-                initVerify(keyPair.public)
+                initVerify(publicKey)
                 update(data)
             }.verify(signature.signature.base64Decode())
 

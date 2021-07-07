@@ -32,7 +32,7 @@ interface SignerImpl {
 
     fun verify(signatureBytes: ByteArray): Boolean
 
-    fun verify(data: ByteArray, signature: Common.Signature): Boolean
+    fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
 
     fun initVerify(publicKey: PublicKey)
 

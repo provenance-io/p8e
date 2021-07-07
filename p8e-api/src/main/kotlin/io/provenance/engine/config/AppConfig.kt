@@ -255,7 +255,7 @@ class AppConfig : WebMvcConfigurer {
 
     @Bean
     fun smartKeySigner(signAndVerifyApi: SignAndVerifyApi, securityObjectsApi: SecurityObjectsApi): SmartKeySigner
-        = SmartKeySigner(signAndVerifyApi, securityObjectsApi)
+        = SmartKeySigner(signAndVerifyApi)
 
     @Bean
     fun signer(smartKeySigner: SmartKeySigner): SignerFactory = SignerFactory(smartKeySigner)

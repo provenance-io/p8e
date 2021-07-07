@@ -44,8 +44,7 @@ import java.security.Signature
  * operating in a public, private, or hybrid cloud.
  */
 class SmartKeySigner(
-    private val signAndVerifyApi: SignAndVerifyApi,
-    private val securityObjectsApi: SecurityObjectsApi
+    private val signAndVerifyApi: SignAndVerifyApi
 ): SignerImpl {
 
     init {
@@ -58,8 +57,12 @@ class SmartKeySigner(
     private var verifying: Boolean = false
     private var keyUuid: String? = null
 
-    fun instance(keyUuid: String): SmartKeySigner {
+    // AffiliateService will pass in a non-null signing public key to instantiate the signer
+    private var publicKey: PublicKey? = null
+
+    fun instance(keyUuid: String, publicKey: PublicKey): SmartKeySigner {
         this.keyUuid = keyUuid
+        this.publicKey = publicKey
         return this
     }
 
@@ -107,7 +110,7 @@ class SmartKeySigner(
             .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
             .setSigner(signer())
             .build()
-            .takeIf { verify(data, it) }
+            .takeIf { verify(publicKey!!, data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
@@ -134,17 +137,15 @@ class SmartKeySigner(
         }
     }
 
-    override fun verify(data: ByteArray, signature: Common.Signature): Boolean {
+    override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean {
         val s = Signature.getInstance(signature.algo, signature.provider)
-        s.initVerify(getPublicKey())
+        s.initVerify(publicKey)
         s.update(data)
         return s.verify(signature.signature.base64Decode())
     }
 
     /**
-     * Get and convert SmartKey's public key (Sun Security Provider) into a BouncyCastle Provider (P8e).
-     *
-     * @return [PublicKey] return the Java security version of the PublicKey.
+     * Return the public used to setup the signer.
      */
-    override fun getPublicKey(): PublicKey = securityObjectsApi.getSecurityObject(keyUuid).toJavaPublicKey()
+    override fun getPublicKey(): PublicKey = publicKey!!
 }
