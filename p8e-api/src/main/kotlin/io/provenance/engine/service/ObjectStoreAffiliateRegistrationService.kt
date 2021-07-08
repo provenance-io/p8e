@@ -1,5 +1,6 @@
 package io.provenance.engine.service
 
+import io.p8e.crypto.SignerFactory
 import io.p8e.util.toHex
 import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKey
@@ -21,6 +22,7 @@ class ObjectStoreAffiliateRegistrationService(
     private val objectStoreQueryService: ObjectStoreQueryService,
     private val affiliateService: AffiliateService,
     private val osClient: OsClient,
+    private val signerFactory: SignerFactory,
 ): JobHandlerService, ApplicationListener<ApplicationReadyEvent> {
     companion object {
         private val OS_REGISTERED_AFFILIATES = mutableSetOf<PublicKey>()
@@ -53,9 +55,7 @@ class ObjectStoreAffiliateRegistrationService(
 
     private fun registerRemoteAffiliate(localAffiliate: PublicKey, remoteAffiliate: PublicKey): Boolean = if (!OS_REGISTERED_AFFILIATES.contains(remoteAffiliate)) {
         try {
-            val keyPair = transaction { affiliateService.getSigningKeyPair(localAffiliate) }
-
-            objectStoreQueryService.getObjectStoreUri(remoteAffiliate, keyPair)
+            objectStoreQueryService.getObjectStoreUri(remoteAffiliate, localAffiliate)
                 .also {
                     osClient.createPublicKey(remoteAffiliate, it)
                     OS_REGISTERED_AFFILIATES.add(remoteAffiliate)

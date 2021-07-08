@@ -57,7 +57,7 @@ class MailboxService(
             .toSet()
             .plus(scopeOwners)
 
-        registerAffiliatesWithObjectStore(encryptionKeyPair.public, additionalAudiences)
+        registerAffiliatesWithObjectStore(encryptionPublicKey, additionalAudiences)
 
         // Mail the actual contract
         osClient.put(
@@ -100,7 +100,7 @@ class MailboxService(
         val signer = affiliateService.getSigner(publicKey)
         val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
-        registerAffiliatesWithObjectStore(encryptionKeyPair.public, audiencePublicKeys)
+        registerAffiliatesWithObjectStore(encryptionPublicKey, audiencePublicKeys)
 
         osClient.put(
             uuid = UUID.randomUUID(),
@@ -125,7 +125,7 @@ class MailboxService(
         val signer = affiliateService.getSigner(publicKey)
         val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
-        registerAffiliatesWithObjectStore(encryptionKeyPair.public, additionalAudiences)
+        registerAffiliatesWithObjectStore(encryptionPublicKey, additionalAudiences)
 
         osClient.put(
             uuid = UUID.randomUUID(),

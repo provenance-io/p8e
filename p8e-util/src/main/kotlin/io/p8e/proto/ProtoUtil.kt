@@ -5,7 +5,6 @@ import com.google.protobuf.Message.Builder
 import com.google.protobuf.util.JsonFormat
 import io.p8e.crypto.Pen
 import io.p8e.crypto.SignerImpl.Companion.PROVIDER
-import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common.DefinitionSpec
 import io.p8e.proto.Common.DefinitionSpec.Type
 import io.p8e.proto.Common.Location
@@ -62,9 +61,9 @@ object ProtoUtil {
             .setRef(ref)
             .setClassname(classname)
 
-    fun signatureBuilderOf(signature: String): Signature.Builder =
+    fun signatureBuilderOf(signature: String, algorithm: String): Signature.Builder =
         Signature.newBuilder()
-            .setAlgo(SIGN_ALGO)
+            .setAlgo(algorithm)
             .setProvider(PROVIDER)
             .setSignature(signature)
 

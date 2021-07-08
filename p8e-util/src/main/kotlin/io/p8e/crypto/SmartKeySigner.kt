@@ -5,9 +5,9 @@ import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
 import com.google.protobuf.Message
+import io.p8e.crypto.SignerImpl.Companion.DEFAULT_HASH
 import io.p8e.crypto.SignerImpl.Companion.OBJECT_SIZE_BYTES
 import io.p8e.crypto.SignerImpl.Companion.PROVIDER
-import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common
 import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
@@ -62,6 +62,14 @@ class SmartKeySigner(
     private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
     private var aggregatedData: ByteArray? = null
 
+    override var hashType: SignerImpl.Companion.HashType = DEFAULT_HASH
+    override var deterministic: Boolean = true
+    private val digestAlgorithm: DigestAlgorithm
+        get() = when(hashType) {
+            SignerImpl.Companion.HashType.SHA256 -> DigestAlgorithm.SHA256
+            SignerImpl.Companion.HashType.SHA512 -> DigestAlgorithm.SHA512
+        }
+
     fun instance(keyUuid: String): SmartKeySigner {
         this.keyUuid = keyUuid
         return this
@@ -71,7 +79,7 @@ class SmartKeySigner(
      * Using the local java security signature instance to verify data.
      */
     override fun initVerify(publicKey: PublicKey) {
-        signature = Signature.getInstance(SIGN_ALGO, PROVIDER).apply { initVerify(publicKey) }
+        signature = Signature.getInstance(signAlgorithm, PROVIDER).apply { initVerify(publicKey) }
         verifying = true
     }
 
@@ -79,7 +87,7 @@ class SmartKeySigner(
      * Using SmartKey to sign data.
      */
     override fun initSign() {
-        signatureRequest = SignRequest().hashAlg(DigestAlgorithm.SHA512).deterministicSignature(true)
+        signatureRequest = SignRequest().hashAlg(digestAlgorithm).deterministicSignature(deterministic)
         verifying = false
     }
 
@@ -128,14 +136,14 @@ class SmartKeySigner(
 
     override fun sign(data: ByteArray): Common.Signature {
         val signatureRequest = SignRequest()
-            .hashAlg(DigestAlgorithm.SHA512)
+            .hashAlg(digestAlgorithm)
             .data(data)
-            .deterministicSignature(true)
+            .deterministicSignature(deterministic)
 
         val signatureResponse = signAndVerifyApi.sign(keyUuid, signatureRequest)
 
         return ProtoUtil
-            .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
+            .signatureBuilderOf(String(signatureResponse.signature.base64Encode()), signAlgorithm)
             .setSigner(signer())
             .build()
             .takeIf { verify(data, it) }

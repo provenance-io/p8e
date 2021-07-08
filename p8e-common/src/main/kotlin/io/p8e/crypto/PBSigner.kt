@@ -2,6 +2,7 @@ package io.provenance.engine.crypto
 
 import io.p8e.crypto.Hash
 import io.p8e.crypto.Pen
+import io.p8e.crypto.SignerImpl
 import io.p8e.util.base64decode
 import io.provenance.pbc.clients.StdPubKey
 import io.provenance.pbc.clients.StdSignature
@@ -34,9 +35,18 @@ object PbSigner {
             val privateKey = (keyPair.private as BCECPrivateKey).s
             StdSignature(
                 pub_key = StdPubKey("tendermint/PubKeySecp256k1", (keyPair.public as BCECPublicKey).q.getEncoded(true)) ,
-                signature = EllipticCurveSigner().sign(it, privateKey, true).encodeAsBTC() // todo: account for signature provider???
+                signature = EllipticCurveSigner().sign(it, privateKey, true).encodeAsBTC()
             )
         }.let {
+            listOf(it)
+        }
+    }
+
+    fun signerFor(signer: SignerImpl): SignerFn = { bytes ->
+        StdSignature(
+            pub_key = StdPubKey("tendermint/PubKeySecp256k1", (signer.getPublicKey() as BCECPublicKey).q.getEncoded(true)),
+            signature = signer.sign(bytes).signature.base64decode().toECDSASignature(true).encodeAsBTC()
+        ).let {
             listOf(it)
         }
     }
@@ -64,3 +74,4 @@ data class SignerMeta(val compressedPublicKey: ByteArray, val sign: SignerFn) {
 
 fun ECKeyPair.toSignerMeta() = SignerMeta(this.getCompressedPublicKey(), PbSigner.signerFor(this))
 fun KeyPair.toSignerMeta() = SignerMeta((public as BCECPublicKey).q.getEncoded(true), PbSigner.signerFor(this))
+fun SignerImpl.toSignerMeta() = SignerMeta((getPublicKey() as BCECPublicKey).q.getEncoded(true), PbSigner.signerFor(this))

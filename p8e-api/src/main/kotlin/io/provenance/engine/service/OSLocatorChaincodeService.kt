@@ -5,31 +5,20 @@ import cosmos.bank.v1beta1.Tx
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.base.v1beta1.CoinOuterClass
 import cosmos.tx.v1beta1.ServiceOuterClass
-import io.p8e.crypto.Hash
-import io.p8e.util.orThrow
-import io.p8e.util.orThrowNotFound
+import io.p8e.crypto.SignerImpl
 import io.p8e.util.toHex
-import io.p8e.util.toJavaPrivateKey
-import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKey
 import io.provenance.engine.config.ObjectStoreLocatorProperties
-import io.provenance.engine.crypto.Bech32
-import io.provenance.engine.crypto.toBech32Data
 import io.provenance.engine.crypto.toSignerMeta
 import io.provenance.metadata.v1.MsgBindOSLocatorRequest
 import io.provenance.metadata.v1.ObjectStoreLocator
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
-import io.provenance.p8e.shared.domain.AffiliateRecord
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
-import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Service
 import p8e.Jobs
-import java.lang.IllegalStateException
-import java.security.KeyPair
-import java.security.PublicKey
 
 @Service
 class OSLocatorChaincodeService(
@@ -49,8 +38,10 @@ class OSLocatorChaincodeService(
 
         logger().info("Handling os locator job for public key ${publicKey.toHex()}")
 
-        val affiliate = transaction { affiliateService.get(publicKey) }.orThrowNotFound("Affiliate with public key ${publicKey.toHex()} not found")
-        val affiliateKeyPair = KeyPair(affiliate.encryptionPublicKey.toJavaPublicKey(), affiliate.encryptionPrivateKey.toJavaPrivateKey())
+        val affiliateSigner = transaction { affiliateService.getSigner(publicKey) }.apply {
+            hashType = SignerImpl.Companion.HashType.SHA256
+            deterministic = true
+        }
 
         // estimate amount of hash needed for locator request
         val p8eAccountInfo = provenanceGrpcService.accountInfo(p8eAccount.bech32Address())
@@ -63,7 +54,7 @@ class OSLocatorChaincodeService(
 
         // perform and wait for os locator request to complete
         waitForTx {
-            recordOSLocator(affiliateKeyPair, affiliateAddress, osLocatorEstimate)
+            recordOSLocator(affiliateSigner, affiliateAddress, osLocatorEstimate)
         }
     }
 
@@ -84,10 +75,10 @@ class OSLocatorChaincodeService(
             chaincodeInvokeService.batchTx(it.toTxBody())
         }
 
-    fun recordOSLocator(affiliateKeyPair: KeyPair, affiliateAddress: String, gasEstimate: GasEstimate): ServiceOuterClass.BroadcastTxResponse {
+    fun recordOSLocator(affiliateSigner: SignerImpl, affiliateAddress: String, gasEstimate: GasEstimate): ServiceOuterClass.BroadcastTxResponse {
         val accountInfo = provenanceGrpcService.accountInfo(affiliateAddress)
         val message = osLocatorMessage(accountInfo)
-        return provenanceGrpcService.batchTx(message.toTxBody(), accountInfo.accountNumber, accountInfo.sequence, gasEstimate, affiliateKeyPair.toSignerMeta()).also {
+        return provenanceGrpcService.batchTx(message.toTxBody(), accountInfo.accountNumber, accountInfo.sequence, gasEstimate, affiliateSigner.toSignerMeta()).also {
             log.info("recordOSLocator response $it")
         }
     }

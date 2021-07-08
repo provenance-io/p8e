@@ -8,8 +8,10 @@ import io.provenance.objectstore.locator.ObjectStoreLocatorServiceGrpc
 import io.provenance.objectstore.locator.OsLocator
 import io.provenance.objectstore.locator.Util
 import io.provenance.os.util.toPublicKeyProtoOS
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.cache.annotation.Cacheable
 import org.springframework.stereotype.Service
 import java.net.URI
@@ -29,20 +31,24 @@ class ObjectStoreQueryService(
     }
 
     @Cacheable(PUBLIC_KEY_TO_IP)
-    fun getObjectStoreUri(publicKey: PublicKey, requesterKeyPair: KeyPair) =
+    fun getObjectStoreUri(publicKey: PublicKey, requesterPublicKey: PublicKey) =
         affiliateService.getAddress(publicKey, chaincodeProperties.mainNet).let { address ->
             provenanceGrpcService.getOSLocatorByAddress(address).locatorUri
         }.let { locatorUri ->
+            val signer = transaction { affiliateService.getSigner(requesterPublicKey) }
+
             OsLocator.GetObjectStoreIPRequest.newBuilder()
                 .setOwnerPublicKey(publicKey.toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
-                .setRequesterPublicKey(requesterKeyPair.public.toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
+                .setRequesterPublicKey(requesterPublicKey.toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
                 .build().let {
                     ObjectStoreLocatorServiceGrpc.newBlockingStub(locatorUri.toChannel())
                         .getObjectStoreIP(OsLocator.SignedGetObjectStoreIPRequest.newBuilder()
                             .setRequest(it)
-                            .setSignature(Util.Signature.newBuilder().setSignature(it.sign(requesterKeyPair.private).toByteString())) // todo: need to support additional signers once smartkey signer branch merged to main
+                            .setSignature(Util.Signature.newBuilder().setSignature(signer.sign(it).signatureBytes))
                             .build())
-                }.objectStoreUri
+                }.objectStoreUri.also {
+                    logger().info("fetched objectStoreUri = $it")
+                }
         }
 
     private fun String.toChannel() = URI.create(this).let { uri ->
@@ -55,11 +61,5 @@ class ObjectStoreQueryService(
                 }
             }
             .build()
-    }
-
-    private fun Message.sign(privateKey: PrivateKey): ByteArray = Signature.getInstance("SHA512withECDSA", BouncyCastleProvider.PROVIDER_NAME).run {
-        initSign(privateKey)
-        update(toByteArray())
-        sign()
     }
 }

@@ -3,11 +3,11 @@ package io.p8e.crypto
 import com.google.protobuf.Message
 import io.p8e.crypto.SignerImpl.Companion.OBJECT_SIZE_BYTES
 import io.p8e.crypto.SignerImpl.Companion.PROVIDER
-import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common
 import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
 import io.p8e.util.*
+import io.provenance.p8e.shared.extension.logger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.KeyPair
 import java.security.PrivateKey
@@ -18,21 +18,39 @@ import java.security.Signature
 class Pen(
     private val keyPair: KeyPair
 ): SignerImpl {
-
-    val privateKey: PrivateKey = keyPair.private
-
-    val signature: Signature = Signature.getInstance(
-        SIGN_ALGO,
-        PROVIDER
-    )
-
     init {
         Security.addProvider(BouncyCastleProvider())
     }
 
+    val privateKey: PrivateKey = keyPair.private
+
     private var verifying: Boolean = false
     private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
     private var aggregatedData: ByteArray? = null
+
+    override var hashType = SignerImpl.DEFAULT_HASH
+        set(value) {
+            field = value
+            resetSignature()
+        }
+
+    override var deterministic: Boolean = false
+        set(value) {
+            field = value
+            resetSignature()
+        }
+
+    private var signature: Signature = getNewSignatureInstance()
+
+    private fun resetSignature() {
+        logger().info("setting signature to algorithm $signAlgorithm")
+        signature = getNewSignatureInstance()
+    }
+
+    private fun getNewSignatureInstance() = Signature.getInstance(
+        signAlgorithm,
+        PROVIDER
+    )
 
     /**
      * Return the signing public key.
@@ -57,7 +75,7 @@ class Pen(
         signature.update(data)
 
         return ProtoUtil
-            .signatureBuilderOf(String(signature.sign().base64Encode()))
+            .signatureBuilderOf(String(signature.sign().base64Encode()), signature.algorithm)
             .setSigner(signer())
             .build()
             .takeIf { verify(data, it) }
