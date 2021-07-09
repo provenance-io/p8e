@@ -3,9 +3,9 @@ package io.p8e.crypto
 import com.google.protobuf.Message
 import io.p8e.proto.Common
 import io.p8e.proto.PK
-import io.provenance.p8e.shared.extension.logger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.PublicKey
+
 interface SignerImpl {
 
     companion object{
@@ -17,10 +17,6 @@ interface SignerImpl {
         val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
 
         val DEFAULT_HASH = HashType.SHA512
-
-        //The size of the object bytes that are signed at bootstrap time is 32768.
-        //The data pulled from the dime input stream breaks the data into chunks of 8192.
-        val OBJECT_SIZE_BYTES = 8192 * 4
 
         enum class HashType {
             SHA512,
@@ -47,7 +43,7 @@ interface SignerImpl {
 
     fun verify(signatureBytes: ByteArray): Boolean
 
-    fun verify(data: ByteArray, signature: Common.Signature): Boolean
+    fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
 
     fun initVerify(publicKey: PublicKey)
 

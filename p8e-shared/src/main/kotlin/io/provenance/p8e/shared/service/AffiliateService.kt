@@ -75,7 +75,7 @@ class AffiliateService(
             .orThrowNotFound("Affiliate Record Not found")
 
         return when(affiliateRecord.keyType) {
-            SMARTKEY -> signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString()))
+            SMARTKEY -> signerFactory.getSigner(SignerFactoryParam.SmartKeyParam(affiliateRecord.signingKeyUuid.toString(), affiliateRecord.publicKey.value.toJavaPublicKey()))
             DATABASE -> signerFactory.getSigner(SignerFactoryParam.PenParam(KeyPair(affiliateRecord.publicKey.value.toJavaPublicKey(), affiliateRecord.privateKey!!.toJavaPrivateKey())))
         }
     }

@@ -19,6 +19,7 @@ import io.p8e.proto.ContractScope
 import io.p8e.util.ThreadPoolFactory
 import io.p8e.util.toByteString
 import io.p8e.util.toPublicKeyProto
+import io.p8e.util.toUuidProv
 import io.provenance.engine.config.ChaincodeProperties
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.crypto.PbSigner
@@ -29,7 +30,8 @@ import io.provenance.engine.util.toP8e
 import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.OSLocatorRequest
 import io.provenance.metadata.v1.ScopeRequest
-import io.provenance.p8e.shared.extension.logger
+import io.provenance.metadata.v1.ScopeSpecification
+import io.provenance.metadata.v1.ScopeSpecificationRequest
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
@@ -39,6 +41,7 @@ import org.kethereum.model.PublicKey
 import org.springframework.stereotype.Service
 import java.net.URI
 import java.security.KeyPair
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -180,12 +183,19 @@ class ProvenanceGrpcService(
                 ).contractSpecification.specification.hash
             }.toMap()
 
-        return scopeResponse.toP8e(contractSpecHashLookup, affiliateService)
+        val scopeSpecificationName = getScopeSpecification(scopeResponse.scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv()).description.name
+
+        return scopeResponse.toP8e(contractSpecHashLookup, scopeSpecificationName, affiliateService)
     }
 
     fun getOSLocatorByAddress(address: String) = metadataQueryService.oSLocator(OSLocatorRequest.newBuilder()
         .setOwner(address)
         .build()).locator
+
+    fun getScopeSpecification(uuid: UUID): ScopeSpecification = metadataQueryService.scopeSpecification(ScopeSpecificationRequest.newBuilder()
+            .setSpecificationId(uuid.toString())
+            .build()
+        ).scopeSpecification.specification
 }
 
 fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()

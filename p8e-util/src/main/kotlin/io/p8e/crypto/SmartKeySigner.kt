@@ -6,7 +6,6 @@ import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
 import com.google.protobuf.Message
 import io.p8e.crypto.SignerImpl.Companion.DEFAULT_HASH
-import io.p8e.crypto.SignerImpl.Companion.OBJECT_SIZE_BYTES
 import io.p8e.crypto.SignerImpl.Companion.PROVIDER
 import io.p8e.proto.Common
 import io.p8e.proto.PK
@@ -45,8 +44,9 @@ import java.security.Signature
  * operating in a public, private, or hybrid cloud.
  */
 class SmartKeySigner(
-    private val signAndVerifyApi: SignAndVerifyApi,
-    private val securityObjectsApi: SecurityObjectsApi
+    private val keyUuid: String,
+    private val publicKey: PublicKey,
+    private val signAndVerifyApi: SignAndVerifyApi
 ): SignerImpl {
 
     init {
@@ -57,10 +57,6 @@ class SmartKeySigner(
     private var signatureRequest: SignRequest? = null
 
     private var verifying: Boolean = false
-    private var keyUuid: String? = null
-
-    private var objSizeIndexer: Int = OBJECT_SIZE_BYTES
-    private var aggregatedData: ByteArray? = null
 
     override var hashType: SignerImpl.Companion.HashType = DEFAULT_HASH
     override var deterministic: Boolean = true
@@ -69,11 +65,6 @@ class SmartKeySigner(
             SignerImpl.Companion.HashType.SHA256 -> DigestAlgorithm.SHA256
             SignerImpl.Companion.HashType.SHA512 -> DigestAlgorithm.SHA512
         }
-
-    fun instance(keyUuid: String): SmartKeySigner {
-        this.keyUuid = keyUuid
-        return this
-    }
 
     /**
      * Using the local java security signature instance to verify data.
@@ -92,41 +83,14 @@ class SmartKeySigner(
     }
 
     override fun update(data: ByteArray, off: Int, res: Int) {
-        // If off is less then res, these are the data that we care about.
-        if(off < res) {
-            if(!verifying) {
-                val dataSample = data.copyOfRange(off, off+res)
-                signatureRequest?.data = dataSample
-            } else {
-                /**
-                 * The downstream (data verification) chunks the data into data size of 8192.
-                 * The data needs to be aggregated to its signing size of 32768 before the
-                 * data can be validated.
-                 */
-                if(objSizeIndexer == OBJECT_SIZE_BYTES) {
-                    objSizeIndexer = (off + res)
-                    aggregatedData = null
-                    aggregatedData = if (aggregatedData == null) {
-                        data.copyOfRange(off, off + res)
-                    } else {
-                        aggregatedData?.plus(data.copyOfRange(off, off + res))
-                    }
-                } else {
-                    objSizeIndexer += (off + res)
-                    aggregatedData = aggregatedData?.plus(data.copyOfRange(off, off + res))
-                }
-            }
+        if(!verifying) {
+            signatureRequest?.data = data.copyOfRange(off, res)
+        } else {
+            signature?.update(data, off, res)
         }
     }
 
-    override fun verify(signatureBytes: ByteArray): Boolean {
-        signature?.update(aggregatedData)
-
-        // Reset the object size indexer.
-        objSizeIndexer = OBJECT_SIZE_BYTES
-
-        return signature?.verify(signatureBytes)!!
-    }
+    override fun verify(signatureBytes: ByteArray): Boolean = signature?.verify(signatureBytes)!!
 
     override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
 
@@ -146,7 +110,7 @@ class SmartKeySigner(
             .signatureBuilderOf(String(signatureResponse.signature.base64Encode()), signAlgorithm)
             .setSigner(signer())
             .build()
-            .takeIf { verify(data, it) }
+            .takeIf { verify(publicKey!!, data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
@@ -173,17 +137,15 @@ class SmartKeySigner(
         }
     }
 
-    override fun verify(data: ByteArray, signature: Common.Signature): Boolean {
+    override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean {
         val s = Signature.getInstance(signature.algo, signature.provider)
-        s.initVerify(getPublicKey())
+        s.initVerify(publicKey)
         s.update(data)
         return s.verify(signature.signature.base64Decode())
     }
 
     /**
-     * Get and convert SmartKey's public key (Sun Security Provider) into a BouncyCastle Provider (P8e).
-     *
-     * @return [PublicKey] return the Java security version of the PublicKey.
+     * Return the public used to setup the signer.
      */
-    override fun getPublicKey(): PublicKey = securityObjectsApi.getSecurityObject(keyUuid).toJavaPublicKey()
+    override fun getPublicKey(): PublicKey = publicKey!!
 }
