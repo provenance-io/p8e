@@ -185,7 +185,7 @@ class IndexHandler(
 
     private fun updateDataAccess(envelope: EnvelopeRecord) {
         val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
-                affiliateSharePublicKey ->
+            affiliateSharePublicKey ->
             affiliateService.getAddress(
                 affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
             )
