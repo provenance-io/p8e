@@ -185,14 +185,15 @@ class IndexHandler(
 
     private fun updateDataAccess(envelope: EnvelopeRecord) {
         val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
-            affiliateSharePublicKey ->
+                affiliateSharePublicKey ->
             affiliateService.getAddress(
                 affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
             )
+        }.filter {
+            it !in provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
         }
-        val existingScopeDataAccess = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
         // Only perform job if data access will be updated
-        if (envelopeDataAccess.any { it !in existingScopeDataAccess }) {
+        if (envelopeDataAccess.isNotEmpty()) {
             p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
                 .addAllDataAccess(envelopeDataAccess)
                 .addAllSigners(envelope.data.result.signaturesList.map {
@@ -209,7 +210,8 @@ class IndexHandler(
                 )
                 .setPublicKey(envelope.data.input.contract.invoker.encryptionPublicKey)
                 .build().takeIf { envelope.data.input.affiliateSharesList.isNotEmpty() }
-                ?.let { dataAccessService.addDataAccess(it) }
+                ?.let {
+                    dataAccessService.addDataAccess(it) }
         }
     }
 }
