@@ -39,7 +39,7 @@ class ObjectStoreQueryService(
 
             OsLocator.GetObjectStoreIPRequest.newBuilder()
                 .setOwnerPublicKey(publicKey.toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
-                .setRequesterPublicKey(requesterPublicKey.toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
+                .setRequesterPublicKey(signer.getPublicKey().toPublicKeyProtoOS().run { Util.PublicKey.parseFrom(toByteString()) })
                 .build().let {
                     ObjectStoreLocatorServiceGrpc.newBlockingStub(locatorUri.toChannel())
                         .getObjectStoreIP(OsLocator.SignedGetObjectStoreIPRequest.newBuilder()
