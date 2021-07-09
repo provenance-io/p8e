@@ -34,6 +34,11 @@ fun PublicKey.toSha512Hex() = toHex().hexStringToByteArray().sha512().toHexStrin
 
 fun String.toJavaPublicKey() = toPublicKeyProto().toPublicKey()
 
+/**
+ * Convert SmartKey's public key (Sun Security Provider) into a BouncyCastle Provider (P8e).
+ *
+ * @return [PublicKey] return the Java security version of the PublicKey.
+ */
 fun KeyObject.toJavaPublicKey() = pubKey
     .let { KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(it)) }
     .let { BCECPublicKey(it as ECPublicKey, BouncyCastlePQCProvider.CONFIGURATION) }
