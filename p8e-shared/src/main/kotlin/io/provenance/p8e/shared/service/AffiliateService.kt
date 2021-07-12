@@ -242,7 +242,7 @@ class AffiliateService(
         AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public, "http://localhost") // todo: get object store to accept null/missing
+                osClient.createPublicKey(encryptionKeyPair.public)
                 osLocatorService.registerAffiliate(encryptionKeyPair.public)
 
                 // create index in ES if it doesn't already exist
@@ -282,6 +282,7 @@ class AffiliateService(
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(encryptionPublicKey.publicKey)
+                osLocatorService.registerAffiliate(encryptionPublicKey.publicKey)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
