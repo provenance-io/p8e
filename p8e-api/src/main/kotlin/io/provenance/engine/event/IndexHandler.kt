@@ -124,10 +124,7 @@ class IndexHandler(
                                 ), RequestOptions.DEFAULT
                             )
                             // If the env is the invoker, create the data access message and put into a job.
-                            if (envelope.data.input.contract.recitalsCount > 1) {
-                                throw IllegalStateException("Received ${indexScope.eventType} event from chain but multiparty contracts aren't currently supported for adding data access.")
-                            }
-                            else if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
+                            if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
                                 updateDataAccess(envelope)
                             }
                         } else {
@@ -187,16 +184,20 @@ class IndexHandler(
     }
 
     private fun updateDataAccess(envelope: EnvelopeRecord) {
+        val scopeData = provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value)
         val envelopeDataAccess = envelope.data.input.affiliateSharesList.map {
             affiliateSharePublicKey ->
             affiliateService.getAddress(
                 affiliateSharePublicKey.toPublicKey(), chaincodeProperties.mainNet
             )
         }.filter {
-            it !in provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
+            it !in scopeData.scope.scope.dataAccessList
         }
         // Only perform job if data access will be updated
-        if (envelopeDataAccess.isNotEmpty()) {
+        if (scopeData.scope.scope.ownersCount < 2) {
+            log.error("Multiparty contracts aren't currently supported for adding data access.")
+        }
+        else if (envelopeDataAccess.isNotEmpty()) {
             p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
                 .addAllDataAccess(envelopeDataAccess)
                 .addAllSigners(envelope.data.result.signaturesList.map {
