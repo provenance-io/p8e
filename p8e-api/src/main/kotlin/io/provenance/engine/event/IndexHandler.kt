@@ -124,7 +124,10 @@ class IndexHandler(
                                 ), RequestOptions.DEFAULT
                             )
                             // If the env is the invoker, create the data access message and put into a job.
-                            if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
+                            if (envelope.data.input.contract.recitalsCount > 1) {
+                                throw IllegalStateException("Received ${indexScope.eventType} event from chain but multiparty contracts aren't currently supported for adding data access.")
+                            }
+                            else if(envelope.isInvoker == true && envelope.data.input.affiliateSharesList.isNotEmpty()) {
                                 updateDataAccess(envelope)
                             }
                         } else {
@@ -192,17 +195,21 @@ class IndexHandler(
         }.filter {
             it !in provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
         }
+        val signers = envelope.data.result.signaturesList.map {
+                signature ->
+            signature.signer.signingPublicKey.toPublicKey().let {
+                    signerPublicKey ->
+                affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
+            }
+        }
+//        if (signers.size > 1) {
+//            throw
+//        }
         // Only perform job if data access will be updated
         if (envelopeDataAccess.isNotEmpty()) {
             p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
                 .addAllDataAccess(envelopeDataAccess)
-                .addAllSigners(envelope.data.result.signaturesList.map {
-                    signature ->
-                    signature.signer.signingPublicKey.toPublicKey().let {
-                        signerPublicKey ->
-                        affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
-                    }
-                })
+                .addAllSigners(signers)
                 .setScopeId(
                     envelope.data.input.ref.scopeUuid.value.toUuidProv().toAddress(
                         PROV_METADATA_PREFIX_SCOPE_ADDR
