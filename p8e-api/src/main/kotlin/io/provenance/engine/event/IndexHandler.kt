@@ -195,21 +195,17 @@ class IndexHandler(
         }.filter {
             it !in provenanceGrpcService.retrieveScopeData(envelope.data.input.scope.uuid.value).scope.scope.dataAccessList
         }
-        val signers = envelope.data.result.signaturesList.map {
-                signature ->
-            signature.signer.signingPublicKey.toPublicKey().let {
-                    signerPublicKey ->
-                affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
-            }
-        }
-//        if (signers.size > 1) {
-//            throw
-//        }
         // Only perform job if data access will be updated
         if (envelopeDataAccess.isNotEmpty()) {
             p8e.Jobs.MsgAddScopeDataAccessRequest.newBuilder()
                 .addAllDataAccess(envelopeDataAccess)
-                .addAllSigners(signers)
+                .addAllSigners(envelope.data.result.signaturesList.map {
+                        signature ->
+                    signature.signer.signingPublicKey.toPublicKey().let {
+                            signerPublicKey ->
+                        affiliateService.getAddress(signerPublicKey, chaincodeProperties.mainNet)
+                    }
+                })
                 .setScopeId(
                     envelope.data.input.ref.scopeUuid.value.toUuidProv().toAddress(
                         PROV_METADATA_PREFIX_SCOPE_ADDR
