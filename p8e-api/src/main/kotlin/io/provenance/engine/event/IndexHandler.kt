@@ -194,7 +194,7 @@ class IndexHandler(
             it !in scopeData.scope.scope.dataAccessList
         }
         // Only perform job if data access will be updated
-        if (scopeData.scope.scope.ownersCount < 2) {
+        if (scopeData.scope.scope.ownersCount > 1) {
             log.error("Multiparty contracts aren't currently supported for adding data access.")
         }
         else if (envelopeDataAccess.isNotEmpty()) {
