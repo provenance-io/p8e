@@ -5,16 +5,13 @@ import io.p8e.proto.Common
 import io.p8e.proto.PK
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.security.PublicKey
+
 interface SignerImpl {
 
     companion object{
         // Algo must match Provenance-object-store
         val SIGN_ALGO = "SHA512withECDSA"
         val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
-
-        //The size of the object bytes that are signed at bootstrap time is 32768.
-        //The data pulled from the dime input stream breaks the data into chunks of 8192.
-        val OBJECT_SIZE_BYTES = 8192 * 4
     }
 
     /**
@@ -36,7 +33,7 @@ interface SignerImpl {
 
     fun verify(signatureBytes: ByteArray): Boolean
 
-    fun verify(data: ByteArray, signature: Common.Signature): Boolean
+    fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
 
     fun initVerify(publicKey: PublicKey)
 
