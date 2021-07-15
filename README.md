@@ -9,6 +9,7 @@
 ```
 ## Status
 
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/io.provenance.p8e/p8e-sdk/badge.svg)](https://maven-badges.herokuapp.com/maven-central/io.provenance.p8e/p8e-sdk)
 [![Latest Release][release-badge]][release-latest]
 [![Code Coverage][code-coverage-badge]][code-coverage-report]
 [![License][license-badge]][license-url]
