@@ -174,10 +174,6 @@ class ProvenanceGrpcService(
 
         val scopeSpecificationName = getScopeSpecification(scopeResponse.scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv()).description.name
 
-        if (scopeSpecificationName == null) {
-            throw IllegalStateException("Invalid scope specification response $address")
-        }
-
         return scopeResponse.toP8e(contractSpecHashLookup, scopeSpecificationName, affiliateService)
     }
 
