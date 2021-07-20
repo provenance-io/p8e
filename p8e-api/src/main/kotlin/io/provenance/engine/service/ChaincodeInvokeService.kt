@@ -222,6 +222,7 @@ class ChaincodeInvokeService(
                         else -> { // fail the whole batch
                             batch.map {
                                 it.future.completeExceptionally(t)
+                                freeScope(it.request.scopeId.toUuidProv())
                                 it.executionUuid
                             }.also {
                                 batch.clear()
@@ -242,6 +243,7 @@ class ChaincodeInvokeService(
 
          // default to failing all envelopes, unless a specific envelope can be identified or certain envelopes can be retried
          var executionUuidsToFail = batch.executionUuids
+         val txExecutionUuids = batch.executionUuids
 
          val retryable = response.code == SIGNATURE_VERIFICATION_FAILED
 
@@ -254,9 +256,12 @@ class ChaincodeInvokeService(
              if (retryable) {
                  executionUuidsToFail = handleBatchRetry(errorMessage)
              } else {
+                 // fail whole batch
                  batch.forEach {
                      it.future.completeExceptionally(IllegalStateException(errorMessage))
+                     freeScope(it.request.scopeId.toUuidProv())
                  }
+                 batch.clear()
              }
          } else {
              // Ship the error back for the bad index.
@@ -264,7 +269,7 @@ class ChaincodeInvokeService(
          }
 
          transaction {
-             TransactionStatusRecord.insert(response.txhash, batch.executionUuids).let {
+             TransactionStatusRecord.insert(response.txhash, txExecutionUuids).let {
                  transactionStatusService.setError(it, errorMessage, executionUuidsToFail)
              }
          }
@@ -291,6 +296,7 @@ class ChaincodeInvokeService(
         val erroredContract = batch[index]
         batch.removeContract(erroredContract)
         erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
+        freeScope(erroredContract.request.scopeId.toUuidProv())
         return erroredContract.executionUuid
     }
 
@@ -311,6 +317,8 @@ class ChaincodeInvokeService(
                 log.warn("Exceeded max retry attempts for execution: ${it.executionUuid}")
                 batch.removeContract(it)
                 it.future.completeExceptionally(IllegalStateException(errorMessage))
+
+                freeScope(it.request.scopeId.toUuidProv())
 
                 it.executionUuid
             }

@@ -68,6 +68,7 @@ class TransactionStatusService(
 
             if (envelope.isInvoker ?: false) {
                 val event = envelope.uuid.value.toProtoUuidProv().toEvent(Event.ENVELOPE_CHAINCODE)
+                ChaincodeInvokeService.freeScope(envelope.scope.scopeUuid)
                 eventService.submitEvent(event, envelope.uuid.value)
             }
         }
