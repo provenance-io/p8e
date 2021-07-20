@@ -201,9 +201,7 @@ class ContractEngine(
                         withoutLogging { function.invoke() }
                     } catch (t: Throwable) {
                         // Abort execution on a failed condition
-                        log.error(
-                            "Error executing condition ${contractWrapper.contractClass}.${function.method.name} [Exception classname: ${t.javaClass.name}]"
-                        )
+                        log.error("Error executing condition ${contractWrapper.contractClass}.${function.method.name} [Exception classname: ${t.javaClass.name}]", t)
                         function.considerationBuilder.result = failResult(t)
 
                         val contractForSignature = contractBuilder.build()

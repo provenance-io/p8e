@@ -129,7 +129,7 @@ class ContractWrapper(
             }.let(executor::submit)
             completableFuture
         }.map { (name, futures) ->
-            name to futures.parallelStream().map { it.get() }.toList()
+            name to futures.map { it.get() }
         }.toMap()
 
         val facts = factMap.entries

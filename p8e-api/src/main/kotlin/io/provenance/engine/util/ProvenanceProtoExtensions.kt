@@ -15,6 +15,7 @@ import io.provenance.metadata.v1.*
 import io.provenance.metadata.v1.PartyType as ProvenancePartyType
 import io.provenance.metadata.v1.p8e.SignatureSet
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import org.bouncycastle.util.encoders.Hex
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -93,30 +94,35 @@ fun Envelope.toProv(invokerAddress: String): MsgP8eMemorializeContractRequest =
 
 // Extensions for marshalling data back to P8e
 
-fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, scopeSpecificationName: String, affiliateService: AffiliateService): ContractScope.Scope = ContractScope.Scope.newBuilder()
-    .setUuid(scope.scopeIdInfo.scopeUuid.toProtoUuidProv())
-    .addAllParties(scope.scope.ownersList.map { it.toP8e(affiliateService) })
-    .addAllRecordGroup(sessionsList.map { session ->
-        ContractScope.RecordGroup.newBuilder()
-            .setSpecification(contractSpecHashLookup.getOrDefault(session.contractSpecIdInfo.contractSpecAddr, session.contractSpecIdInfo.contractSpecAddr))
-            .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
-//            .setExecutor() // TODO: not sure if this is available, no keys appear to be readily accessible
-            .addAllParties(session.session.partiesList.map { it.toP8e(affiliateService) })
-            .addAllRecords(recordsList
-                .filter { record -> record.record.sessionId == session.session.sessionId }
-                .map { record -> record.toP8e() }
-            )
-            .setClassname(session.session.name)
-            .setAudit(session.session.audit.toP8e())
-            .build()
-    })
-    .setScopeSpecificationName(scopeSpecificationName)
-    .setLastEvent(sessionsList.lastSession()?.let { session ->
-        ContractScope.Event.newBuilder()
-            .setExecutionUuid(Contracts.ContractState.parseFrom(session.session.context).executionUuid)
-            .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
-    })
-    .build()
+fun ScopeResponse.toP8e(contractSpecHashLookup: Map<String, String>, scopeSpecificationName: String, affiliateService: AffiliateService): ContractScope.Scope = try {
+    ContractScope.Scope.newBuilder()
+        .setUuid(scope.scopeIdInfo.scopeUuid.toProtoUuidProv())
+        .addAllParties(scope.scope.ownersList.map { it.toP8e(affiliateService) })
+        .addAllRecordGroup(sessionsList.map { session ->
+            ContractScope.RecordGroup.newBuilder()
+                .setSpecification(contractSpecHashLookup.getOrDefault(session.contractSpecIdInfo.contractSpecAddr, session.contractSpecIdInfo.contractSpecAddr))
+                .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
+//                .setExecutor() // TODO: not sure if this is available, no keys appear to be readily accessible
+                .addAllParties(session.session.partiesList.map { it.toP8e(affiliateService) })
+                .addAllRecords(recordsList
+                    .filter { record -> record.record.sessionId == session.session.sessionId }
+                    .map { record -> record.toP8e() }
+                )
+                .setClassname(session.session.name)
+                .setAudit(session.session.audit.toP8e())
+                .build()
+        })
+        .setScopeSpecificationName(scopeSpecificationName)
+        .setLastEvent(sessionsList.lastSession()?.let { session ->
+            ContractScope.Event.newBuilder()
+                .setExecutionUuid(Contracts.ContractState.parseFrom(session.session.context).executionUuid)
+                .setGroupUuid(session.sessionIdInfo.sessionUuid.toProtoUuidProv())
+        })
+        .build()
+} catch (e: Exception) {
+    logger().warn("Failed to convert scope ${scope.scopeIdInfo.scopeUuid}")
+    throw e
+}
 
 fun List<SessionWrapper>.lastSession(): SessionWrapper? = sortedByDescending {
     max(it.session.audit.createdDate.toOffsetDateTimeProv().toEpochSecond(), it.session.audit.updatedDate.toOffsetDateTimeProv().toEpochSecond())
