@@ -49,6 +49,14 @@ class ChaincodeInvokeService(
     private val chaincodeProperties: ChaincodeProperties,
     private val provenanceGrpc: ProvenanceGrpcService,
 ) : IChaincodeInvokeService {
+
+    companion object {
+        private val blockScopeIds = HashSet<String>()
+        fun freeScope(scopeUuid: UUID) {
+            blockScopeIds.remove(scopeUuid.toString())
+        }
+    }
+
     private val log = logger()
 
     private val objectMapper = ObjectMapper().configureProvenance()
@@ -75,7 +83,6 @@ class ChaincodeInvokeService(
 
     // non-thread safe data structures that are only used within the worker thread
     private val batch = mutableListOf<ContractRequestWrapper>()
-    private val blockScopeIds = HashSet<String>()
     private val priorityScopeBacklog = HashMap<String, LinkedList<ContractRequestWrapper>>()
     private var currentBlockHeight = 0L
 
@@ -107,23 +114,6 @@ class ChaincodeInvokeService(
         log.info("Starting bc-tx-batch thread")
 
         while(true) {
-            try {
-                provenanceGrpc.getLatestBlock()
-                    .takeIf { it.block.header.height > currentBlockHeight }
-                    ?.let {
-                        currentBlockHeight = it.block.header.height
-
-                        if (!blockScopeIds.isEmpty()) {
-                            log.debug("Clearing blockScopeIds")
-                            blockScopeIds.clear()
-                        }
-                    }
-            } catch (t: Throwable) {
-                log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
-                Thread.sleep(1000);
-                continue;
-            }
-
             // attempt to load the batch with scopes that were previously passed on due to not
                 // wanting to send the same scope in the same block
             while (batch.size < chaincodeProperties.txBatchSize) {
