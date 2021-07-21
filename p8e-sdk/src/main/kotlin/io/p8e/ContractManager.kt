@@ -225,7 +225,7 @@ class ContractManager(
     fun <T: P8eContract> newContract(contractClazz: Class<T>, scopeUuid: UUID, executionUuid: UUID? = null, invokerRole: PartyType? = null, scopeSpecificationName: String? = null): Contract<T> {
         val scope = Scope.newBuilder()
             .setUuid(scopeUuid.toProtoUuidProv())
-            .setScopeSpecificationName(scopeSpecificationName ?: contractClazz.scopeSpecificationNames().firstOrNull())
+            .setScopeSpecificationName(scopeSpecificationName ?: contractClazz.scopeSpecificationNames().first())
             .build()
 
         return newContract(contractClazz, scope, executionUuid, invokerRole)
