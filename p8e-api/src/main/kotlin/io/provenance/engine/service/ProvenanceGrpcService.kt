@@ -32,6 +32,7 @@ import io.provenance.metadata.v1.OSLocatorRequest
 import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.metadata.v1.ScopeSpecification
 import io.provenance.metadata.v1.ScopeSpecificationRequest
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey
@@ -165,27 +166,40 @@ class ProvenanceGrpcService(
         }
 
     fun retrieveScope(address: String): ContractScope.Scope {
-        val scopeResponse = metadataQueryService.scope(
-            ScopeRequest.newBuilder()
-                .setScopeId(address)
-                .setIncludeSessions(true)
-                .setIncludeRecords(true)
-                .build()
-        )
-
-        val contractSpecHashLookup = scopeResponse.sessionsList
-            .map { it.contractSpecIdInfo.contractSpecAddr }
-            .toSet()
-            .threadedMap(executor) {
-                it to metadataQueryService.contractSpecification(ContractSpecificationRequest.newBuilder()
-                    .setSpecificationId(it)
+        val (scopeResponse, contractSpecHashLookup, scopeSpecificationName) = try {
+            val scopeResponse = metadataQueryService.scope(
+                ScopeRequest.newBuilder()
+                    .setScopeId(address)
+                    .setIncludeSessions(true)
+                    .setIncludeRecords(true)
                     .build()
-                ).contractSpecification.specification.hash
-            }.toMap()
+            )
 
-        val scopeSpecificationName = getScopeSpecification(scopeResponse.scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv()).description.name
+            val contractSpecHashLookup = scopeResponse.sessionsList
+                .map { it.contractSpecIdInfo.contractSpecAddr }
+                .toSet()
+                .threadedMap(executor) {
+                    it to metadataQueryService.contractSpecification(
+                        ContractSpecificationRequest.newBuilder()
+                            .setSpecificationId(it)
+                            .build()
+                    ).contractSpecification.specification.hash
+                }.toMap()
 
-        return scopeResponse.toP8e(contractSpecHashLookup, scopeSpecificationName, affiliateService)
+            val scopeSpecificationName = getScopeSpecification(scopeResponse.scope.scopeSpecIdInfo.scopeSpecUuid.toUuidProv()).description.name
+
+            Triple(scopeResponse, contractSpecHashLookup, scopeSpecificationName)
+        } catch (e: Exception) {
+            logger().warn("Error retrieving scope details for address $address", e)
+            throw e
+        }
+
+        return try {
+            scopeResponse.toP8e(contractSpecHashLookup, scopeSpecificationName, affiliateService)
+        } catch (e: Exception) {
+            logger().warn("Failed to convert scope [address = $address, scopeUuid = ${scopeResponse.scope.scopeIdInfo.scopeUuid}, scopeSpecificationName = $scopeSpecificationName, scopeResponse = $scopeResponse, contractSpecHashLookup = $contractSpecHashLookup]")
+            throw e
+        }
     }
 
     fun getOSLocatorByAddress(address: String) = metadataQueryService.oSLocator(OSLocatorRequest.newBuilder()

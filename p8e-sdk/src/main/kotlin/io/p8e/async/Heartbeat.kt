@@ -89,7 +89,11 @@ class HeartbeatManagerRunnable(
 
             for (key in toAdd) {
                 val receiveObserver = desired.getValue(key).invoke()
-                val sendObserver = QueueingStreamObserverSender(manager.client.event(key.clazz, receiveObserver))
+                log.info("Fetched receiveObserver for ${key.publicKey.toHex() to key.clazz.name}")
+                val sendObserver = QueueingStreamObserverSender(manager.client.event(key.clazz, receiveObserver).also {
+                    log.info("Opened event stream for ${key.publicKey.toHex() to key.clazz.name}")
+                })
+                log.info("Initialized sendObserver for ${key.publicKey.toHex() to key.clazz.name}")
 
                 receiveObserver.setQueuer(sendObserver)
                 queuers[key.clazz] = sendObserver

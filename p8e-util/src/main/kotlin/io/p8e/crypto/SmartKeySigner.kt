@@ -78,7 +78,11 @@ class SmartKeySigner(
      * Using SmartKey to sign data.
      */
     override fun initSign() {
-        signatureRequest = SignRequest().hashAlg(digestAlgorithm).deterministicSignature(deterministic)
+        signatureRequest = SignRequest()
+            .hashAlg(digestAlgorithm)
+            .deterministicSignature(deterministic)
+            .data(byteArrayOf())
+
         verifying = false
     }
 
