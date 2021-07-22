@@ -136,7 +136,7 @@ class ScopeStream(
             EventStreamRecord.update(eventStreamId, blockHeight)
 
             events.forEach {
-                ChaincodeInvokeService.freeScope(it.scope.uuid.toUuidProv())
+                ChaincodeInvokeService.unlockScope(it.scope.uuid.value)
             }
         }
     }

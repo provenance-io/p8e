@@ -22,7 +22,6 @@ import io.provenance.metadata.v1.ScopeSpecification
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
-import io.provenance.pbc.clients.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
@@ -51,13 +50,35 @@ class ChaincodeInvokeService(
 ) : IChaincodeInvokeService {
 
     companion object {
+        private val log = logger()
+
         private val blockScopeIds = HashSet<String>()
-        fun freeScope(scopeUuid: UUID) {
-            blockScopeIds.remove(scopeUuid.toString())
+        private val scopeLockHeights = HashMap<String, Long>()
+        private var currentBlockHeight = 0L
+
+        fun unlockScope(scopeUuid: String) {
+            blockScopeIds.remove(scopeUuid)
+            scopeLockHeights.remove(scopeUuid)
+        }
+
+        private fun scopeLocked(scopeUuid: String): Boolean = blockScopeIds.contains(scopeUuid)
+
+        private fun lockScope(scopeUuid: String) {
+            require(!scopeLocked(scopeUuid)) { "attempted to lock scope that was already locked [scopeUuid = $scopeUuid]" }
+
+            blockScopeIds.add(scopeUuid)
+            scopeLockHeights[scopeUuid] = currentBlockHeight
+        }
+
+        private fun logStaleScopeLocks() {
+            scopeLockHeights.filter {
+                it.value < currentBlockHeight - 10
+            }.forEach {
+                log.error("Scope ${it.key} has been locked for > 10 blocks")
+                scopeLockHeights.remove(it.key) // we only want to log this error once per scope
+            }
         }
     }
-
-    private val log = logger()
 
     private val objectMapper = ObjectMapper().configureProvenance()
     private val indexRegex = "^.*message index: (\\d+).*$".toRegex()
@@ -84,7 +105,6 @@ class ChaincodeInvokeService(
     // non-thread safe data structures that are only used within the worker thread
     private val batch = mutableListOf<ContractRequestWrapper>()
     private val priorityScopeBacklog = HashMap<String, LinkedList<ContractRequestWrapper>>()
-    private var currentBlockHeight = 0L
 
     // helper extensions for batch management
     private val MutableList<ContractRequestWrapper>.executionUuids: List<UUID> get() = map { it.executionUuid }
@@ -114,12 +134,27 @@ class ChaincodeInvokeService(
         log.info("Starting bc-tx-batch thread")
 
         while(true) {
+            try {
+                provenanceGrpc.getLatestBlock()
+                    .takeIf { it.block.header.height > currentBlockHeight }
+                    ?.let {
+                        currentBlockHeight = it.block.header.height
+
+                        logStaleScopeLocks()
+                    }
+            } catch (t: Throwable) {
+                log.warn("Received error when fetching latest block, waiting 1s before trying again", t)
+                Thread.sleep(1000);
+                continue;
+            }
+
+
             // attempt to load the batch with scopes that were previously passed on due to not
                 // wanting to send the same scope in the same block
             while (batch.size < chaincodeProperties.txBatchSize) {
                 // filter the backlog for scopes that aren't in the block and then pick a random
                 // scope and insert it into the block
-                priorityScopeBacklog.filterKeys { !blockScopeIds.contains(it) }
+                priorityScopeBacklog.filterKeys { !scopeLocked(it) }
                     .keys
                     .toList()
                     .takeIf { it.isNotEmpty() }
@@ -135,17 +170,17 @@ class ChaincodeInvokeService(
                         }
 
                         log.debug("adding ${message.request.scopeId} to batch")
-                        blockScopeIds.add(message.request.scopeId)
+                        lockScope(message.request.scopeId)
                         batch.add(message)
                     } ?: break
             }
 
             while (batch.size < chaincodeProperties.txBatchSize) {
                 queue.poll(chaincodeProperties.emptyIterationBackoffMS.toLong(), TimeUnit.MILLISECONDS)?.let { message ->
-                    if (!blockScopeIds.contains(message.request.scopeId)) {
+                    if (!scopeLocked(message.request.scopeId)) {
                         log.debug("adding ${message.request.scopeId} to batch")
 
-                        blockScopeIds.add(message.request.scopeId)
+                        lockScope(message.request.scopeId)
                         batch.add(message)
                     } else {
                         val list = priorityScopeBacklog.getOrDefault(message.request.scopeId, LinkedList())
@@ -222,7 +257,7 @@ class ChaincodeInvokeService(
                         else -> { // fail the whole batch
                             batch.map {
                                 it.future.completeExceptionally(t)
-                                freeScope(it.request.scopeId.toUuidProv())
+                                unlockScope(it.request.scopeId)
                                 it.executionUuid
                             }.also {
                                 batch.clear()
@@ -259,7 +294,7 @@ class ChaincodeInvokeService(
                  // fail whole batch
                  batch.forEach {
                      it.future.completeExceptionally(IllegalStateException(errorMessage))
-                     freeScope(it.request.scopeId.toUuidProv())
+                     unlockScope(it.request.scopeId)
                  }
                  batch.clear()
              }
@@ -296,7 +331,7 @@ class ChaincodeInvokeService(
         val erroredContract = batch[index]
         batch.removeContract(erroredContract)
         erroredContract.future.completeExceptionally(IllegalStateException(errorMessage))
-        freeScope(erroredContract.request.scopeId.toUuidProv())
+        unlockScope(erroredContract.request.scopeId)
         return erroredContract.executionUuid
     }
 
@@ -318,7 +353,7 @@ class ChaincodeInvokeService(
                 batch.removeContract(it)
                 it.future.completeExceptionally(IllegalStateException(errorMessage))
 
-                freeScope(it.request.scopeId.toUuidProv())
+                unlockScope(it.request.scopeId)
 
                 it.executionUuid
             }

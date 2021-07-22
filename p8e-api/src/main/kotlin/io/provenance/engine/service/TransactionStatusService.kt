@@ -11,7 +11,6 @@ import io.provenance.engine.grpc.v1.toEvent
 import io.provenance.p8e.shared.domain.EnvelopeRecord
 import io.provenance.p8e.shared.domain.EnvelopeTable
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import io.p8e.proto.ContractScope.Envelope.Status
 import io.p8e.proto.Events.P8eEvent.Event
 import org.springframework.stereotype.Component
@@ -68,7 +67,7 @@ class TransactionStatusService(
 
             if (envelope.isInvoker ?: false) {
                 val event = envelope.uuid.value.toProtoUuidProv().toEvent(Event.ENVELOPE_CHAINCODE)
-                ChaincodeInvokeService.freeScope(envelope.scope.scopeUuid)
+                ChaincodeInvokeService.unlockScope(envelope.scope.scopeUuid.toString())
                 eventService.submitEvent(event, envelope.uuid.value)
             }
         }
