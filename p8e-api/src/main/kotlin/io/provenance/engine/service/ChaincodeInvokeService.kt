@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component
 import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Future
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -52,14 +53,9 @@ class ChaincodeInvokeService(
     companion object {
         private val log = logger()
 
-        private val blockScopeIds = HashSet<String>()
-        private val scopeLockHeights = HashMap<String, Long>()
+        private val blockScopeIds = ConcurrentHashMap.newKeySet<String>()
+        private val scopeLockHeights = ConcurrentHashMap<String, Long>()
         private var currentBlockHeight = 0L
-
-        fun unlockScope(scopeUuid: String) {
-            blockScopeIds.remove(scopeUuid)
-            scopeLockHeights.remove(scopeUuid)
-        }
 
         private fun scopeLocked(scopeUuid: String): Boolean = blockScopeIds.contains(scopeUuid)
 
@@ -68,6 +64,11 @@ class ChaincodeInvokeService(
 
             blockScopeIds.add(scopeUuid)
             scopeLockHeights[scopeUuid] = currentBlockHeight
+        }
+
+        fun unlockScope(scopeUuid: String) {
+            blockScopeIds.remove(scopeUuid)
+            scopeLockHeights.remove(scopeUuid)
         }
 
         private fun logStaleScopeLocks() {
