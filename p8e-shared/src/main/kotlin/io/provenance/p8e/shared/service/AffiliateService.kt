@@ -242,8 +242,8 @@ class AffiliateService(
         AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public)
-                osLocatorService.registerAffiliate(encryptionKeyPair.public)
+                osClient.createPublicKey(signingKeyPair.public, encryptionKeyPair.public)
+                osLocatorService.registerAffiliate(encryptionKeyPair.public) // todo: if we use signing here (since the chain wants that), will we
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
@@ -281,7 +281,7 @@ class AffiliateService(
         AffiliateRecord.insert(signingPublicKey, encryptionPublicKey, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionPublicKey.publicKey)
+                osClient.createPublicKey(signingPublicKey.publicKey, encryptionPublicKey.publicKey)
                 osLocatorService.registerAffiliate(encryptionPublicKey.publicKey)
 
                 // create index in ES if it doesn't already exist

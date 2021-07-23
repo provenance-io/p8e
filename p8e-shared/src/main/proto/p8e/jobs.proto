@@ -17,5 +17,10 @@ message AddAffiliateOSLocator {
 
 message ResolveAffiliateOSLocators {
   PublicKey localAffiliate = 1;
-  repeated PublicKey remoteAffiliates = 2;
+  repeated RemoteAffiliate remoteAffiliates = 2;
+}
+
+message RemoteAffiliate {
+  PublicKey signingPublicKey = 1;
+  PublicKey encryptionPublicKey = 2;
 }

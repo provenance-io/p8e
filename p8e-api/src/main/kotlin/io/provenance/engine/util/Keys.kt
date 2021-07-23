@@ -9,3 +9,5 @@ fun PublicKey.toPublicKeyProtoOSLocator(): Util.PublicKey =
     Util.PublicKey.newBuilder()
         .setSecp256K1(ECUtils.convertPublicKeyToBytes(this).toByteString())
         .build()
+
+data class SigningAndEncryptionPublicKeys(val signing: PublicKey, val encryption: PublicKey)

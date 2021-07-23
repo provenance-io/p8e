@@ -6,6 +6,7 @@ import io.p8e.util.*
 import io.provenance.p8e.shared.extension.logger
 import io.p8e.util.toUuidProv
 import io.provenance.engine.batch.MailboxMeta
+import io.provenance.engine.util.SigningAndEncryptionPublicKeys
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.domain.JobRecord
 import io.provenance.p8e.encryption.model.KeyRef
@@ -47,17 +48,17 @@ class MailboxService(
 
         val scopeOwners = env.scope.partiesList
             .filter { it.hasSigner() }
-            .map { it.signer.encryptionPublicKey.toPublicKey() }
+            .map { SigningAndEncryptionPublicKeys(it.signer.signingPublicKey.toPublicKey(), it.signer.encryptionPublicKey.toPublicKey()) }
             .toSet()
 
         val additionalAudiences = env.contract.recitalsList
             .filter { it.hasSigner() }
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
-            .map { it.signer.encryptionPublicKey.toPublicKey() }
-            .toSet()
+            .map { SigningAndEncryptionPublicKeys(it.signer.signingPublicKey.toPublicKey(), it.signer.encryptionPublicKey.toPublicKey()) }
             .plus(scopeOwners)
+            .toSet()
 
-        registerAffiliatesWithObjectStore(encryptionPublicKey, additionalAudiences)
+        registerAffiliatesWithObjectStore(signer.getPublicKey(), additionalAudiences)
 
         // Mail the actual contract
         osClient.put(
@@ -65,7 +66,7 @@ class MailboxService(
             message = env,
             encryptionPublicKey = encryptionPublicKey,
             signer = signer,
-            additionalAudiences = additionalAudiences,
+            additionalAudiences = additionalAudiences.map { it.encryption }.toSet(),
             metadata = MailboxMeta.MAILBOX_REQUEST
         )
     }
@@ -78,11 +79,11 @@ class MailboxService(
      * @param [error] The envelope error to return
      * @param [audiencePublicKeyFilter] Audiences to filter out by
      */
-    fun error(publicKey: PublicKey, env: Envelope, error: EnvelopeError, vararg audiencePublicKeyFilter: PublicKey) {
+    fun error(publicKey: PublicKey, env: Envelope, error: EnvelopeError, vararg audienceSigningPublicKeyFilter: PublicKey) {
         env.contract.recitalsList
             // Even though owner is in the recital list, mailbox client will ignore/filter for you
-            .map { it.signer.encryptionPublicKey.toPublicKey() }
-            .filterNot { audiencePublicKeyFilter.contains(it) }
+            .map { SigningAndEncryptionPublicKeys(it.signer.signingPublicKey.toPublicKey(), it.signer.encryptionPublicKey.toPublicKey()) }
+            .filterNot { audienceSigningPublicKeyFilter.contains(it.signing) }
             .toSet()
             .run { error(publicKey, this, error) }
     }
@@ -94,20 +95,20 @@ class MailboxService(
      * @param [audiencePublicKeys] Public key(s) to send mail to
      * @param [error] The envelope error to return
      */
-    fun error(publicKey: PublicKey, audiencePublicKeys: Collection<PublicKey>, error: EnvelopeError) {
+    fun error(publicKey: PublicKey, audiencePublicKeys: Collection<SigningAndEncryptionPublicKeys>, error: EnvelopeError) {
         log.info("Sending error result env:{}, error type:{}", error.groupUuid.toUuidProv(), error.type.name)
 
         val signer = affiliateService.getSigner(publicKey)
         val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
-        registerAffiliatesWithObjectStore(encryptionPublicKey, audiencePublicKeys)
+        registerAffiliatesWithObjectStore(signer.getPublicKey(), audiencePublicKeys)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = error,
             encryptionPublicKey = encryptionPublicKey,
             signer = signer,
-            additionalAudiences = audiencePublicKeys.toSet(),
+            additionalAudiences = audiencePublicKeys.map { it.encryption }.toSet(),
             metadata = MailboxMeta.MAILBOX_ERROR
         )
     }
@@ -121,27 +122,31 @@ class MailboxService(
     fun result(publicKey: PublicKey, env: Envelope) {
         log.info("Returning fragment result env:{}", env.getUuid())
 
-        val additionalAudiences = setOf(env.contract.invoker.encryptionPublicKey.toPublicKey())
+        val additionalAudiences = env.contract.invoker.let { setOf(SigningAndEncryptionPublicKeys(it.signingPublicKey.toPublicKey(), it.encryptionPublicKey.toPublicKey())) }
         val signer = affiliateService.getSigner(publicKey)
         val encryptionPublicKey = affiliateService.getEncryptionPublicKey(publicKey)
 
-        registerAffiliatesWithObjectStore(encryptionPublicKey, additionalAudiences)
+        registerAffiliatesWithObjectStore(signer.getPublicKey(), additionalAudiences)
 
         osClient.put(
             uuid = UUID.randomUUID(),
             message = env,
             encryptionPublicKey = encryptionPublicKey,
             signer = signer,
-            additionalAudiences = additionalAudiences,
+            additionalAudiences = additionalAudiences.map { it.encryption }.toSet(),
             metadata = MailboxMeta.MAILBOX_RESPONSE
         )
     }
 
-    private fun registerAffiliatesWithObjectStore(publicKey: PublicKey, audiencesPublicKey: Collection<PublicKey>) {
+    private fun registerAffiliatesWithObjectStore(signingPublicKey: PublicKey, audienceSigningPublicKeys: Collection<SigningAndEncryptionPublicKeys>) {
         JobRecord.create(Jobs.P8eJob.newBuilder()
             .setResolveAffiliateOSLocators(Jobs.ResolveAffiliateOSLocators.newBuilder()
-                .setLocalAffiliate(publicKey.toPublicKeyProto())
-                .addAllRemoteAffiliates(audiencesPublicKey.map { it.toPublicKeyProto() })
+                .setLocalAffiliate(signingPublicKey.toPublicKeyProto())
+                .addAllRemoteAffiliates(audienceSigningPublicKeys.map { Jobs.RemoteAffiliate.newBuilder()
+                    .setSigningPublicKey(it.signing.toPublicKeyProto())
+                    .setEncryptionPublicKey(it.encryption.toPublicKeyProto())
+                    .build()
+                })
             )
             .build())
     }

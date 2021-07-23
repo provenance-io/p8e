@@ -87,7 +87,7 @@ class OSLocatorChaincodeService(
         .setLocator(ObjectStoreLocator.newBuilder()
             .setOwner(account.address)
             .setLocatorUri(objectStoreLocatorProperties.url)
-            // todo: add in p8e owner address
+            // todo: add in encryption address once this is available in provenance (though this may be unnecessary after all)
         )
         .build()
 

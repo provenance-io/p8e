@@ -4,6 +4,7 @@ import io.p8e.crypto.SignerFactory
 import io.p8e.util.toHex
 import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKey
+import io.provenance.engine.util.SigningAndEncryptionPublicKeys
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
@@ -12,7 +13,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent
 import org.springframework.context.ApplicationListener
 import org.springframework.stereotype.Service
 import p8e.Jobs
-import java.lang.Exception
 import java.security.PublicKey
 
 private class ObjectStoreRegistrationException(message: String): Throwable(message)
@@ -32,7 +32,7 @@ class ObjectStoreAffiliateRegistrationService(
 
     override fun onApplicationEvent(event: ApplicationReadyEvent) {
         transaction { affiliateService.getAll() }.forEach {
-            OS_REGISTERED_AFFILIATES.add(it.encryptionPublicKey.toJavaPublicKey())
+            OS_REGISTERED_AFFILIATES.add(it.publicKey.value.toJavaPublicKey())
             // todo: also hydrate OS_REGISTERED_AFFILIATES with some object store endpoint on startup?
         }
     }
@@ -40,25 +40,25 @@ class ObjectStoreAffiliateRegistrationService(
     override fun handle(payload: Jobs.P8eJob) {
         val request = payload.resolveAffiliateOSLocators
 
-        val localAffiliate = request.localAffiliate.toPublicKey()
+        val localAffiliateSigningPublicKey = request.localAffiliate.toPublicKey()
         val failedRegistrations = request.remoteAffiliatesList
-            .map { it.toPublicKey() }
-            .filterNot { remoteAffiliate ->
-                registerRemoteAffiliate(localAffiliate, remoteAffiliate)
+            .map { SigningAndEncryptionPublicKeys(it.signingPublicKey.toPublicKey(), it.encryptionPublicKey.toPublicKey()) }
+            .filterNot { remoteAffiliatePublicKeys ->
+                registerRemoteAffiliate(localAffiliateSigningPublicKey, remoteAffiliatePublicKeys)
             }
 
         if (failedRegistrations.isNotEmpty()) {
             // prevent job from succeeding until all affiliates successfully registered
-            throw ObjectStoreRegistrationException("Failed to register public keys with Object Store: [${failedRegistrations.joinToString { it.toHex() }}]")
+            throw ObjectStoreRegistrationException("Failed to register public keys with Object Store: [${failedRegistrations.joinToString { "(signing = ${it.signing.toHex()}, encryption = ${it.encryption.toHex()})" }}]")
         }
     }
 
-    private fun registerRemoteAffiliate(localAffiliate: PublicKey, remoteAffiliate: PublicKey): Boolean = if (!OS_REGISTERED_AFFILIATES.contains(remoteAffiliate)) {
+    private fun registerRemoteAffiliate(localAffiliateSigningPublicKey: PublicKey, remoteAffiliatePublicKeys: SigningAndEncryptionPublicKeys): Boolean = if (!OS_REGISTERED_AFFILIATES.contains(remoteAffiliatePublicKeys.signing)) {
         try {
-            objectStoreQueryService.getObjectStoreUri(remoteAffiliate, localAffiliate)
+            objectStoreQueryService.getObjectStoreDetails(remoteAffiliatePublicKeys.signing, localAffiliateSigningPublicKey)
                 .also {
-                    osClient.createPublicKey(remoteAffiliate, it)
-                    OS_REGISTERED_AFFILIATES.add(remoteAffiliate)
+                    osClient.createPublicKey(remoteAffiliatePublicKeys.signing, remoteAffiliatePublicKeys.encryption, it)
+                    OS_REGISTERED_AFFILIATES.add(remoteAffiliatePublicKeys.signing)
                 }
             true
         } catch (t: Throwable) {
