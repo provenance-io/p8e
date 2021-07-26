@@ -59,30 +59,18 @@ class SmartKeySigner(
     private var verifying: Boolean = false
 
     /**
-     * Using the local java security signature instance to verify data.
-     */
-    override fun initVerify(publicKey: PublicKey) {
-        signature = Signature.getInstance(SIGN_ALGO, PROVIDER).apply { initVerify(publicKey) }
-        verifying = true
-    }
-
-    /**
      * Using SmartKey to sign data.
      */
     override fun initSign() {
-        signatureRequest = SignRequest().hashAlg(DigestAlgorithm.SHA512).deterministicSignature(true)
-        verifying = false
+        signatureRequest = SignRequest()
+            .hashAlg(DigestAlgorithm.SHA512)
+            .deterministicSignature(true)
+            .data(byteArrayOf())
     }
 
     override fun update(data: ByteArray, off: Int, res: Int) {
-        if(!verifying) {
-            signatureRequest?.data = data.copyOfRange(off, res)
-        } else {
-            signature?.update(data, off, res)
-        }
+        signatureRequest?.data = data.copyOfRange(off, res)
     }
-
-    override fun verify(signatureBytes: ByteArray): Boolean = signature?.verify(signatureBytes)!!
 
     override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
 
@@ -102,7 +90,7 @@ class SmartKeySigner(
             .signatureBuilderOf(String(signatureResponse.signature.base64Encode()))
             .setSigner(signer())
             .build()
-            .takeIf { verify(publicKey!!, data, it) }
+            .takeIf { verify(publicKey, data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
@@ -113,20 +101,11 @@ class SmartKeySigner(
             ).build()
 
     override fun update(data: ByteArray) {
-        if(!verifying) {
-            signatureRequest?.data(data)
-        } else {
-            signature?.update(data)
-        }
+        signatureRequest?.data(data)
     }
 
     override fun update(data: Byte) {
-        val dataByteArray = mutableListOf(data)
-        if(!verifying) {
-            signatureRequest?.data(dataByteArray.toByteArray())
-        } else {
-            signature?.update(data)
-        }
+        signatureRequest?.data(mutableListOf(data).toByteArray())
     }
 
     override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean {
