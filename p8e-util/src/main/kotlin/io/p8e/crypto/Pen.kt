@@ -69,12 +69,6 @@ class Pen(
 
     override fun update(data: Byte) { signature.update(data) }
 
-    override fun verify(signatureBytes: ByteArray): Boolean = signature.verify(signatureBytes)
-
-    override fun initVerify(publicKey: PublicKey) {
-        signature.initVerify(publicKey)
-    }
-
     override fun initSign() {
         signature.initSign(keyPair.private)
     }

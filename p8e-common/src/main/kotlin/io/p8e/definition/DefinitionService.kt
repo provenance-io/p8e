@@ -47,14 +47,12 @@ class DefinitionService(
     fun addJar(
         encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ) {
         return get(
             encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
-            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
     }
@@ -67,14 +65,12 @@ class DefinitionService(
     fun loadClass(
         encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Class<*> {
         return get(
             encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
-            signer,
             signaturePublicKey
         ).let { memoryClassLoader.addJar(definition.resourceLocation.ref.hash, it) }
             .let {
@@ -91,14 +87,12 @@ class DefinitionService(
     fun loadProto(
         encryptionKeyRef: KeyRef,
         location: Location,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             encryptionKeyRef,
             location.ref.hash,
             location.classname,
-            signer,
             signaturePublicKey
         )
     }
@@ -106,14 +100,12 @@ class DefinitionService(
     fun loadProto(
         encryptionKeyRef: KeyRef,
         definition: DefinitionSpec,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             encryptionKeyRef,
             definition.resourceLocation.ref.hash,
             definition.resourceLocation.classname,
-            signer,
             signaturePublicKey
         )
     }
@@ -121,14 +113,12 @@ class DefinitionService(
     fun loadProto(
         encryptionKeyRef: KeyRef,
         fact: Fact,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
             encryptionKeyRef,
             fact.dataLocation.ref.hash,
             fact.dataLocation.classname,
-            signer,
             signaturePublicKey
         )
     }
@@ -137,7 +127,6 @@ class DefinitionService(
         encryptionKeyRef: KeyRef,
         hash: String,
         classname: String,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): Message {
         return loadProto(
@@ -145,7 +134,6 @@ class DefinitionService(
                 encryptionKeyRef,
                 hash,
                 classname,
-                signer,
                 signaturePublicKey
             ),
             classname
@@ -179,7 +167,6 @@ class DefinitionService(
         encryptionKeyRef: KeyRef,
         hash: String,
         classname: String,
-        signer: SignerImpl,
         signaturePublicKey: PublicKey? = null
     ): InputStream {
         return byteCache.computeIfAbsent(ByteCacheKey(encryptionKeyRef.publicKey, hash)) {
@@ -210,9 +197,9 @@ class DefinitionService(
                             .map { it.publicKey.toString(Charsets.UTF_8) }
                             .contains(publicKeyToPem(publicKey))
                     }?.let { publicKey ->
-                        dimeInputStream.getDecryptedPayload(encryptionKeyRef, publicKey, signer)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyRef, publicKey)
                     }.or {
-                        dimeInputStream.getDecryptedPayload(encryptionKeyRef, signer)
+                        dimeInputStream.getDecryptedPayload(encryptionKeyRef)
                     }.use { signatureInputStream ->
                         signatureInputStream.readAllBytes()
                             .also {
