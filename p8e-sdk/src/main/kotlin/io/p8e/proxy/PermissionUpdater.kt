@@ -42,7 +42,7 @@ companion object {
         // via a stream observer. We never did this yet, but this could even be marked as endpoints we can hit right
         // on the raw netty network threads since it would be nonblocking...I'm not sure if you can configure that
         // for a specific endpoint though, or the whole managed channel.
-        private val executor = ThreadPoolFactory.newFixedDaemonThreadPool(40, "permission-updater-%d")
+        private val executor = ThreadPoolFactory.newFixedDaemonThreadPool(16, "permission-updater-%d")
     }
 }
 
