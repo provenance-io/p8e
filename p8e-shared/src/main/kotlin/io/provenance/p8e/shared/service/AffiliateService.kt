@@ -243,7 +243,7 @@ class AffiliateService(
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(signingKeyPair.public, encryptionKeyPair.public)
-                osLocatorService.registerAffiliate(encryptionKeyPair.public) // todo: if we use signing here (since the chain wants that), will we
+                osLocatorService.registerAffiliate(signingKeyPair.public) // todo: if we use signing here (since the chain wants that), will we
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
@@ -282,7 +282,7 @@ class AffiliateService(
             .also {
                 // Register the key with object store so that it monitors for replication.
                 osClient.createPublicKey(signingPublicKey.publicKey, encryptionPublicKey.publicKey)
-                osLocatorService.registerAffiliate(encryptionPublicKey.publicKey)
+                osLocatorService.registerAffiliate(signingPublicKey.publicKey)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
