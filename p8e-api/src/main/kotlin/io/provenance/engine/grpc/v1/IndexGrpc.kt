@@ -205,8 +205,7 @@ class IndexGrpc(
                         definitionService.get(
                             encryptionKeyRef,
                             entry.resultHash,
-                            entry.contractClassname,
-                            signer
+                            entry.contractClassname
                         ).readAllBytes()
                             .toByteString()
                     ).build()

@@ -55,7 +55,7 @@ class ContractEngine(
         val scope = envelope.scope.takeIf { it != Scope.getDefaultInstance() }
 
         val spec = timed("ContractEngine_fetchSpec") {
-            _definitionService.loadProto(encryptionKeyRef, contract.spec.dataLocation, signer) as? ContractSpec
+            _definitionService.loadProto(encryptionKeyRef, contract.spec.dataLocation) as? ContractSpec
                 ?: throw ContractDefinitionException("Spec stored at contract.spec.dataLocation is not of type ${ContractSpec::class.java.name}")
         }
 
@@ -93,7 +93,7 @@ class ContractEngine(
         // Load contract spec class
         val contractSpecClass = timed("ContractEngine_loadSpecClass") {
             try {
-                definitionService.loadClass(encryptionKeyRef, spec.definition, signer)
+                definitionService.loadClass(encryptionKeyRef, spec.definition)
             } catch (e: StatusRuntimeException) {
                 if (e.status.code == Status.Code.NOT_FOUND) {
                     throw ContractDefinitionException(
@@ -114,8 +114,7 @@ class ContractEngine(
             loadAllClasses(
                 encryptionKeyRef,
                 definitionService,
-                spec,
-                signer
+                spec
             )
         }
 
@@ -136,7 +135,7 @@ class ContractEngine(
                     
                     log.debug("Change scope ownership - adding ${audience.map { it.toHex() }} [scope: ${scope.uuid.value}] [executionUuid: ${envelope.executionUuid.value}]")
 
-                    this.getScopeData(encryptionKeyRef, definitionService, scope, signer)
+                    this.getScopeData(encryptionKeyRef, definitionService, scope)
                         .threadedMap(executor) { definitionService.save(encryptionKeyRef.publicKey, it, signer, audience) }
                 } else { }
             }
@@ -150,7 +149,7 @@ class ContractEngine(
             encryptionKeyRef,
             definitionService,
             contractBuilder,
-            signer
+            signer.getPublicKey()
         )
 
         val prerequisiteResults = contractWrapper.prerequisites.map { prerequisite ->
@@ -254,22 +253,20 @@ class ContractEngine(
     private fun getScopeData(
         encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
-        scope: Scope,
-        signer: SignerImpl
+        scope: Scope
     ): List<ByteArray> =
         scope.recordGroupList.flatMap { it.recordsList }
             .map { record -> record.inputsList.map { input -> Pair(input.classname, input.hash) } + Pair("unset", record.hash) + Pair(record.classname, record.resultHash) }
             .flatten()
             .plus(scope.recordGroupList.map { Pair(it.classname, it.specification) })
             .toSet()
-            .threadedMap(executor) { (classname, hash) -> definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = hash, classname = classname, signer = signer).readAllBytes() }
+            .threadedMap(executor) { (classname, hash) -> definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = hash, classname = classname).readAllBytes() }
             .toList()
 
     private fun loadAllClasses(
         encryptionKeyRef: KeyRef,
         definitionService: DefinitionService,
-        spec: ContractSpec,
-        signer: SignerImpl
+        spec: ContractSpec
     ) {
         mutableListOf(spec.definition)
             .apply {
@@ -281,7 +278,7 @@ class ContractEngine(
                 )
             }.threadedMap(executor) { definition ->
                 with (definition.resourceLocation) {
-                    this to definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = this.ref.hash, classname = this.classname, signer)
+                    this to definitionService.get(encryptionKeyRef = encryptionKeyRef, hash = this.ref.hash, classname = this.classname)
                 }
             }.toList()
             .forEach { (location, inputStream) ->  definitionService.addJar(location.ref.hash, inputStream) }
