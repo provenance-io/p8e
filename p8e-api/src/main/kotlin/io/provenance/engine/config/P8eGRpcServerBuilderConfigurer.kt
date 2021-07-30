@@ -14,7 +14,7 @@ class P8eGRpcServerBuilderConfigurer: GRpcServerBuilderConfigurer() {
         serverBuilder.maxInboundMessageSize(Constant.MAX_MESSAGE_SIZE)
             .also {
                 val netty = (it as NettyServerBuilder)
-                    .executor(ThreadPoolFactory.newFixedThreadPool(40, "grpc-server-%d"))
+                    .executor(ThreadPoolFactory.newFixedThreadPool(80, "grpc-server-%d"))
                     .permitKeepAliveTime(50, SECONDS)
                     .keepAliveTime(60, SECONDS)
                     .keepAliveTimeout(20, SECONDS)
