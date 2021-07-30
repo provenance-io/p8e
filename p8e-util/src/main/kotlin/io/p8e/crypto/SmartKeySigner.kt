@@ -9,7 +9,6 @@ import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
 import io.p8e.util.base64Decode
 import io.p8e.util.base64Encode
-import io.p8e.util.base64Sha512
 import io.p8e.util.orThrow
 import io.p8e.util.toPublicKeyProto
 import org.bouncycastle.jce.provider.BouncyCastleProvider
