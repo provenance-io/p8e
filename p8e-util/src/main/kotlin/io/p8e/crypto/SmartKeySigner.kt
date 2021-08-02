@@ -1,22 +1,19 @@
 package io.p8e.crypto
 
-import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
 import com.google.protobuf.Message
-import io.p8e.crypto.SignerImpl.Companion.PROVIDER
-import io.p8e.crypto.SignerImpl.Companion.SIGN_ALGO
 import io.p8e.proto.Common
 import io.p8e.proto.PK
 import io.p8e.proto.ProtoUtil
 import io.p8e.util.base64Decode
 import io.p8e.util.base64Encode
 import io.p8e.util.orThrow
-import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKeyProto
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.lang.IllegalStateException
+import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Security
 import java.security.Signature
@@ -53,10 +50,8 @@ class SmartKeySigner(
         Security.addProvider(BouncyCastleProvider())
     }
 
-    private var signature: Signature? = null
     private var signatureRequest: SignRequest? = null
-
-    private var verifying: Boolean = false
+    private val messageDigest = MessageDigest.getInstance("SHA-512")
 
     /**
      * Using SmartKey to sign data.
@@ -65,14 +60,19 @@ class SmartKeySigner(
         signatureRequest = SignRequest()
             .hashAlg(DigestAlgorithm.SHA512)
             .deterministicSignature(true)
-            .data(byteArrayOf())
+            .hash(byteArrayOf())
     }
 
     override fun update(data: ByteArray, off: Int, res: Int) {
-        signatureRequest?.data = data.copyOfRange(off, res)
+        messageDigest.update(data, off, res)
     }
 
-    override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
+    override fun sign(): ByteArray {
+        // Completes the message digest and adds the necessary padding before signing
+        signatureRequest?.hash = messageDigest.digest()
+
+        return signAndVerifyApi.sign(keyUuid, signatureRequest).signature
+    }
 
     override fun sign(data: String): Common.Signature = sign(data.toByteArray())
 
@@ -101,11 +101,11 @@ class SmartKeySigner(
             ).build()
 
     override fun update(data: ByteArray) {
-        signatureRequest?.data(data)
+        messageDigest.update(data)
     }
 
     override fun update(data: Byte) {
-        signatureRequest?.data(mutableListOf(data).toByteArray())
+        messageDigest.update(data)
     }
 
     override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean {
