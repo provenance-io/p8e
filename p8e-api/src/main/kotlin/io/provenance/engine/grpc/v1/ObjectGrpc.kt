@@ -82,7 +82,6 @@ class ObjectGrpc(
                 encryptionKeyRef,
                 request.uri,
                 "<raw fetch - classname not included>",
-                signer = signer,
                 signaturePublicKey = signer.getPublicKey()
             ).readAllBytes()
         }?.let { bytes ->
@@ -102,9 +101,9 @@ class ObjectGrpc(
         log.debug("ObjectLoadJsonRequest ${request.hash}")
 
         transaction {
-            val signer = affiliateService.getSigner(publicKey())
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
             val encryptionKeyRef = affiliateService.getEncryptionKeyRef(publicKey())
-            val spec = DefinitionService(osClient).loadProto(encryptionKeyRef, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signer, signer.getPublicKey()) as ContractSpecs.ContractSpec
+            val spec = DefinitionService(osClient).loadProto(encryptionKeyRef, request.contractSpecHash, ContractSpecs.ContractSpec::class.java.name, signingPublicKey) as ContractSpecs.ContractSpec
 
             val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}"
             val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
@@ -113,10 +112,10 @@ class ObjectGrpc(
 
             DefinitionService(osClient, memoryClassLoader).run {
                 // spec.definition is the contract uberjar
-                addJar(encryptionKeyRef, spec.definition, signer)
+                addJar(encryptionKeyRef, spec.definition)
 
                 forThread {
-                    loadProto(encryptionKeyRef, request.hash, request.classname, signer, signer.getPublicKey())
+                    loadProto(encryptionKeyRef, request.hash, request.classname, signingPublicKey)
                 }.toJsonString()
             }
         }?.let { json ->

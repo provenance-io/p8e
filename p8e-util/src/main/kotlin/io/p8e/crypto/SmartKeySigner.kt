@@ -1,6 +1,5 @@
 package io.p8e.crypto
 
-import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.model.DigestAlgorithm
 import com.fortanix.sdkms.v1.model.SignRequest
@@ -13,10 +12,11 @@ import io.p8e.proto.ProtoUtil
 import io.p8e.util.base64Decode
 import io.p8e.util.base64Encode
 import io.p8e.util.orThrow
-import io.p8e.util.toJavaPublicKey
 import io.p8e.util.toPublicKeyProto
+import io.provenance.p8e.shared.extension.logger
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import java.lang.IllegalStateException
+import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Security
 import java.security.Signature
@@ -53,12 +53,13 @@ class SmartKeySigner(
         Security.addProvider(BouncyCastleProvider())
     }
 
-    private var signature: Signature? = null
     private var signatureRequest: SignRequest? = null
 
-    private var verifying: Boolean = false
-
     override var hashType: SignerImpl.Companion.HashType = DEFAULT_HASH
+        set(value) {
+            field = value
+            resetDigest()
+        }
     override var deterministic: Boolean = true
     private val digestAlgorithm: DigestAlgorithm
         get() = when(hashType) {
@@ -66,13 +67,12 @@ class SmartKeySigner(
             SignerImpl.Companion.HashType.SHA512 -> DigestAlgorithm.SHA512
         }
 
-    /**
-     * Using the local java security signature instance to verify data.
-     */
-    override fun initVerify(publicKey: PublicKey) {
-        signature = Signature.getInstance(signAlgorithm, PROVIDER).apply { initVerify(publicKey) }
-        verifying = true
+    private fun resetDigest() {
+        logger().info("Setting digest to algorithm $hashType")
+        messageDigest = MessageDigest.getInstance(hashType.value)
     }
+
+    private var messageDigest = MessageDigest.getInstance(hashType.value)
 
     /**
      * Using SmartKey to sign data.
@@ -81,22 +81,19 @@ class SmartKeySigner(
         signatureRequest = SignRequest()
             .hashAlg(digestAlgorithm)
             .deterministicSignature(deterministic)
-            .data(byteArrayOf())
-
-        verifying = false
+            .hash(byteArrayOf())
     }
 
     override fun update(data: ByteArray, off: Int, res: Int) {
-        if(!verifying) {
-            signatureRequest?.data = data.copyOfRange(off, res)
-        } else {
-            signature?.update(data, off, res)
-        }
+        messageDigest.update(data, off, res)
     }
 
-    override fun verify(signatureBytes: ByteArray): Boolean = signature?.verify(signatureBytes)!!
+    override fun sign(): ByteArray {
+        // Completes the message digest and adds the necessary padding before signing
+        signatureRequest?.hash = messageDigest.digest()
 
-    override fun sign(): ByteArray = signAndVerifyApi.sign(keyUuid, signatureRequest).signature
+        return signAndVerifyApi.sign(keyUuid, signatureRequest).signature
+    }
 
     override fun sign(data: String): Common.Signature = sign(data.toByteArray())
 
@@ -114,7 +111,7 @@ class SmartKeySigner(
             .signatureBuilderOf(String(signatureResponse.signature.base64Encode()), signAlgorithm)
             .setSigner(signer())
             .build()
-            .takeIf { verify(publicKey!!, data, it) }
+            .takeIf { verify(publicKey, data, it) }
             .orThrow { IllegalStateException("can't verify signature - public cert may not match private key.") }
     }
 
@@ -125,20 +122,11 @@ class SmartKeySigner(
             ).build()
 
     override fun update(data: ByteArray) {
-        if(!verifying) {
-            signatureRequest?.data(data)
-        } else {
-            signature?.update(data)
-        }
+        messageDigest.update(data)
     }
 
     override fun update(data: Byte) {
-        val dataByteArray = mutableListOf(data)
-        if(!verifying) {
-            signatureRequest?.data(dataByteArray.toByteArray())
-        } else {
-            signature?.update(data)
-        }
+        messageDigest.update(data)
     }
 
     override fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean {

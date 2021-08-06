@@ -183,13 +183,13 @@ class DIMEInputStream(
      * @param keyPair - The encryption key pair to decrypt the stream
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(encryptionKeyRef: KeyRef, signer: SignerImpl): SignatureInputStream {
+    fun getDecryptedPayload(encryptionKeyRef: KeyRef): SignatureInputStream {
         // seek past the header
         pos += header.size
 
         return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
             .let { ProvenanceDIME.decryptPayload(this, it) }
-            .verify(signer, getFirstSignaturePublicKey(), getFirstSignature())
+            .verify(getFirstSignaturePublicKey(), getFirstSignature())
     }
 
     /**
@@ -200,7 +200,7 @@ class DIMEInputStream(
      * @param signaturePublicKey - The signature public key to use for signature verification
      * @return - SignatureInputStream containing a CipherInputStream in DECRYPT mode.
      */
-    fun getDecryptedPayload(encryptionKeyRef: KeyRef, signaturePublicKey: PublicKey, signer: SignerImpl): SignatureInputStream {
+    fun getDecryptedPayload(encryptionKeyRef: KeyRef, signaturePublicKey: PublicKey): SignatureInputStream {
         // seek past the header
         pos += header.size
 
@@ -210,7 +210,7 @@ class DIMEInputStream(
 
         return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
             .let { ProvenanceDIME.decryptPayload(this, it) }
-            .verify(signer, signaturePublicKey, signatureToUse)
+            .verify(signaturePublicKey, signatureToUse)
     }
 
     fun length() = pos
