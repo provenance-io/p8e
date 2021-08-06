@@ -2,6 +2,7 @@ package io.p8e.crypto
 
 import io.p8e.crypto.SignerType.SIGN
 import io.p8e.crypto.SignerType.VERIFY
+import org.bouncycastle.crypto.Signer
 import java.io.InputStream
 import java.security.PublicKey
 import java.security.Signature
@@ -63,8 +64,8 @@ fun InputStream.sign(signer: SignerImpl): SignatureInputStream {
     )
 }
 
-fun InputStream.verify(publicKey: PublicKey, signature: ByteArray): SignatureInputStream {
-    val verifySig = Signature.getInstance(SignerImpl.SIGN_ALGO, SignerImpl.PROVIDER).apply { initVerify(publicKey) }
+fun InputStream.verify(publicKey: PublicKey, signature: ByteArray, signAlgo: String = SignerImpl.SIGN_ALGO_SHA_512_PREFIX + SignerImpl.SIGN_ALGO_NON_DETERMINISTIC_SUFFIX): SignatureInputStream {
+    val verifySig = Signature.getInstance(signAlgo, SignerImpl.PROVIDER).apply { initVerify(publicKey) }
     return SignatureInputStream(
         inputStream = this,
         signatureRef = SignatureRef(null, verifySig, VERIFY),
