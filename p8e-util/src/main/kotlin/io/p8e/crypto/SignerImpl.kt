@@ -18,9 +18,9 @@ interface SignerImpl {
 
         val DEFAULT_HASH = HashType.SHA512
 
-        enum class HashType {
-            SHA512,
-            SHA256
+        enum class HashType(val value: String) {
+            SHA512("SHA-512"),
+            SHA256("SHA-256"),
         }
     }
 
