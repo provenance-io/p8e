@@ -1,5 +1,6 @@
 package io.provenance.p8e.encryption.ecies
 
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.experimental.extensions.toAgreeKey
 import io.provenance.p8e.encryption.experimental.extensions.toTransientSecurityObject
@@ -13,7 +14,7 @@ import java.util.Arrays
 import javax.crypto.BadPaddingException
 import javax.crypto.IllegalBlockSizeException
 
-class ProvenanceECIESCipher {
+object ProvenanceECIESCipher {
 
     private var logger = LoggerFactory.getLogger(ProvenanceECIESCipher::class.java)
 
@@ -68,15 +69,15 @@ class ProvenanceECIESCipher {
      * @throws IllegalArgumentException In case decryption fails due to invalid life-cycle phase,
      */
     @Throws(ProvenanceECIESDecryptException::class)
-    fun decrypt(payload: ProvenanceECIESCryptogram, keyRef: KeyRef, additionalAuthenticatedData: String?): ByteArray {
+    fun decrypt(payload: ProvenanceECIESCryptogram, keyRef: KeyRef, additionalAuthenticatedData: String?, extKeyCustodyApi: ExternalKeyCustodyApi): ByteArray {
         try {
 
             val ephemeralDerivedSecretKey = if(keyRef.type == SMARTKEY) {
                 // Create a transient security object out of the ephemeral public key from the payload.
-                val transientEphemeralSObj = payload.ephemeralPublicKey.toTransientSecurityObject()
+                val transientEphemeralSObj = payload.ephemeralPublicKey.toTransientSecurityObject(extKeyCustodyApi.getSmartKeySecurityObj())
 
                 // Compute the shared/agree key via SmartKey's API
-                val secretKey = keyRef.uuid.toString().toAgreeKey(transientEphemeralSObj.transientKey)
+                val secretKey = keyRef.uuid.toString().toAgreeKey(transientEphemeralSObj.transientKey, extKeyCustodyApi.getSmartKeySecurityObj())
                 ProvenanceHKDFSHA256.derive(secretKey.value, null, ECUtils.KDF_SIZE)
             } else {
                 val secretKey = ProvenanceKeyGenerator.computeSharedKey(keyRef.privateKey!!, payload.ephemeralPublicKey)

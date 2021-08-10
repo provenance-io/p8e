@@ -83,25 +83,25 @@ fun EncryptionProtos.Audience.toCryptogram(): ProvenanceECIESCryptogram {
 
 fun String.toSecretKeySpecProv() = ProvenanceAESCrypt.secretKeySpecGenerate(Base64.getDecoder().decode(this))
 
-fun String.toAgreeKey(transientKey: String): KeyObject {
-       val keyUuid = this
-       val request = AgreeKeyRequest().apply {
-            privateKey = SobjectDescriptor().kid(keyUuid)
-            publicKey = SobjectDescriptor().transientKey(transientKey)
-            name = keyUuid
-            keySize = ECUtils.AGREEKEY_SIZE
-            keyType = ObjectType.OPAQUE
-            mechanism = AgreeKeyMechanism.HELLMAN
-            transient = true
-        }
-        return SecurityObjectsApi().agreeKey(request)
+fun String.toAgreeKey(transientKey: String, securityObjectsApi: SecurityObjectsApi): KeyObject {
+    val keyUuid = this
+    val request = AgreeKeyRequest().apply {
+        privateKey = SobjectDescriptor().kid(keyUuid)
+        publicKey = SobjectDescriptor().transientKey(transientKey)
+        name = keyUuid
+        keySize = ECUtils.AGREEKEY_SIZE
+        keyType = ObjectType.OPAQUE
+        mechanism = AgreeKeyMechanism.HELLMAN
+        transient = true
+    }
+    return securityObjectsApi.agreeKey(request)
 }
 
 /**
  * A transient security object will be created, meaning this security object is for one time use
  * and will not be stored into SmartKey's repository.
  */
-fun PublicKey.toTransientSecurityObject(): KeyObject {
+fun PublicKey.toTransientSecurityObject(securityObjectsApi: SecurityObjectsApi): KeyObject {
     val ephemeralPublicKey = this
     val request = SobjectRequest().apply {
         value = ephemeralPublicKey.encoded
@@ -109,5 +109,5 @@ fun PublicKey.toTransientSecurityObject(): KeyObject {
         objType = ObjectType.EC
         transient = true
     }
-    return SecurityObjectsApi().importSecurityObject(request)
+    return securityObjectsApi.importSecurityObject(request)
 }

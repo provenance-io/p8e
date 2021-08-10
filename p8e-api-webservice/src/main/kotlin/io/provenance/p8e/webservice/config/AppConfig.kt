@@ -8,9 +8,9 @@ import com.fortanix.sdkms.v1.api.SecurityObjectsApi
 import com.fortanix.sdkms.v1.api.SignAndVerifyApi
 import com.fortanix.sdkms.v1.auth.ApiKeyAuth
 import io.p8e.crypto.SignerFactory
-import io.p8e.crypto.SmartKeySigner
 import io.p8e.util.configureProvenance
 import io.provenance.os.client.OsClient
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.provenance.p8e.shared.config.JwtProperties
 import io.provenance.p8e.shared.config.ProvenanceKeystoneProperties
 import io.provenance.p8e.shared.config.SmartKeyProperties
@@ -51,10 +51,11 @@ class AppConfig : WebMvcConfigurer {
     }
 
     @Bean
-    fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties): OsClient =
+    fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties, externalKeyCustodyApi: ExternalKeyCustodyApi): OsClient =
         OsClient(
             uri = URI(objectStoreProperties.url),
-            deadlineMs = 60000
+            deadlineMs = 60000,
+            extEncryptSigningApi = externalKeyCustodyApi
         )
 
     @Bean
@@ -123,4 +124,7 @@ class AppConfig : WebMvcConfigurer {
 
     @Bean
     fun signer(signAndVerifyApi: SignAndVerifyApi): SignerFactory = SignerFactory(signAndVerifyApi)
+
+    @Bean
+    fun externalEncryptSignApi(securityObjectsApi: SecurityObjectsApi) = ExternalKeyCustodyApi(securityObjectsApi)
 }
