@@ -51,7 +51,7 @@ open class ScopeEntityClass : UUIDEntityClass<ScopeRecord>(
             if (q != null) {
                 try {
                     val uuid = UUID.fromString(q.trim())
-                    expressions.add((ScopeTable.id eq uuid) or (ScopeTable.scopeUuid eq uuid))
+                    expressions.add(ScopeTable.scopeUuid eq uuid)
                 } catch (e: IllegalArgumentException) {
                     // invalid uuid
                 }

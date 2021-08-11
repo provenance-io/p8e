@@ -25,6 +25,7 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.isNull
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import java.lang.IllegalStateException
 import java.security.PublicKey
 import java.sql.ResultSet
 import java.time.OffsetDateTime
@@ -166,14 +167,31 @@ open class EnvelopeEntityClass : UUIDEntityClass<EnvelopeRecord>(
                     .plus(EnvelopeTable.actualScopeUuid)
                 var query = EnvelopeTable.slice(columns)
                 if (q != null) {
+                    val searchableUuidColumns = listOf("scope_uuid", "uuid", "execution_uuid", "group_uuid")
+                    val segments = q.split(';').map { it.split(',') }
+                        .filter {
+                            it.size == 2
+                            && searchableUuidColumns.any { column -> column == it[0] }
+                            && try {
+                                UUID.fromString(it[1])
+                                true
+                            } catch(e: Exception) { false }
+                        }
+                        .map { it[0] to UUID.fromString(it[1]) }
+
                     try {
-                        val uuid = UUID.fromString(q)
                         query = EnvelopeTable
                                 .join(ScopeTable, JoinType.INNER)
                                 .slice(columns)
-                        expressions.add((EnvelopeTable.scope eq uuid) or (ScopeTable.scopeUuid eq uuid) or (EnvelopeTable.id eq uuid) or (EnvelopeTable.executionUuid eq uuid) or (EnvelopeTable.groupUuid eq uuid))
-                    } catch (e: IllegalArgumentException) {
-                        // invalid uuid
+
+                        expressions.addAll(segments.map { (column, uuid) -> when (column) {
+                            "scope_uuid" -> ScopeTable.scopeUuid eq uuid
+                            "uuid" -> EnvelopeTable.id eq uuid
+                            "execution_uuid" -> EnvelopeTable.executionUuid eq uuid
+                            "group_uuid" -> EnvelopeTable.groupUuid eq uuid
+                            else -> throw IllegalStateException("Invalid column for searching, should be impossible to get here")
+                        } })
+                    } catch (e: IllegalStateException) {
                     }
                 }
 

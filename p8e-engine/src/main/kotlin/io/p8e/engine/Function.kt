@@ -4,7 +4,6 @@ import arrow.core.Either
 import com.google.protobuf.Message
 import io.p8e.annotations.Fact
 import io.p8e.annotations.Input
-import io.p8e.crypto.SignerImpl
 import io.p8e.definition.DefinitionService
 import io.p8e.proto.Common.DefinitionSpec.Type
 import io.p8e.proto.Common.ProvenanceReference
@@ -16,11 +15,12 @@ import io.p8e.util.ContractDefinitionException
 import io.provenance.p8e.encryption.model.KeyRef
 import java.lang.reflect.Method
 import java.lang.reflect.Parameter
+import java.security.PublicKey
 import kotlin.Function
 
 class Function<T: P8eContract>(
     private val encryptionKeyRef: KeyRef,
-    private val signer: SignerImpl,
+    private val signingPublicKey: PublicKey,
     definitionService: DefinitionService,
     private val contract: T,
     val considerationBuilder: ConsiderationProto.Builder,
@@ -59,8 +59,7 @@ class Function<T: P8eContract>(
                 val message = definitionService.loadProto(
                     encryptionKeyRef,
                     proposedFact.let(::proposedFactToDef),
-                    signer = signer,
-                    signaturePublicKey = signer.getPublicKey()
+                    signaturePublicKey = signingPublicKey
                 )
                 FactInstance(
                     proposedFact.name,

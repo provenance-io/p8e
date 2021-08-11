@@ -31,15 +31,11 @@ interface SignerImpl {
 
     fun update(data: ByteArray, off: Int, len: Int)
 
-    fun verify(signatureBytes: ByteArray): Boolean
-
-    fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
-
-    fun initVerify(publicKey: PublicKey)
-
     fun initSign()
 
     fun signer(): PK.SigningAndEncryptionPublicKeys
+
+    fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
 
     fun getPublicKey(): PublicKey
 }

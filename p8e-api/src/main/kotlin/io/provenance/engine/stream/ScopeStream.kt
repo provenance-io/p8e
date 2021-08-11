@@ -11,6 +11,7 @@ import io.p8e.util.toProtoUuidProv
 import io.provenance.engine.config.EventStreamProperties
 import io.provenance.engine.domain.EventStreamRecord
 import io.provenance.engine.domain.TransactionStatusRecord
+import io.provenance.engine.service.ChaincodeInvokeService
 import io.provenance.p8e.shared.index.data.IndexScopeRecord
 import io.provenance.engine.service.EventService
 import io.provenance.engine.service.ProvenanceGrpcService
@@ -133,6 +134,10 @@ class ScopeStream(
 
             // Mark that we've stored up to the given block height for indexing.
             EventStreamRecord.update(eventStreamId, blockHeight)
+
+            events.forEach {
+                ChaincodeInvokeService.unlockScope(it.scope.uuid.value)
+            }
         }
     }
 }
