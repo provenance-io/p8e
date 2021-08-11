@@ -112,7 +112,7 @@ class EventServiceTest {
     fun `Test in-progress events are updated to completed`() {
         transaction {
             //Execute
-            eventService.completeInProgressEvent(envelopeRecord.uuid.value)
+            eventService.completeInProgressEvent(envelopeRecord.uuid.value, Event.ENVELOPE_REQUEST)
 
             //Validate
             val lastUpdatedRow = EventTable.selectAll().last()
