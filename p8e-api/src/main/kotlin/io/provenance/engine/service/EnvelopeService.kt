@@ -268,7 +268,7 @@ class EnvelopeService(
             return record
         }
 
-        eventService.completeInProgressEvent(record.uuid.value)
+        eventService.completeInProgressEvent(record.uuid.value, Event.ENVELOPE_REQUEST)
 
         return envelopeStateEngine.onHandleRead(record)
     }
@@ -300,7 +300,7 @@ class EnvelopeService(
                     }
             }
             .build()
-        eventService.completeInProgressEvent(record.uuid.value)
+        eventService.completeInProgressEvent(record.uuid.value, Event.ENVELOPE_ERROR)
 
         return record
     }
@@ -321,7 +321,7 @@ class EnvelopeService(
         envelopeStateEngine.onHandleComplete(record)
         metricsService.logEnvelopeStats(record)
 
-        eventService.completeInProgressEvent(record.uuid.value)
+        eventService.completeInProgressEvent(record.uuid.value, Event.ENVELOPE_RESPONSE)
 
         return record
     }
