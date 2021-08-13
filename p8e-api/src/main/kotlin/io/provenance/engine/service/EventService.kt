@@ -51,9 +51,11 @@ class EventService() {
     fun submitEvent(event: P8eEvent, envelopeUuid: UUID, status: EventStatus = EventStatus.CREATED, created: OffsetDateTime = OffsetDateTime.now()): EventRecord =
         EventRecord.insertOrUpdate(event, envelopeUuid, status, created, created).also(::submitToChannel)
 
-    fun completeInProgressEvent(envelopeUuid: UUID) = EventRecord.findByEnvelopeUuidForUpdate(envelopeUuid)?.let {
-        it.status = EventStatus.COMPLETE
-    }
+    fun completeInProgressEvent(envelopeUuid: UUID, expectedEventType: Event) = EventRecord.findByEnvelopeUuidForUpdate(envelopeUuid)
+        ?.takeIf { it.event == expectedEventType }
+        ?.let {
+            it.status = EventStatus.COMPLETE
+        }
 
     private fun submitToChannel(record: EventRecord) {
         if (!SKIPPABLE_EVENTS.contains(record.event)) {
