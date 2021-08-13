@@ -3,9 +3,8 @@ package io.provenance.os.domain.inputstream
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.p8e.crypto.SignatureInputStream
-import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.verify
-import io.p8e.util.base64String
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
 import io.provenance.p8e.encryption.util.ByteUtil
 import io.provenance.p8e.encryption.util.ByteUtil.writeUInt16
@@ -23,7 +22,6 @@ import java.io.EOFException
 import java.io.FilterInputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
-import java.security.KeyPair
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.util.UUID
@@ -36,7 +34,8 @@ class DIMEInputStream(
     val uri: String = "",
     val signatures: List<Signature> = listOf(),
     val internalHash: Boolean = true,
-    val externalHash: Boolean = true
+    val externalHash: Boolean = true,
+    val extKeyCustodyApi: ExternalKeyCustodyApi
 ) : FilterInputStream(BufferedInputStream(`in`)) {
 
     private val internalInputStream = `in`
@@ -187,7 +186,7 @@ class DIMEInputStream(
         // seek past the header
         pos += header.size
 
-        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
+        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef, externalKeyCustodyApi = extKeyCustodyApi)
             .let { ProvenanceDIME.decryptPayload(this, it) }
             .verify(getFirstSignaturePublicKey(), getFirstSignature())
     }
@@ -208,7 +207,7 @@ class DIMEInputStream(
             .orThrow { IllegalStateException("Unable to find signature in object for public key ${signaturePublicKey.toHex()}")}
             .signature
 
-        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef)
+        return ProvenanceDIME.getDEK(dime.audienceList, encryptionKeyRef, externalKeyCustodyApi = extKeyCustodyApi)
             .let { ProvenanceDIME.decryptPayload(this, it) }
             .verify(signaturePublicKey, signatureToUse)
     }
@@ -230,7 +229,8 @@ class DIMEInputStream(
             uri: String? = null,
             signatures: List<Signature>? = null,
             internalHash: Boolean = false,
-            externalHash: Boolean = false
+            externalHash: Boolean = false,
+            extKeyCustodyApi: ExternalKeyCustodyApi
         ): DIMEInputStream {
             val magicBytes = ByteArray(4).apply {
                 readUntilFull(
@@ -341,7 +341,8 @@ class DIMEInputStream(
                 uri = uri ?: readUri,
                 signatures = signatures ?: readSignatures ?: listOf(),
                 internalHash = internalHash,
-                externalHash = externalHash
+                externalHash = externalHash,
+                extKeyCustodyApi = extKeyCustodyApi
             )
         }
 

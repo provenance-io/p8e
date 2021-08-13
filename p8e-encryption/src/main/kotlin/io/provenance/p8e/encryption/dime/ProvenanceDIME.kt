@@ -3,6 +3,7 @@ package io.provenance.p8e.encryption.dime
 import com.google.common.io.BaseEncoding
 import com.google.protobuf.ByteString
 import com.google.protobuf.Timestamp
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.provenance.p8e.encryption.aes.ProvenanceAESCrypt
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.encryption.ecies.ECUtils.curveName
@@ -11,13 +12,10 @@ import io.provenance.p8e.encryption.ecies.ProvenanceKeyGenerator
 import io.provenance.p8e.encryption.experimental.aes.aesDecryptStream
 import io.provenance.p8e.encryption.experimental.extensions.aesDecrypt
 import io.provenance.p8e.encryption.experimental.extensions.toSecretKeySpec
-import io.provenance.p8e.encryption.model.DIMEAdditionalAuthenticationModel
-import io.provenance.p8e.encryption.model.DIMEDekPayloadModel
 import io.provenance.p8e.encryption.model.DIMEProcessingModel
 import io.provenance.p8e.encryption.model.DIMEStreamProcessingModel
 import io.p8e.proto.Util
 import io.provenance.p8e.encryption.ecies.ProvenanceECIESCipher
-import io.provenance.p8e.encryption.model.KeyProviders.DATABASE
 import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos
 import io.provenance.proto.encryption.EncryptionProtos.Audience
@@ -109,7 +107,7 @@ object ProvenanceDIME {
     fun getECIESEncodedPayload(publicKey: PublicKey, additionalAuthenticatedData: String = "", key: SecretKeySpec): Pair<String, ProvenanceECIESCryptogram> {
         val publicKeyEncodedStr = BaseEncoding.base64().encode(ECUtils.convertPublicKeyToBytes(publicKey))
 
-        val provenanceECIESCryptogram = ProvenanceECIESCipher().encrypt(
+        val provenanceECIESCryptogram = ProvenanceECIESCipher.encrypt(
             BaseEncoding.base64().encode(key.encoded).toByteArray(Charsets.UTF_8),
             publicKey,
             additionalAuthenticatedData
@@ -118,13 +116,7 @@ object ProvenanceDIME {
         return Pair(publicKeyEncodedStr, provenanceECIESCryptogram)
     }
 
-    fun getDEKFromDIME(dime: EncryptionProtos.DIME, encryptionKeyRef: KeyRef, dimeAdditionalAuthenticationModel: DIMEAdditionalAuthenticationModel = DIMEAdditionalAuthenticationModel()): DIMEDekPayloadModel {
-        val dek = getDEK(dime.audienceList, encryptionKeyRef, dimeAdditionalAuthenticationModel.dekAdditionalAuthenticatedData)
-        val decrypted = decryptDIME(dime, dek, dimeAdditionalAuthenticationModel.payloadAdditionalAuthenticatedData)
-        return DIMEDekPayloadModel(dek.toString(Charsets.UTF_8), decrypted.toString(Charsets.UTF_8))
-    }
-
-    fun getDEK(audienceList: List<Audience>, encryptionKeyRef: KeyRef, additionalAuthenticatedData: String = ""): ByteArray {
+    fun getDEK(audienceList: List<Audience>, encryptionKeyRef: KeyRef, additionalAuthenticatedData: String = "", externalKeyCustodyApi: ExternalKeyCustodyApi): ByteArray {
         val audience = getAudience(audienceList, encryptionKeyRef.publicKey)
 
         val provenanceECIESCryptogram = ECUtils.getProvenanceCryptogram(
@@ -133,7 +125,7 @@ object ProvenanceDIME {
                 audience.encryptedDek.toString(Charsets.UTF_8),
                 encryptionKeyRef.publicKey.curveName())
 
-        return ProvenanceECIESCipher().decrypt(provenanceECIESCryptogram, encryptionKeyRef, additionalAuthenticatedData)
+        return ProvenanceECIESCipher.decrypt(provenanceECIESCryptogram, encryptionKeyRef, additionalAuthenticatedData, externalKeyCustodyApi)
     }
 
     @Throws(IllegalStateException::class)
@@ -396,8 +388,5 @@ object ProvenanceDIME {
     }
 
     private fun SecretKeySpec?.createIfNotProvided() = this.takeIf { it != null } ?: ProvenanceAESCrypt.secretKeySpecGenerate()
-
-    fun getSecretKeyFromDIME(dime: EncryptionProtos.DIME, encryptionKeyRef: KeyRef): SecretKeySpec =
-            ProvenanceAESCrypt.secretKeySpecGenerate(Base64.getDecoder().decode(getDEKFromDIME(dime, encryptionKeyRef).dek))
 
 }
