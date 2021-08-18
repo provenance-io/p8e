@@ -2,8 +2,6 @@ package io.provenance.engine.crypto
 
 import io.p8e.crypto.Hash
 import io.p8e.crypto.Numeric
-import io.provenance.engine.crypto.Bech32
-import io.provenance.engine.crypto.toBech32Data
 import org.kethereum.bip32.generateChildKey
 import org.kethereum.bip32.model.ExtendedKey
 import org.kethereum.bip32.model.Seed
