@@ -37,4 +37,5 @@ class ObjectStoreProperties {
 @ConfigurationProperties(prefix = "service")
 class ServiceProperties {
     @NotNull lateinit var name: String
+    var objectFetchEnabled: Boolean = false
 }

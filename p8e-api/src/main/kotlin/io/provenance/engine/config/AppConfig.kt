@@ -16,7 +16,7 @@ import feign.Feign
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 import io.p8e.crypto.SignerFactory
-import io.p8e.crypto.SmartKeySigner
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.p8e.util.configureProvenance
 import io.provenance.engine.crypto.Account
 import io.provenance.engine.domain.RPCClient
@@ -140,10 +140,11 @@ class AppConfig : WebMvcConfigurer {
     }
 
     @Bean
-    fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties): OsClient =
+    fun osClient(objectMapper: ObjectMapper, objectStoreProperties: ObjectStoreProperties, externalKeyCustodyApi: ExternalKeyCustodyApi): OsClient =
         OsClient(
             uri = URI(objectStoreProperties.url),
-            deadlineMs = 60000
+            deadlineMs = 60000,
+            extEncryptSigningApi = externalKeyCustodyApi
         )
 
     @Bean
@@ -270,4 +271,7 @@ class AppConfig : WebMvcConfigurer {
 
     @Bean
     fun signer(signAndVerifyApi: SignAndVerifyApi): SignerFactory = SignerFactory(signAndVerifyApi)
+
+    @Bean
+    fun externalEncryptSignApi(securityObjectsApi: SecurityObjectsApi) = ExternalKeyCustodyApi(securityObjectsApi)
 }

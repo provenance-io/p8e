@@ -5,6 +5,7 @@ import io.grpc.ManagedChannelBuilder
 import io.grpc.stub.StreamObserver
 import io.p8e.crypto.SignerImpl
 import io.p8e.crypto.sign
+import io.provenance.p8e.encryption.util.ExternalKeyCustodyApi
 import io.p8e.util.toByteString
 import io.p8e.util.toHex
 import io.provenance.p8e.encryption.dime.ProvenanceDIME
@@ -21,13 +22,10 @@ import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
 import io.provenance.os.proto.PublicKeyServiceGrpc
 import io.provenance.os.proto.PublicKeys
-import io.provenance.os.util.base64Decode
-import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.os.util.toHexString
 import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import objectstore.Util
-import org.bouncycastle.asn1.tsp.EncryptionInfo
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -39,7 +37,8 @@ import java.util.concurrent.TimeUnit
 
 open class OsClient(
     uri: URI,
-    private val deadlineMs: Long
+    private val deadlineMs: Long,
+    private val extEncryptSigningApi: ExternalKeyCustodyApi
 ) {
 
     private val objectAsyncClient: ObjectServiceGrpc.ObjectServiceStub
@@ -83,7 +82,7 @@ open class OsClient(
 
         return response.asSequence()
             .map {
-                val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()))
+                val dime = DIMEInputStream.parse(ByteArrayInputStream(it.data.toByteArray()), extKeyCustodyApi = extEncryptSigningApi)
                 Pair(UUID.fromString(it.uuid.value), dime)
             }
     }
@@ -154,7 +153,7 @@ open class OsClient(
             throw error!!
         }
 
-        return DIMEInputStream.parse(ByteArrayInputStream(bytes.toByteArray()))
+        return DIMEInputStream.parse(ByteArrayInputStream(bytes.toByteArray()), extKeyCustodyApi = extEncryptSigningApi)
     }
 
     fun put(
@@ -204,7 +203,8 @@ open class OsClient(
             uuid = uuid,
             metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signerPublicKey)),
             internalHash = true,
-            externalHash = false
+            externalHash = false,
+            extKeyCustodyApi = extEncryptSigningApi
         )
         val responseObserver = SingleResponseObserver<Objects.ObjectResponse>()
         val requestObserver = objectAsyncClient.put(responseObserver)
