@@ -209,7 +209,9 @@ class ChaincodeInvokeService(
                 val txBody = batch.map {
                     it.attempts++
                     it.request
-                }.toTxBody()
+                }.toTxBody().toBuilder()
+                    .setTimeoutHeight(currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval)
+                .build()
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
