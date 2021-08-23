@@ -206,6 +206,7 @@ class ChaincodeInvokeService(
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
             try {
+                log.info("currentBlockHeight = $currentBlockHeight | timeout = ${currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval}")
                 val txBody = batch.map {
                     it.attempts++
                     it.request
