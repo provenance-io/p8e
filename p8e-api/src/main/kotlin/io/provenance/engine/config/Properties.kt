@@ -56,7 +56,7 @@ class ChaincodeProperties {
     @NotNull var txBatchSize: Int = 25
     @NotNull var gasMultiplier: Double = 1.0
     @NotNull var maxGasMultiplierPerDay: Int = 1000
-    @NotNull var blockHeightTimeoutInterval: Int = 12
+    @NotNull var blockHeightTimeoutInterval: Int = 20
 }
 
 @ConfigurationProperties(prefix = "elasticsearch")
