@@ -35,6 +35,7 @@ class TransactionStatusService(
         }.forUpdate().let { envelopes ->
             val sameInstanceKeys = envelopes.map { it.publicKey.toJavaPublicKey() }.toTypedArray()
             envelopes.forEach { envelope ->
+                ChaincodeInvokeService.unlockScope(envelope.scope.scopeUuid.toString())
                 envelopeStateEngine.onHandleError(envelope)
                 envelope.addChaincodeError(error).also {
                     val envWithError = Envelope.EnvelopeUuidWithError.newBuilder()
@@ -65,7 +66,7 @@ class TransactionStatusService(
             envelope.status = Status.SIGNED
             envelope.chaincodeTime = null
 
-            if (envelope.isInvoker ?: false) {
+            if (envelope.isInvoker == true) {
                 val event = envelope.uuid.value.toProtoUuidProv().toEvent(Event.ENVELOPE_CHAINCODE)
                 ChaincodeInvokeService.unlockScope(envelope.scope.scopeUuid.toString())
                 eventService.submitEvent(event, envelope.uuid.value)
