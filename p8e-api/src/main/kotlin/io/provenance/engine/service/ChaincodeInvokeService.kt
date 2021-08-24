@@ -9,9 +9,8 @@ import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
 import io.p8e.proto.Contracts
 import io.p8e.util.*
-import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.config.ChaincodeProperties
-import io.provenance.engine.crypto.Account
+import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.TransactionStatusRecord
 import io.provenance.engine.util.toProv
 import io.provenance.metadata.v1.Description
@@ -19,6 +18,7 @@ import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
 import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
 import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
 import io.provenance.metadata.v1.ScopeSpecification
+import io.provenance.engine.crypto.Account
 import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
@@ -215,7 +215,7 @@ class ChaincodeInvokeService(
                 .build()
 
                 // Send the transactions to the blockchain.
-                val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
+                val resp = batchTx(txBody)
 
                 if (resp.txResponse.code != 0) {
                     // adding extra raw logging during exceptional cases so that we can see what typical responses look like while this interface is new
@@ -434,14 +434,12 @@ class ChaincodeInvokeService(
             }
             val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
 
-            synchronized(provenanceGrpc) {
-                batchTx(txBody, applyMultiplier = false).also {
-                    if (it.txResponse.code != 0) {
-                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
-                    }
-
-                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
+            batchTx(txBody, applyMultiplier = false).also {
+                if (it.txResponse.code != 0) {
+                    throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
                 }
+
+                log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
             }
         } catch(e: Throwable) {
             log.warn("failed to add contract spec: ${e.message}")
@@ -449,7 +447,7 @@ class ChaincodeInvokeService(
         }
     }
 
-    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse {
+    fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse = synchronized(provenanceGrpc) {
         val accountNumber = accountInfo.accountNumber
         val sequenceNumber = getAndIncrementSequenceNumber()
 
@@ -465,7 +463,7 @@ class ChaincodeInvokeService(
             log.info("skipping gasMultiplier due to daily limit")
         }
 
-        return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
+        provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
 
     /**

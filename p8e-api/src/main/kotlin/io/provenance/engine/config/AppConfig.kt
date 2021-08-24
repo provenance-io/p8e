@@ -25,8 +25,12 @@ import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.engine.index.query.Operation
 import io.provenance.engine.index.query.OperationDeserializer
 import io.provenance.engine.service.DataDogMetricCollector
+import io.provenance.engine.service.JobHandlerService
+import io.provenance.engine.service.JobHandlerServiceFactory
 import io.provenance.engine.service.LogFileMetricCollector
 import io.provenance.engine.service.MetricsService
+import io.provenance.engine.service.OSLocatorChaincodeService
+import io.provenance.engine.service.ObjectStoreAffiliateRegistrationService
 import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -54,6 +58,7 @@ import org.springframework.context.annotation.Scope
 import org.springframework.http.converter.HttpMessageConverter
 import org.springframework.http.converter.protobuf.ProtobufHttpMessageConverter
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import p8e.Jobs
 import java.lang.IllegalArgumentException
 import java.net.URI
 import java.time.Duration
@@ -66,6 +71,7 @@ import java.time.Duration
     EventStreamProperties::class,
     JwtProperties::class,
     ObjectStoreProperties::class,
+    ObjectStoreLocatorProperties::class,
     ReaperChaincodeProperties::class,
     ReaperExpirationProperties::class,
     ReaperFragmentProperties::class,
@@ -222,6 +228,15 @@ class AppConfig : WebMvcConfigurer {
                 }.toMap()
             MetricsService(collectors, labels)
         }
+    
+    @Bean
+    fun jobHandlerServiceFactory(osLocatorChaincodeService: OSLocatorChaincodeService, objectStoreAffiliateRegistrationService: ObjectStoreAffiliateRegistrationService): JobHandlerServiceFactory = { payload ->
+        when (payload.jobCase) {
+            Jobs.P8eJob.JobCase.ADDAFFILIATEOSLOCATOR -> osLocatorChaincodeService
+            Jobs.P8eJob.JobCase.RESOLVEAFFILIATEOSLOCATORS -> objectStoreAffiliateRegistrationService
+            else -> throw IllegalArgumentException("No handler registered for job of type ${payload.jobCase.name}")
+        }
+    }
 
     /**
      * Add support for new key management.

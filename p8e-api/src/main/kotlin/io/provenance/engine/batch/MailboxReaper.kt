@@ -26,6 +26,7 @@ import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.engine.service.EnvelopeService
 import io.provenance.engine.service.EventService
 import io.provenance.engine.service.MailboxService
+import io.provenance.engine.util.SigningAndEncryptionPublicKeys
 import io.provenance.os.client.OsClient
 import io.provenance.os.domain.inputstream.DIMEInputStream
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -155,12 +156,7 @@ class MailboxReaper(
 
             val className = env.contract.definition.resourceLocation.classname
 
-            val signingPublicKey = env.contract.recitalsList.plus(env.scope.partiesList)
-                .firstOrNull { it.signer.encryptionPublicKey.toPublicKey() == item.publicKey }
-                .orThrow { IllegalStateException("Can't find party on contract execution ${env.executionUuid.value} with key ${item.publicKey.toHex()}") }
-                .signer
-                .signingPublicKey
-                .toPublicKey()
+            val signingPublicKey = env.getSigningPublicKey(item.publicKey)
 
             log.info("Processing envelope mail from key:{} poll:{}, classname:{}", mailboxKey, uuid, className)
 
@@ -185,7 +181,9 @@ class MailboxReaper(
                         )
                         // TODO - do we need to handle only-once processing for mailing errors?
                         .also {
-                            mailboxService.error(item.publicKey, listOf(ownerAudience.publicKey.toPublicKey()), it)
+                            val ownerEncryptionPublicKey = ownerAudience.publicKey.toPublicKey()
+                            val ownerSigningPublicKey = env.getSigningPublicKey(ownerEncryptionPublicKey)
+                            mailboxService.error(item.publicKey, listOf(SigningAndEncryptionPublicKeys(ownerSigningPublicKey, ownerEncryptionPublicKey)), it)
                         }
             }
         }
@@ -207,12 +205,19 @@ class MailboxReaper(
                         item.publicKey,
                         it.data.input,
                         error,
-                        ownerAudience.publicKey.toPublicKey()
+                        it.data.input.getSigningPublicKey(ownerAudience.publicKey.toPublicKey())
                     )
             }?.data
                 ?.result
                 ?: defaultProto
         }
+
+        private fun Envelope.getSigningPublicKey(encryptionPublicKey: PublicKey): PublicKey = contract.recitalsList.plus(scope.partiesList)
+            .firstOrNull { it.signer.encryptionPublicKey.toPublicKey() == encryptionPublicKey }
+            .orThrow { IllegalStateException("Can't find party on contract execution ${executionUuid.value} with key ${encryptionPublicKey.toHex()}") }
+            .signer
+            .signingPublicKey
+            .toPublicKey()
     }
 
     /**

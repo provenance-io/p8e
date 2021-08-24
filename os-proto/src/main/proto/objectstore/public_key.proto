@@ -14,14 +14,22 @@ service PublicKeyService {
 }
 
 message PublicKeyRequest {
+    // public key of a party member used for encryption
     PublicKey public_key = 1;
+    // public key of a party member used for signing
+    PublicKey signing_public_key = 4;
+    // optional - remote url of the object-store associated with the p8e public key
+    // when blank, this public key is associated with the local p8e environment
     string url = 2;
+    // optional - contains any associated metadata that the caller wants to attach
+    // to this public key
     google.protobuf.Any metadata = 3;
 }
 
 message PublicKeyResponse {
     UUID uuid = 1;
     PublicKey public_key = 2;
+    PublicKey signing_public_key = 7;
     string url = 3;
     google.protobuf.Any metadata = 4;
 

@@ -1,8 +1,18 @@
 package io.provenance.engine.crypto
 
+import io.p8e.util.toHexString
+import io.provenance.p8e.shared.extension.logger
+import org.bouncycastle.asn1.ASN1Encoding
+import org.bouncycastle.asn1.ASN1Integer
+import org.bouncycastle.asn1.ASN1Sequence
+import org.bouncycastle.asn1.ASN1StreamParser
 import org.kethereum.crypto.CURVE
 import org.kethereum.crypto.api.ec.ECDSASignature
+import org.kethereum.crypto.impl.ec.canonicalise
+import java.lang.Exception
+import java.lang.IllegalStateException
 import java.math.BigInteger
+import kotlin.experimental.and
 
 // A Zero value byte
 const val ZERO = 0x0.toByte()
@@ -47,4 +57,23 @@ fun BigInteger.getUnsignedBytes(): ByteArray {
     }
 
     return bytes;
+}
+
+fun ByteArray.extractRAndS(): Pair<BigInteger, BigInteger> {
+    val startR = if (this[1] and 0x80.toByte() != 0.toByte()) 3 else 2
+    val lengthR = this[startR + 1].toInt()
+    val startS = startR + 2 + lengthR
+    val lengthS = this[startS + 1].toInt()
+
+    return BigInteger(this, startR + 2, lengthR) to BigInteger(this, startS + 2, lengthS)
+}
+
+fun ByteArray.toECDSASignature(canonical: Boolean) = extractRAndS().let { (r, s) ->
+    ECDSASignature(r, s)
+}.let {
+    if (canonical) {
+        it.canonicalise()
+    } else {
+        it
+    }
 }

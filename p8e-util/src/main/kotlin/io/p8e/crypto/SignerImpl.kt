@@ -10,8 +10,18 @@ interface SignerImpl {
 
     companion object{
         // Algo must match Provenance-object-store
-        val SIGN_ALGO = "SHA512withECDSA"
+        val SIGN_ALGO_SHA_512_PREFIX = "SHA512"
+        val SIGN_ALGO_SHA_256_PREFIX = "SHA256"
+        val SIGN_ALGO_DETERMINISTIC_SUFFIX = "withECDDSA"
+        val SIGN_ALGO_NON_DETERMINISTIC_SUFFIX = "withECDSA"
         val PROVIDER = BouncyCastleProvider.PROVIDER_NAME
+
+        val DEFAULT_HASH = HashType.SHA512
+
+        enum class HashType(val value: String) {
+            SHA512("SHA-512"),
+            SHA256("SHA-256"),
+        }
     }
 
     /**
@@ -38,4 +48,20 @@ interface SignerImpl {
     fun verify(publicKey: PublicKey, data: ByteArray, signature: Common.Signature): Boolean
 
     fun getPublicKey(): PublicKey
+
+    var hashType: HashType
+
+    var deterministic: Boolean
+
+    val signAlgorithmPrefix
+        get() = when (hashType) {
+            HashType.SHA256 -> SIGN_ALGO_SHA_256_PREFIX
+            HashType.SHA512 -> SIGN_ALGO_SHA_512_PREFIX
+        }
+
+    val signAlgorithmSuffix
+        get() = if (deterministic) SIGN_ALGO_DETERMINISTIC_SUFFIX else SIGN_ALGO_NON_DETERMINISTIC_SUFFIX
+
+    val signAlgorithm
+        get() = signAlgorithmPrefix + signAlgorithmSuffix
 }

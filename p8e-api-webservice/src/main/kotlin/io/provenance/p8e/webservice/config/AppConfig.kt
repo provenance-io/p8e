@@ -42,7 +42,6 @@ import java.net.URI
     SmartKeyProperties::class,
 ])
 class AppConfig : WebMvcConfigurer {
-
     @Bean
     fun objectMapper(): ObjectMapper {
         val module = SimpleModule()

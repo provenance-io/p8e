@@ -11,6 +11,8 @@ dependencies {
 
     implementation group: 'ch.qos.logback', name: 'logback-classic', version: "$logback_version"
 
+    implementation "com.github.komputing.kethereum:model:$kethereum_version"
+
     //jackson / protobuf
     implementation group: 'com.hubspot.jackson', name: 'jackson-datatype-protobuf', version: '0.9.9-jackson2.9-proto3'
 }
