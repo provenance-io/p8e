@@ -206,10 +206,13 @@ class ChaincodeInvokeService(
             log.debug("Internal structures\nblockScopeIds: $blockScopeIds\npriorityFutureScopeToQueue: ${priorityScopeBacklog.entries.map { e -> "${e.key} => ${e.value.size}"}}")
 
             try {
+                log.info("currentBlockHeight = $currentBlockHeight | timeout = ${currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval}")
                 val txBody = batch.map {
                     it.attempts++
                     it.request
-                }.toTxBody()
+                }.toTxBody().toBuilder()
+                    .setTimeoutHeight(currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval)
+                .build()
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
