@@ -66,8 +66,8 @@ fun P8eError.message(): String = when (this) {
     is P8eError.ProtoParse -> this.message
     is P8eError.NotFound -> this.message
     is P8eError.ExecutionError -> this.envelopeError.message
-    is P8eError.PreExecutionError -> this.t.message ?: this.t.javaClass.name
-    is P8eError.Unknown -> this.t.message ?: this.t.javaClass.name
+    is P8eError.PreExecutionError -> this.t.cause?.stackTraceToString() ?: this.t.stackTraceToString()
+    is P8eError.Unknown -> this.t.cause?.stackTraceToString() ?: this.t.stackTraceToString()
 }
 
 fun ContractScope.EnvelopeError.p8eError(): P8eError = P8eError.ExecutionError(this)
