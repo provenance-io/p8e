@@ -1,11 +1,13 @@
 package io.provenance.engine.service
 
 import com.google.protobuf.Any
+import com.google.protobuf.ByteString
 import com.google.protobuf.Message
 import cosmos.auth.v1beta1.Auth
 import cosmos.auth.v1beta1.QueryGrpc
 import cosmos.auth.v1beta1.QueryOuterClass
 import cosmos.base.abci.v1beta1.Abci.TxResponse
+import cosmos.base.query.v1beta1.Pagination
 import cosmos.base.tendermint.v1beta1.Query.*
 import cosmos.base.v1beta1.CoinOuterClass
 import cosmos.crypto.secp256k1.Keys
@@ -26,6 +28,8 @@ import io.provenance.metadata.v1.ContractSpecificationRequest
 import io.provenance.metadata.v1.ScopeRequest
 import io.provenance.metadata.v1.ScopeSpecification
 import io.provenance.metadata.v1.ScopeSpecificationRequest
+import io.provenance.metadata.v1.ScopeSpecificationWrapper
+import io.provenance.metadata.v1.ScopeSpecificationsAllRequest
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
