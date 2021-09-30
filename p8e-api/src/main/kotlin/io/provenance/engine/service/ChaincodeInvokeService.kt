@@ -1,6 +1,7 @@
 package io.provenance.engine.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.protobuf.ByteString
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
@@ -19,7 +20,6 @@ import io.provenance.metadata.v1.MsgP8eMemorializeContractRequest
 import io.provenance.metadata.v1.MsgWriteP8eContractSpecRequest
 import io.provenance.metadata.v1.MsgWriteScopeSpecificationRequest
 import io.provenance.metadata.v1.ScopeSpecification
-import io.provenance.p8e.shared.domain.ContractSpecificationRecord
 import io.provenance.p8e.shared.domain.ContractTxResult
 import io.provenance.p8e.shared.domain.ScopeSpecificationRecord
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -398,13 +398,12 @@ class ChaincodeInvokeService(
      */
     fun addContractSpecs(
         scopeSpecs: Collection<ScopeSpecificationRecord>,
-        historicalContractSpecs: Collection<ContractSpecificationRecord>,
+        scopeSpecIdToContractSpecHashes: Map<UUID, Collection<ByteString>>,
         contractSpecs: List<ContractSpec>,
     ) {
         log.info("received a set of contract specs: ${contractSpecs.size} and scope specs: ${scopeSpecs.size}")
 
         val owners = listOf(accountProvider.bech32Address())
-        val historicalContractSpecsById = historicalContractSpecs.groupBy { it.scopeSpecificationUuid }
 
         try {
             val scopeSpecTx = scopeSpecs.map {
@@ -420,7 +419,7 @@ class ChaincodeInvokeService(
                         )
                         .addAllPartiesInvolved(it.partiesInvolved.map { p -> ContractSpecs.PartyType.valueOf(p).toProv() })
                         .addAllOwnerAddresses(owners)
-                        .addAllContractSpecIds(historicalContractSpecsById.getValue(it.id.value).map { p -> p.provenanceHash.base64Decode().toByteString() })
+                        .addAllContractSpecIds(scopeSpecIdToContractSpecHashes.getOrDefault(it.id.value, listOf()))
                         .build()
                     )
                     .addAllSigners(owners)
