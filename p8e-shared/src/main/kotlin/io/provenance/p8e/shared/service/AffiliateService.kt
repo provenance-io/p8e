@@ -11,7 +11,6 @@ import io.p8e.util.auditedProv
 import io.p8e.util.toProtoTimestampProv
 import io.provenance.engine.crypto.Bech32
 import io.provenance.engine.crypto.toBech32Data
-import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.p8e.shared.extension.isActive
 import io.provenance.os.client.OsClient
 import io.provenance.p8e.encryption.model.ExternalKeyRef
@@ -242,7 +241,7 @@ class AffiliateService(
         AffiliateRecord.insert(signingKeyPair, encryptionKeyPair, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionKeyPair.public)
+                osClient.createPublicKey(signingKeyPair.public, encryptionKeyPair.public)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {
@@ -257,8 +256,9 @@ class AffiliateService(
     /**
      * Save or update an affiliate with a signing public key from a key management system.
      *
-     * @param [signingPublicKey] The provided signing public key from the key management system.
-     * @param [encryptionKeyPair] The encryption used for affiliate auth
+     * @param [signingKeyRef] The signing key reference used for signing
+     * @param [encryptionKeyRef] The encryption key reference used for encryption
+     * @param [authPublicKey] The public key used for validating auth
      * @param [indexName] Name of index for doc storage.
      * @param [alias] alias used to describe an affiliate.
      * @param [jwt] token for webservice authentication.
@@ -276,11 +276,11 @@ class AffiliateService(
         AFFILIATE_INDEX_NAME,
         AFFILIATE_BECH32_LOOKUP,
     ])
-    fun save(signingPublicKey: ExternalKeyRef, encryptionPublicKey: ExternalKeyRef, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
-        AffiliateRecord.insert(signingPublicKey, encryptionPublicKey, authPublicKey, indexName, alias)
+    fun save(signingKeyRef: ExternalKeyRef, encryptionKeyRef: ExternalKeyRef, authPublicKey: PublicKey, indexName: String? = null, alias: String?, jwt: String? = null, identityUuid: UUID? = null): AffiliateRecord =
+        AffiliateRecord.insert(signingKeyRef, encryptionKeyRef, authPublicKey, indexName, alias)
             .also {
                 // Register the key with object store so that it monitors for replication.
-                osClient.createPublicKey(encryptionPublicKey.publicKey)
+                osClient.createPublicKey(signingKeyRef.publicKey, encryptionKeyRef.publicKey)
 
                 // create index in ES if it doesn't already exist
                 indexName?.let {

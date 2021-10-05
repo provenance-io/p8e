@@ -79,17 +79,18 @@ open class AffiliateEntityClass: EntityClass<String, AffiliateRecord>(
     /**
      * Insert for an affiliate with just the public key.
      *
-     * [signingPublicKey] The signing public key provided a key management system
-     * [encryptionKeyPair] The encryptionKey pair of the affiliate
-     * [indexName] Name of index for elasticsearch
-     * [alias] Alias for affiliate
+     * @param [signingKeyRef] The key reference to use for signing
+     * @param [encryptionKeyRef] The key reference to use for encryption
+     * @param [authPublicKey] The public key used for auth verification
+     * @param [indexName] Name of index for elasticsearch
+     * @param [alias] Alias for affiliate
      */
-    fun insert(signingPublicKey: ExternalKeyRef, encryptionPublicKey: ExternalKeyRef, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
-        findForUpdate(signingPublicKey.publicKey)
-            ?: new(signingPublicKey.publicKey.toHex()) {
-                this.signingKeyUuid = signingPublicKey.uuid
-                this.encryptionPublicKey = encryptionPublicKey.publicKey.toHex()
-                this.encryptionKeyUuid = encryptionPublicKey.uuid
+    fun insert(signingKeyRef: ExternalKeyRef, encryptionKeyRef: ExternalKeyRef, authPublicKey: PublicKey, indexName: String?, alias: String? = null) =
+        findForUpdate(signingKeyRef.publicKey)
+            ?: new(signingKeyRef.publicKey.toHex()) {
+                this.signingKeyUuid = signingKeyRef.uuid
+                this.encryptionPublicKey = encryptionKeyRef.publicKey.toHex()
+                this.encryptionKeyUuid = encryptionKeyRef.uuid
                 this.keyType = SMARTKEY
                 this.authPublicKey = authPublicKey.toHex()
                 this.alias = alias
