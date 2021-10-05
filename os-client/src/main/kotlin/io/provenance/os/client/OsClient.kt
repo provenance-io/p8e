@@ -26,7 +26,6 @@ import io.provenance.os.util.toHexString
 import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import objectstore.Util
-import org.bouncycastle.asn1.x509.ObjectDigestInfo.publicKey
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
