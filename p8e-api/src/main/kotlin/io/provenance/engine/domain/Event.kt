@@ -29,32 +29,20 @@ object EventTable : UUIDTable(name = "event", columnName = "uuid") {
 open class EventEntityClass : UUIDEntityClass<EventRecord>(EventTable) {
     fun findForUpdate(uuid: UUID) = find { EventTable.id eq uuid }.forUpdate().firstOrNull()
 
-    fun insertOrUpdate(
+    fun insert(
         event: P8eEvent,
         envelopeUuid: UUID,
         status: EventStatus = EventStatus.CREATED,
         created: OffsetDateTime = OffsetDateTime.now(),
         updated: OffsetDateTime = OffsetDateTime.now()
-    ): EventRecord = findByEnvelopeUuidForUpdate(envelopeUuid)?.also {
-        it.event = event.event
-        it.payload = event
-        it.status = status
-        it.created = created
-        it.updated = updated
-    } ?: new(UUID.randomUUID()) {
-            this.event = event.event
-            this.payload = event
-            this.status = status
-            this.envelopeUuid = envelopeUuid
-            this.created = created
-            this.updated = updated
+    ): EventRecord = new(UUID.randomUUID()) {
+        this.event = event.event
+        this.payload = event
+        this.status = status
+        this.envelopeUuid = envelopeUuid
+        this.created = created
+        this.updated = updated
     }
-
-
-    fun findByEvent(event: P8eEvent.Event): List<EventRecord> =
-        find{
-            (EventTable.event eq event)
-        }.toList()
 
     fun findForConnectedClients(where: (SqlExpressionBuilder.()-> Op<Boolean>)) = EventTable
         .innerJoin(EnvelopeTable)
@@ -77,6 +65,19 @@ class EventRecord(uuid: EntityID<UUID>) : UUIDEntity(uuid) {
     var status by EventTable.status
     var created by EventTable.created
     var updated by EventTable.updated
+
+    fun update(
+        event: P8eEvent,
+        status: EventStatus = EventStatus.CREATED,
+        created: OffsetDateTime = OffsetDateTime.now(),
+        updated: OffsetDateTime = OffsetDateTime.now()
+    ) = apply {
+        this.event = event.event
+        this.payload = event
+        this.status = status
+        this.created = created
+        this.updated = updated
+    }
 }
 
 enum class EventStatus {
