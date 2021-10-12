@@ -52,11 +52,6 @@ class EventServiceTest {
 
         val key = TestUtils.generateKeyPair()
 
-        val eventMock = Events.P8eEvent.newBuilder()
-            .setEvent(Event.ENVELOPE_REQUEST)
-            .setMessage(key.public.toHex().toByteString())
-            .build()
-
         val testData = ContractScope.EnvelopeState.newBuilder()
             .setContractClassname("HelloWorldContract")
             .build()
@@ -92,15 +87,6 @@ class EventServiceTest {
                 status = ContractScope.Envelope.Status.CREATED
                 scopeUuid = scopeRecord.uuid
             }
-
-            //Insert data into EventTable
-            EventTable.insert {
-                it[payload] = eventMock
-                it[status] = EventStatus.CREATED
-                it[event] = eventMock.event
-                it[envelopeUuid] = envelopeRecord.uuid.value
-                it[created] = createdTime
-            }
         }
 
         eventService = EventService()
@@ -111,6 +97,13 @@ class EventServiceTest {
     @Test
     fun `Test in-progress events are updated to completed`() {
         transaction {
+            val event = Events.P8eEvent.newBuilder()
+                .setEvent(Event.ENVELOPE_REQUEST)
+                .setMessage("some-test-message".toByteString())
+                .build()
+
+            EventRecord.insert(event, envelopeRecord.uuid.value)
+
             //Execute
             eventService.completeInProgressEvent(envelopeRecord.uuid.value, Event.ENVELOPE_REQUEST)
 
@@ -185,5 +178,45 @@ class EventServiceTest {
         Assert.assertEquals(Event.ENVELOPE_ERROR, testErrorEventRecord.event)
         Assert.assertEquals(EventStatus.CREATED, testErrorEventRecord.status)
         Assert.assertEquals(envelopeRecord.uuid.value, testErrorEventRecord.envelopeUuid)
+    }
+
+    @Test
+    fun `Verify event submission skipped for invalid transition`() {
+        val event = Events.P8eEvent.newBuilder()
+            .setEvent(Event.ENVELOPE_RESPONSE)
+            .setMessage("some-test-message".toByteString())
+            .build()
+
+        transaction { EventRecord.insert(event, envelopeRecord.uuid.value) }
+
+        val event2 = Events.P8eEvent.newBuilder()
+            .setEvent(Event.SCOPE_INDEX)
+            .setMessage("some-other-test-message".toByteString())
+            .build()
+        val updatedRecord = transaction { eventService.submitEvent(event2, envelopeRecord.uuid.value, EventStatus.CREATED, createdTime) }
+
+        // event should remain unchanged, since you can't go from ENVELOPE_RESPONSE -> SCOPE_INDEX
+        Assert.assertEquals(Event.ENVELOPE_RESPONSE, updatedRecord.event)
+        Assert.assertEquals("some-test-message".toByteString(), updatedRecord.payload.message)
+    }
+
+    @Test
+    fun `Verify event submission works for a valid transition`() {
+        val event = Events.P8eEvent.newBuilder()
+            .setEvent(Event.SCOPE_INDEX)
+            .setMessage("some-test-message".toByteString())
+            .build()
+
+        transaction { EventRecord.insert(event, envelopeRecord.uuid.value) }
+
+        val event2 = Events.P8eEvent.newBuilder()
+            .setEvent(Event.ENVELOPE_RESPONSE)
+            .setMessage("some-other-test-message".toByteString())
+            .build()
+        val updatedRecord = transaction { eventService.submitEvent(event2, envelopeRecord.uuid.value, EventStatus.CREATED, createdTime) }
+
+        // event should be updated, since you can go from SCOPE_INDEX -> ENVELOPE_RESPONSE
+        Assert.assertEquals(Event.ENVELOPE_RESPONSE, updatedRecord.event)
+        Assert.assertEquals("some-other-test-message".toByteString(), updatedRecord.payload.message)
     }
 }

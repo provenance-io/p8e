@@ -38,6 +38,15 @@ class EventService() {
         val SKIPPABLE_EVENTS = listOf(Event.UNRECOGNIZED, Event.SCOPE_INDEX_FRAGMENT)
         val CONNECTED_CLIENT_EVENTS = listOf(Event.ENVELOPE_REQUEST, Event.ENVELOPE_RESPONSE, Event.ENVELOPE_ERROR)
         val UNCONNECTED_CLIENT_EVENTS = Event.values().toList().minus(CONNECTED_CLIENT_EVENTS).minus(SKIPPABLE_EVENTS)
+
+        val VALID_STATE_TRANSITIONS = mapOf(
+            Event.ENVELOPE_FRAGMENT to listOf(Event.ENVELOPE_CHAINCODE, Event.ENVELOPE_ERROR),
+            Event.ENVELOPE_REQUEST to listOf(Event.ENVELOPE_MAILBOX_OUTBOUND, Event.SCOPE_INDEX, Event.SCOPE_INDEX_FRAGMENT),
+            Event.ENVELOPE_CHAINCODE to listOf(Event.SCOPE_INDEX, Event.SCOPE_INDEX_FRAGMENT, Event.ENVELOPE_ERROR),
+            Event.SCOPE_INDEX to listOf(Event.ENVELOPE_RESPONSE),
+            Event.SCOPE_INDEX_FRAGMENT to listOf(Event.ENVELOPE_RESPONSE),
+            Event.ENVELOPE_RESPONSE to listOf(), // end of the line
+        )
     }
 
     fun registerCallback(event: Event, callback: EventHandler) {
@@ -49,7 +58,13 @@ class EventService() {
     }
 
     fun submitEvent(event: P8eEvent, envelopeUuid: UUID, status: EventStatus = EventStatus.CREATED, created: OffsetDateTime = OffsetDateTime.now()): EventRecord =
-        EventRecord.insertOrUpdate(event, envelopeUuid, status, created, created).also(::submitToChannel)
+        EventRecord.findByEnvelopeUuidForUpdate(envelopeUuid)
+            ?.also {
+                val validTransitions = VALID_STATE_TRANSITIONS[it.event]
+                if (validTransitions == null || validTransitions.contains(event.event)) {
+                    it.update(event, status, created, created).also(::submitToChannel)
+                }
+            } ?: EventRecord.insert(event, envelopeUuid, status, created, created).also(::submitToChannel)
 
     fun completeInProgressEvent(envelopeUuid: UUID, expectedEventType: Event) = EventRecord.findByEnvelopeUuidForUpdate(envelopeUuid)
         ?.takeIf { it.event == expectedEventType }
