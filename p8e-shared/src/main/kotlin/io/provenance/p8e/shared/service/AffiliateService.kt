@@ -212,7 +212,7 @@ class AffiliateService(
      * @return the index name for the specified public key
      */
     @Cacheable(AFFILIATE_INDEX_NAME)
-    fun getIndexNameByPublicKey(publicKey: PublicKey) = AffiliateRecord.findByPublicKey(publicKey)?.indexName ?: DEFAULT_INDEX_NAME
+    fun getIndexNameByPublicKey(publicKey: PublicKey) = get(publicKey)?.indexName ?: DEFAULT_INDEX_NAME
 
     /**
      * Save or update an affiliate.
