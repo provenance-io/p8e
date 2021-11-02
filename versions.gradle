@@ -11,7 +11,7 @@ ext {
     postgres_version = '42.2.19'
     exposed_version = '0.29.1'
     hikari_cp_version = '3.2.0'
-    grpc_version = '1.36.2'
+    grpc_version = '1.41.0'
     scarlet_version = '0.1.11'
     protobuf_version = '3.6.1'
     kethereum_version = '0.83.4'
