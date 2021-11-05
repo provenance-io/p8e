@@ -70,8 +70,9 @@ class EnvelopeGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         transaction {
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
             EnvelopeRecord.findByGroupUuid(groupUuid.toUuidProv())
-                .filter { it.scope.publicKey.toJavaPublicKey() == publicKey() }
+                .filter { it.scope.publicKey.toJavaPublicKey() == signingPublicKey }
                 .map { if (it.data.hasResult()) it.data.result.toBuilder().build() else it.data.input.toBuilder().build() }
                 .let { EnvelopeCollection.newBuilder().addAllEnvelopes(it).build() }
         }.complete(responseObserver)
@@ -84,8 +85,8 @@ class EnvelopeGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         transaction {
-            val publicKey = affiliateService.getSigningKeyPair(publicKey())
-            EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey.public, executionUuid.toUuidProv())
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
+            EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingPublicKey, executionUuid.toUuidProv())
                 ?.let { if (it.data.hasResult()) it.data.result.toBuilder().build() else it.data.input.toBuilder().build() }
                 .orThrowNotFound("Envelope not found for execution ${executionUuid.value}")
         }.complete(responseObserver)
@@ -98,7 +99,8 @@ class EnvelopeGrpc(
         P8eMDC.set(publicKey(), clear = true)
 
         transaction {
-            EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey(), executionUuid.toUuidProv())
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
+            EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingPublicKey, executionUuid.toUuidProv())
                 ?.scopeSnapshot
                 .orThrowNotFound("Scope snapshot not found for contract execution ${executionUuid.value}")
         }.complete(responseObserver)
@@ -112,16 +114,17 @@ class EnvelopeGrpc(
 
         val executionUuid = reject.executionUuid
         transaction {
-            EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey(), executionUuid.toUuidProv())
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
+            EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingPublicKey, executionUuid.toUuidProv())
                 .orThrowNotFound("Envelope not found for execution ${executionUuid.value}")
                 .also { record ->
                     val envelope = if (record.data.hasResult()) record.data.result else record.data.input
                     val error = envelope.error(
-                        "Contract execution was rejected by affiliate ${publicKey().toHex()}: ${reject.message}",
+                        "Contract execution was rejected by affiliate ${signingPublicKey.toHex()}: ${reject.message}",
                         CONTRACT_REJECTED
                     )
-                    envelopeService.error(publicKey(), error)
-                    mailboxService.error(publicKey(), envelope, error)
+                    envelopeService.error(signingPublicKey, error)
+                    mailboxService.error(signingPublicKey, envelope, error)
                 }.let { if (it.data.hasResult()) it.data.result.toBuilder().build() else it.data.input.toBuilder().build() }
         }.complete(responseObserver)
     }
@@ -134,18 +137,19 @@ class EnvelopeGrpc(
 
         val executionUuid = cancel.executionUuid
         transaction {
-            EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey(), executionUuid.toUuidProv())
+            val signingPublicKey = affiliateService.getSigningPublicKey(publicKey())
+            EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingPublicKey, executionUuid.toUuidProv())
                 .orThrowNotFound("Envelope not found for execution ${executionUuid.value}")
                 .takeIf { it.isInvoker == true }
                 .orThrow { IllegalArgumentException("Contract can only be cancelled by the contract invoker.") }
                 .also { record ->
                     val envelope = if (record.data.hasResult()) record.data.result else record.data.input
                     val error = envelope.error(
-                        "Contract execution was cancelled by Account Public Key ${publicKey().toHex()}: ${cancel.message}",
+                        "Contract execution was cancelled by Account Public Key ${signingPublicKey.toHex()}: ${cancel.message}",
                         CONTRACT_CANCELLED
                     )
-                    envelopeService.error(publicKey(), error)
-                    mailboxService.error(publicKey(), envelope, error)
+                    envelopeService.error(signingPublicKey, error)
+                    mailboxService.error(signingPublicKey, envelope, error)
                 }.let { if (it.data.hasResult()) it.data.result.toBuilder().build() else it.data.input.toBuilder().build() }
         }.complete(responseObserver)
     }
