@@ -3,6 +3,7 @@ package io.p8e.index.client.query
 import io.p8e.index.client.query.OperationType.STRING
 import io.p8e.index.client.query.StringOperationType.EQUAL
 import io.p8e.index.client.query.StringOperationType.LIKE
+import io.p8e.index.client.query.StringOperationType.NOT_EQUAL
 import io.p8e.index.client.query.StringOperationType.REGEXP
 import java.util.UUID
 
@@ -11,6 +12,14 @@ infix fun String.equal(uuid: UUID) = this.equal(uuid.toString())
 infix fun String.equal(value: String): Operation {
     return StringOperation(
         EQUAL,
+        this,
+        value
+    )
+}
+
+infix fun String.notEqual(value: String): Operation {
+    return StringOperation(
+        NOT_EQUAL,
         this,
         value
     )
@@ -42,6 +51,7 @@ class StringOperation(
 
 enum class StringOperationType {
     EQUAL,
+    NOT_EQUAL,
     LIKE,
-    REGEXP
+    REGEXP,
 }
