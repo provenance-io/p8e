@@ -9,6 +9,7 @@ import io.p8e.proto.Envelope.EnvelopeEvent
 import io.p8e.proto.Envelope.RejectCancel
 import io.p8e.proto.EnvelopeServiceGrpc
 import io.p8e.util.toProtoUuidProv
+import java.time.Duration
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -17,6 +18,8 @@ class EnvelopeClient(
     interceptor: ChallengeResponseInterceptor,
     private val deadlineMs: Long
 ) {
+    private val connectionTimeoutInterceptor = ConnectionTimeoutInterceptor(Duration.ofMillis(deadlineMs))
+
     private val blockingClient = EnvelopeServiceGrpc.newBlockingStub(channel)
         .withInterceptors(interceptor)
 
@@ -73,7 +76,8 @@ class EnvelopeClient(
     fun event(
         inObserver: StreamObserver<EnvelopeEvent>
     ): StreamObserver<EnvelopeEvent> {
-        return eventClient.event(inObserver)
+        return eventClient.withInterceptors(connectionTimeoutInterceptor)
+            .event(inObserver)
     }
 
     fun execute(
