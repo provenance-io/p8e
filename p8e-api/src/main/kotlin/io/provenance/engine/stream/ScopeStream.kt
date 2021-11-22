@@ -112,7 +112,8 @@ class ScopeStream(
         log.info("Received event stream block!")
 
         transaction {
-            val uuids = IndexScopeRecord.batchInsert(blockHeight, events).flatMap { it.value }.toSet()
+            val filteredEvents = events.filter { it.scope.lastEvent.executionUuid.value.isNotBlank() } // p8e events will have this set, any other scope creates/updates aren't from p8e
+            val uuids = IndexScopeRecord.batchInsert(blockHeight, filteredEvents).flatMap { it.value }.toSet()
             uuids.forEach {
                 // TODO: write a test for and possibly fix the case where multiple parties on multiparty contract share same node, but have different index names
                 // may need to index each separately to ensure both indexes populated https://github.com/FigureTechnologies/p8e/pull/444/files#r557465484
@@ -127,7 +128,7 @@ class ScopeStream(
                 }
             }
 
-            events.map { it.txHash }
+            filteredEvents.map { it.txHash }
                 .toSet()
                 .also { txHashes -> log.debug("Received the following TXs $txHashes at height $blockHeight") }
                 .forEach { txHash -> TransactionStatusRecord.setSuccess(txHash) }
@@ -135,7 +136,7 @@ class ScopeStream(
             // Mark that we've stored up to the given block height for indexing.
             EventStreamRecord.update(eventStreamId, blockHeight)
 
-            events.forEach {
+            filteredEvents.forEach {
                 ChaincodeInvokeService.unlockScope(it.scope.uuid.value)
             }
         }

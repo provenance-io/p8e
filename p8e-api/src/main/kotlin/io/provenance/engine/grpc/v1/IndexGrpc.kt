@@ -6,6 +6,7 @@ import io.grpc.stub.StreamObserver
 import io.p8e.definition.DefinitionService
 import io.p8e.grpc.complete
 import io.p8e.grpc.publicKey
+import io.p8e.proto.ContractScope
 import io.p8e.proto.Index
 import io.p8e.proto.Index.ElasticSearchQueryRequest
 import io.p8e.proto.Index.FactHistoryRequest
@@ -35,6 +36,7 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.util.P8eMDC
 import io.p8e.proto.Util.UUID
+import io.provenance.engine.service.ProvenanceGrpcService
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.index.query.QueryBuilders
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -45,7 +47,8 @@ class IndexGrpc(
     private val affiliateService: AffiliateService,
     iOsClient: OsClient,
     private val indexService: IndexService,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val provenanceGrpcService: ProvenanceGrpcService,
 ): IndexServiceImplBase() {
     private val log = logger()
 
@@ -122,6 +125,15 @@ class IndexGrpc(
 
         indexService.findLatestByScopeUuid(scopeUuid.toUuidProv())
             ?.toScopeWrapper()
+            .or {
+                log.debug("Scope not found in database, attempting to fetch from chain")
+                try {
+                    provenanceGrpcService.retrieveScope(scopeUuid.toUuidProv()).toScopeWrapper()
+                } catch (e: Exception) {
+                    log.debug("Failed to fetch scope from chain")
+                    ScopeWrapper.getDefaultInstance()
+                }
+            }
             .or { ScopeWrapper.getDefaultInstance() }
             .complete(responseObserver)
     }
@@ -132,9 +144,38 @@ class IndexGrpc(
     ) {
         P8eMDC.set(publicKey(), clear = true)
 
-        indexService.findLatestByScopeUuids(request.uuidsList.map { it.toUuidProv() })
+        val indexedScopes = indexService.findLatestByScopeUuids(request.uuidsList.map { it.toUuidProv() })
             .toScopeWrappers()
-            .complete(responseObserver)
+
+        log.debug("Fetched ${indexedScopes.scopesCount}/${request.uuidsCount} scopes from db")
+
+        var allScopes = indexedScopes
+
+        if (indexedScopes.scopesCount != request.uuidsCount) {
+            val fetchedUuids = indexedScopes.scopesList.map { it.scope.uuid.toUuidProv() }.toSet()
+
+
+            val chainScopes = request.uuidsList
+                .map { it.toUuidProv() }
+                .filterNot { fetchedUuids.contains(it) }
+                .also { log.debug("Attempting to fetch an additional ${it.count()} scopes from chain") }
+                .mapNotNull {
+                    try {
+                        provenanceGrpcService.retrieveScope(it)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                .contractScopesToScopeWrappers()
+
+            log.debug("Fetched additional ${chainScopes.scopesCount} scopes from chain")
+
+            allScopes = allScopes.toBuilder()
+                .addAllScopes(chainScopes.scopesList)
+                .build()
+        }
+
+        allScopes.complete(responseObserver)
     }
 
     override fun queryCount(
@@ -243,6 +284,14 @@ fun List<IndexScopeRecord>.toScopeWrappers(): ScopeWrappers {
         .addAllScopes(map { it.toScopeWrapper() })
         .build()
 }
+
+fun ContractScope.Scope.toScopeWrapper(): ScopeWrapper = ScopeWrapper.newBuilder()
+    .setScope(this)
+    .build()
+
+fun List<ContractScope.Scope>.contractScopesToScopeWrappers(): ScopeWrappers = ScopeWrappers.newBuilder()
+    .addAllScopes(map { it.toScopeWrapper() })
+    .build()
 
 fun SearchResponse.toRawQueryResults() = Index.RawQueryResults.newBuilder()
     .addAllResults(hits.map { hit ->
