@@ -159,13 +159,13 @@ class IndexGrpc(
                 .map { it.toUuidProv() }
                 .filterNot { fetchedUuids.contains(it) }
                 .also { log.debug("Attempting to fetch an additional ${it.count()} scopes from chain") }
-                .map {
+                .mapNotNull {
                     try {
                         provenanceGrpcService.retrieveScope(it)
                     } catch (e: Exception) {
                         null
                     }
-                }.filterNotNull()
+                }
                 .contractScopesToScopeWrappers()
 
             log.debug("Fetched additional ${chainScopes.scopesCount} scopes from chain")
