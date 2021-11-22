@@ -158,6 +158,8 @@ class ProvenanceGrpcService(
             )
         }
 
+    fun retrieveScope(uuid: UUID): ContractScope.Scope = retrieveScope(uuid.toString())
+
     fun retrieveScope(address: String): ContractScope.Scope {
         val (scopeResponse, contractSpecHashLookup, scopeSpecificationName) = try {
             val scopeResponse = metadataQueryService.scope(

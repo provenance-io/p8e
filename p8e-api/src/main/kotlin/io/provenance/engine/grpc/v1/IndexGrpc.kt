@@ -6,6 +6,7 @@ import io.grpc.stub.StreamObserver
 import io.p8e.definition.DefinitionService
 import io.p8e.grpc.complete
 import io.p8e.grpc.publicKey
+import io.p8e.proto.ContractScope
 import io.p8e.proto.Index
 import io.p8e.proto.Index.ElasticSearchQueryRequest
 import io.p8e.proto.Index.FactHistoryRequest
@@ -35,6 +36,8 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.util.P8eMDC
 import io.p8e.proto.Util.UUID
+import io.p8e.util.toMessageWithStackTrace
+import io.provenance.engine.service.ProvenanceGrpcService
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.index.query.QueryBuilders
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -45,7 +48,8 @@ class IndexGrpc(
     private val affiliateService: AffiliateService,
     iOsClient: OsClient,
     private val indexService: IndexService,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val provenanceGrpcService: ProvenanceGrpcService,
 ): IndexServiceImplBase() {
     private val log = logger()
 
@@ -120,8 +124,11 @@ class IndexGrpc(
     ) {
         P8eMDC.set(publicKey(), clear = true)
 
-        indexService.findLatestByScopeUuid(scopeUuid.toUuidProv())
-            ?.toScopeWrapper()
+        try {
+            provenanceGrpcService.retrieveScope(scopeUuid.toUuidProv())
+        } catch (e: Exception) {
+            null
+        }?.toScopeWrapper()
             .or { ScopeWrapper.getDefaultInstance() }
             .complete(responseObserver)
     }
@@ -132,8 +139,14 @@ class IndexGrpc(
     ) {
         P8eMDC.set(publicKey(), clear = true)
 
-        indexService.findLatestByScopeUuids(request.uuidsList.map { it.toUuidProv() })
-            .toScopeWrappers()
+        request.uuidsList.map {
+            try {
+                provenanceGrpcService.retrieveScope(it.toUuidProv())
+            } catch (e: Exception) {
+                null
+            }
+        }.filterNotNull()
+            .contractScopesToScopeWrappers()
             .complete(responseObserver)
     }
 
@@ -243,6 +256,14 @@ fun List<IndexScopeRecord>.toScopeWrappers(): ScopeWrappers {
         .addAllScopes(map { it.toScopeWrapper() })
         .build()
 }
+
+fun ContractScope.Scope.toScopeWrapper(): ScopeWrapper = ScopeWrapper.newBuilder()
+    .setScope(this)
+    .build()
+
+fun List<ContractScope.Scope>.contractScopesToScopeWrappers(): ScopeWrappers = ScopeWrappers.newBuilder()
+    .addAllScopes(map { it.toScopeWrapper() })
+    .build()
 
 fun SearchResponse.toRawQueryResults() = Index.RawQueryResults.newBuilder()
     .addAllResults(hits.map { hit ->
