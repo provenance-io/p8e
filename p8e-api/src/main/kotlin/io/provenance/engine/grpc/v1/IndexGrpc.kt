@@ -124,11 +124,17 @@ class IndexGrpc(
     ) {
         P8eMDC.set(publicKey(), clear = true)
 
-        try {
-            provenanceGrpcService.retrieveScope(scopeUuid.toUuidProv())
-        } catch (e: Exception) {
-            null
-        }?.toScopeWrapper()
+        indexService.findLatestByScopeUuid(scopeUuid.toUuidProv())
+            ?.toScopeWrapper()
+            .or {
+                log.debug("Scope not found in database, attempting to fetch from chain")
+                try {
+                    provenanceGrpcService.retrieveScope(scopeUuid.toUuidProv()).toScopeWrapper()
+                } catch (e: Exception) {
+                    log.debug("Failed to fetch scope from chain")
+                    ScopeWrapper.getDefaultInstance()
+                }
+            }
             .or { ScopeWrapper.getDefaultInstance() }
             .complete(responseObserver)
     }
@@ -139,15 +145,38 @@ class IndexGrpc(
     ) {
         P8eMDC.set(publicKey(), clear = true)
 
-        request.uuidsList.map {
-            try {
-                provenanceGrpcService.retrieveScope(it.toUuidProv())
-            } catch (e: Exception) {
-                null
-            }
-        }.filterNotNull()
-            .contractScopesToScopeWrappers()
-            .complete(responseObserver)
+        val indexedScopes = indexService.findLatestByScopeUuids(request.uuidsList.map { it.toUuidProv() })
+            .toScopeWrappers()
+
+        log.debug("Fetched ${indexedScopes.scopesCount}/${request.uuidsCount} scopes from db")
+
+        var allScopes = indexedScopes
+
+        if (indexedScopes.scopesCount != request.uuidsCount) {
+            val fetchedUuids = indexedScopes.scopesList.map { it.scope.uuid.toUuidProv() }.toSet()
+
+
+            val chainScopes = request.uuidsList
+                .map { it.toUuidProv() }
+                .filterNot { fetchedUuids.contains(it) }
+                .also { log.debug("Attempting to fetch an additional ${it.count()} scopes from chain") }
+                .map {
+                    try {
+                        provenanceGrpcService.retrieveScope(it)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }.filterNotNull()
+                .contractScopesToScopeWrappers()
+
+            log.debug("Fetched additional ${chainScopes.scopesCount} scopes from chain")
+
+            allScopes = allScopes.toBuilder()
+                .addAllScopes(chainScopes.scopesList)
+                .build()
+        }
+
+        allScopes.complete(responseObserver)
     }
 
     override fun queryCount(
