@@ -36,7 +36,6 @@ import io.provenance.os.client.OsClient
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.util.P8eMDC
 import io.p8e.proto.Util.UUID
-import io.p8e.util.toMessageWithStackTrace
 import io.provenance.engine.service.ProvenanceGrpcService
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.index.query.QueryBuilders
