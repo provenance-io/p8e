@@ -88,8 +88,8 @@ open class OsClient(
     }
 
     fun get(sha512: ByteArray, publicKey: PublicKey, deadlineSeconds: Long = 60L): DIMEInputStream {
-        if (sha512.size != 64) {
-            throw IllegalArgumentException("Provided SHA-512 must be byte array of size 64, found size: ${sha512.size}")
+        if (sha512.size < 16) {
+            throw IllegalArgumentException("Provided hash must be byte array of at least size 16, found size: ${sha512.size}")
         }
 
         val finishLatch = CountDownLatch(1)
