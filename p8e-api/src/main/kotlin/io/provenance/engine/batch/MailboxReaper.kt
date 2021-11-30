@@ -199,16 +199,16 @@ class MailboxReaper(
             log.info("Processing mail error from key:{} poll:{}, message:{}", MailboxMeta.ERROR_RESPONSE, uuid, error.message)
 
             return transaction {
-                envelopeService.error(item.publicKey, error)
-            }?.also {
-                // Send errors to parties on recital list if invoker sans the sender of the original message
-                if (it.data.isInvoker)
-                    mailboxService.error(
-                        item.publicKey,
-                        it.data.input,
-                        error,
-                        ownerAudience.publicKey.toPublicKey()
-                    )
+                envelopeService.error(item.publicKey, error)?.also {
+                    if (it.data.isInvoker) {
+                        mailboxService.error(
+                            item.publicKey,
+                            it.data.input,
+                            error,
+                            ownerAudience.publicKey.toPublicKey()
+                        )
+                    }
+                }
             }?.data
                 ?.result
                 ?: defaultProto
