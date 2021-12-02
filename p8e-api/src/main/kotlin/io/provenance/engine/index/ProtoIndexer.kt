@@ -49,7 +49,7 @@ class ProtoIndexer(
                         // Try to re-use MemoryClassLoader if possible for caching reasons
                         val spec = _definitionService.loadProto(encryptionKeyRef, group.specification, ContractSpec::class.java.name) as ContractSpec
 
-                        val classLoaderKey = "${spec.definition.resourceLocation.ref.hash}-${spec.considerationSpecsList.first().outputSpec.spec.resourceLocation.ref.hash}"
+                        val classLoaderKey = spec.definition.resourceLocation.ref.hash // one classloader per contract jar
                         val memoryClassLoader = ClassLoaderCache.classLoaderCache.computeIfAbsent(classLoaderKey) {
                             MemoryClassLoader("", ByteArrayInputStream(ByteArray(0)))
                         }
