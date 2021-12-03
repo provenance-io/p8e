@@ -563,7 +563,7 @@ class ContractManager(
             .orThrow { IllegalStateException("Handlers not registered for ${clazz.name}") }
 
         val response = when (event.event) {
-            EventType.ENVELOPE_ACCEPTED -> false
+            EventType.ENVELOPE_ACCEPTED, EventType.ENVELOPE_WATCH_CONNECTED -> false
             EventType.ENVELOPE_RESPONSE -> try {
                 classHandlers.stepCompletionHandler.cast<T>().handle(constructContract(clazz, event))
             } catch (t: Throwable) {
@@ -656,7 +656,7 @@ class ContractManager(
                         EventType.ENVELOPE_REQUEST,
                         EventType.ENVELOPE_RESPONSE -> Either.Right(constructContract(clazz, response))
 
-                        EventType.UNRECOGNIZED, EventType.UNUSED_TYPE, null -> throw IllegalStateException("Invalid EventType of ${response.event}")
+                        EventType.ENVELOPE_WATCH_CONNECTED, EventType.UNRECOGNIZED, EventType.UNUSED_TYPE, null -> throw IllegalStateException("Invalid EventType of ${response.event}")
                     }
                 }
         } catch (t: Throwable) {

@@ -64,6 +64,14 @@ allprojects {
         )
     }
 
+    processResources {
+        def properties = ['version': version]
+        inputs.properties(properties)
+        filesMatching('version.properties') {
+            expand(properties)
+        }
+    }
+
     task sourcesJar(type: Jar, dependsOn: classes) {
         classifier = 'sources'
         from sourceSets.main.allSource

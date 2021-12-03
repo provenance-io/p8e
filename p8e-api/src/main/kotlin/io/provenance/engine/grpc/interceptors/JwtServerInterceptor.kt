@@ -31,10 +31,12 @@ class JwtServerInterceptor(
         }
 
         val clientIp = call.attributes.get(Grpc.TRANSPORT_ATTR_REMOTE_ADDR)
+        val clientVersion = headers[Constant.CLIENT_VERSION_KEY] ?: "unknown"
 
         val context = Context.current()
             .withValue(Constant.PUBLIC_KEY_CTX, publicKey)
             .withValue(Constant.CLIENT_IP_CTX, clientIp.toString())
+            .withValue(Constant.CLIENT_VERSION_CTX, clientVersion)
 
         return Contexts.interceptCall(context, call, headers, next)
     }

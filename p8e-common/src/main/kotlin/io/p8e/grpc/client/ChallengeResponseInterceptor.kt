@@ -10,9 +10,9 @@ import io.grpc.Metadata
 import io.grpc.MethodDescriptor
 import io.p8e.grpc.Constant
 import io.p8e.proto.Authentication
-import io.p8e.util.toPublicKeyProto
 import io.p8e.util.toByteString
 import io.p8e.util.toProtoTimestampProv
+import io.p8e.util.toPublicKeyProto
 import java.security.KeyPair
 import java.security.Signature
 import java.time.OffsetDateTime
@@ -20,11 +20,23 @@ import java.time.ZoneOffset
 import java.util.*
 import java.util.concurrent.atomic.AtomicReference
 
+
 class ChallengeResponseInterceptor(
     private val keyPair: KeyPair,
     private val authenticationClient: AuthenticationClient,
     private val toleranceSeconds: Long = 3
 ): ClientInterceptor {
+    companion object {
+        private val P8E_VERSION = p8eVersion()
+
+        private fun p8eVersion(): String = Properties().let { properties ->
+            ChallengeResponseInterceptor::class.java.getResourceAsStream("/version.properties")?.use {
+                properties.load(it)
+            }
+            properties.getProperty("version", "")
+        }
+    }
+
     private val jwt = AtomicReference("")
 
     override fun <ReqT : Any, RespT : Any> interceptCall(
@@ -44,6 +56,9 @@ class ChallengeResponseInterceptor(
                             .takeIf { it.isNotEmpty() && !it.isExpired() }
                         ?: authenticate())
                 }
+
+                headers.put(Constant.CLIENT_VERSION_KEY, P8E_VERSION)
+
                 super.start(
                     responseListener,
                     headers
