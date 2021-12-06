@@ -133,6 +133,9 @@ dependencies {
     // DataDog
     implementation "com.datadoghq:java-dogstatsd-client:$datadog_version"
 
+    // SemVer parsing utility
+    implementation "net.swiftzer.semver:semver:$semver_version"
+
     // Test Things
     testImplementation 'io.grpc:grpc-testing:1.35.0'
     testImplementation 'com.h2database:h2:1.4.200'

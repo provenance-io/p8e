@@ -2,6 +2,7 @@ package io.provenance.engine.grpc.observers
 
 import io.grpc.stub.StreamObserver
 import io.p8e.grpc.clientIp
+import io.p8e.grpc.clientVersion
 import io.p8e.grpc.observers.CompleteState
 import io.p8e.grpc.observers.EndState
 import io.p8e.grpc.observers.ExceptionState
@@ -14,6 +15,7 @@ import io.p8e.proto.Envelope.EnvelopeEvent.Action.*
 import io.p8e.proto.Envelope.EnvelopeEvent.EventType
 import io.p8e.proto.PK
 import io.p8e.util.*
+import io.provenance.engine.const.P8eVersions
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.AffiliateConnectionRecord
 import io.provenance.engine.domain.ConnectionStatus.CONNECTED
@@ -23,6 +25,7 @@ import io.provenance.engine.grpc.interceptors.statusRuntimeException
 import io.provenance.engine.grpc.v1.*
 import io.provenance.engine.service.EventService
 import io.provenance.p8e.shared.service.AffiliateService
+import net.swiftzer.semver.SemVer
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.time.OffsetDateTime
 import java.util.concurrent.ConcurrentHashMap
@@ -136,7 +139,29 @@ class EnvelopeEventObserver(
                 }
                 else -> queuer.error(IllegalStateException("Unknown action received by server ${value.action.name}").statusRuntimeException())
             }
+        } else {
+            // send a dummy event back on connect to force headers through in order to satisfy the ConnectionTimeoutInterceptor
+            if (clientSupportsEnvelopeWatchConnected()) {
+                EnvelopeEvent.newBuilder()
+                    .setEvent(EventType.ENVELOPE_WATCH_CONNECTED)
+                    .setAction(CONNECT)
+                    .setPublicKey(
+                        PK.SigningAndEncryptionPublicKeys.newBuilder()
+                            .setSigningPublicKey(queuerKey!!.publicKey.toPublicKeyProto())
+                            .setEncryptionPublicKey(queuerKey!!.publicKey.toPublicKeyProto())
+                    ).build()
+                    .let(queuer::queue)
+            } else {
+                logger().info("Skipping ENVELOPE_WATCH_CONNECTED event for unsupported client (version ${clientVersion()})")
+            }
         }
+    }
+
+    private fun clientSupportsEnvelopeWatchConnected(): Boolean = try {
+        SemVer.parse(clientVersion()).compareTo(SemVer.parse(P8eVersions.V0_8_22.version)) > 0
+    } catch (e: Exception) {
+        logger().info("Error parsing version ${e.message}")
+        false
     }
 
     override fun onError(t: Throwable) {

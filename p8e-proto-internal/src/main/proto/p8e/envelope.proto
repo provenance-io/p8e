@@ -55,6 +55,7 @@ message EnvelopeEvent {
         ENVELOPE_MAILBOX_OUTBOUND = 4;
         ENVELOPE_ACCEPTED = 5;
         ENVELOPE_EXECUTION_ERROR = 6;
+        ENVELOPE_WATCH_CONNECTED = 7;
     }
 
     enum Action {
