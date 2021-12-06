@@ -15,6 +15,7 @@ import io.p8e.proto.Envelope.EnvelopeEvent.Action.*
 import io.p8e.proto.Envelope.EnvelopeEvent.EventType
 import io.p8e.proto.PK
 import io.p8e.util.*
+import io.provenance.engine.const.P8eVersions
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.engine.domain.AffiliateConnectionRecord
 import io.provenance.engine.domain.ConnectionStatus.CONNECTED
@@ -157,9 +158,7 @@ class EnvelopeEventObserver(
     }
 
     private fun clientSupportsEnvelopeWatchConnected(): Boolean = try {
-        SemVer.parse(clientVersion()).let {
-            it.compareTo(SemVer.parse("0.8.22")) > 0
-        }
+        SemVer.parse(clientVersion()).compareTo(SemVer.parse(P8eVersions.V0_8_22.version)) > 0
     } catch (e: Exception) {
         logger().info("Error parsing version ${e.message}")
         false
