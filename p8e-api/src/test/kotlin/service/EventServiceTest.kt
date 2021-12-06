@@ -219,4 +219,24 @@ class EventServiceTest {
         Assert.assertEquals(Event.ENVELOPE_RESPONSE, updatedRecord.event)
         Assert.assertEquals("some-other-test-message".toByteString(), updatedRecord.payload.message)
     }
+
+    @Test
+    fun `Verify ENVELOPE_CHAINCODE to ENVELOPE_CHAINCODE is a valid transition`() {
+        // CHAINCODE -> CHAINCODE transition for TransactionStatusService.retryDead case
+        val event = Events.P8eEvent.newBuilder()
+            .setEvent(Event.ENVELOPE_CHAINCODE)
+            .setMessage("some-test-message".toByteString())
+            .build()
+
+        transaction { EventRecord.insert(event, envelopeRecord.uuid.value) }
+
+        val event2 = Events.P8eEvent.newBuilder()
+            .setEvent(Event.ENVELOPE_CHAINCODE)
+            .setMessage("some-other-test-message".toByteString())
+            .build()
+        val updatedRecord = transaction { eventService.submitEvent(event2, envelopeRecord.uuid.value, EventStatus.CREATED, createdTime) }
+
+        // event should be updated, since you can go from ENVELOPE_CHAINCODE -> ENVELOPE_CHAINCODE
+        Assert.assertEquals("some-other-test-message".toByteString(), updatedRecord.payload.message)
+    }
 }
