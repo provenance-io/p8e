@@ -627,4 +627,83 @@ class EnvelopeServiceTest {
             }
         }
     }
+
+    @Test
+    fun `Verify envelope error can be handled for affiliate with different signing and encryption keys `() {
+        //Setup
+        val encryptionKeyPair = TestUtils.generateKeyPair()
+        val signingKeyPair = TestUtils.generateKeyPair()
+        val authKeyPair = TestUtils.generateKeyPair()
+        transaction {
+            AffiliateTable.insert {
+                it[alias] = "diff-keys"
+                it[publicKey] = signingKeyPair.public.toHex()
+                it[privateKey] = signingKeyPair.private.toHex()
+                it[whitelistData] = null
+                it[encryptionPublicKey] = encryptionKeyPair.public.toHex()
+                it[encryptionPrivateKey] = encryptionKeyPair.private.toHex()
+                it[active] = true
+                it[indexName] = "scopes"
+                it[signingKeyUuid] = UUID.randomUUID()
+                it[encryptionKeyUuid] = UUID.randomUUID()
+                it[keyType] = DATABASE
+                it[authPublicKey] = authKeyPair.public.toHex()
+            }
+
+            scopeRecord = ScopeRecord.new {
+                uuid = EntityID(UUID.randomUUID(), ScopeTable)
+                publicKey = signingKeyPair.public.toHex()
+                scopeUuid = UUID.randomUUID()
+                data = ContractScope.Scope.getDefaultInstance()
+                lastExecutionUuid = UUID.randomUUID()
+            }
+        }
+
+        Mockito.`when`(affiliateService.getSigningPublicKey(encryptionKeyPair.public)).thenReturn(signingKeyPair.public)
+
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeyPair, scopeRecord, encryptionKeyPair = encryptionKeyPair)
+
+        val errorUuid = UUID.randomUUID()
+        val envelopeError = ContractScope.EnvelopeError.newBuilder()
+            .setUuid(errorUuid.toProtoUuidProv())
+            .setGroupUuid(testEnvelope.ref.groupUuid)
+            .setExecutionUuid(testEnvelope.executionUuid)
+            .setType(ContractScope.EnvelopeError.Type.CONTRACT_REJECTED)
+            .setMessage("some-error")
+            .setReadTime(OffsetDateTime.now().toProtoTimestampProv())
+            .setScopeUuid(testEnvelope.scope.uuid)
+            .setEnvelope(testEnvelope)
+            .auditedProv()
+            .build()
+
+        val envelopeState = ContractScope.EnvelopeState.newBuilder()
+            .setInput(testEnvelope)
+            .setResult(testEnvelope)
+            .setIsInvoker(true)
+            .setContractClassname("HelloWorldContract")
+            .setExecutedTime(OffsetDateTime.now().toProtoTimestampProv())
+            .setChaincodeTime(OffsetDateTime.now().plusSeconds(5).toProtoTimestampProv())
+            .setInboxTime(OffsetDateTime.now().plusSeconds(10).toProtoTimestampProv())
+            .build()
+
+        transaction {
+            envelopeRecord = EnvelopeRecord.new {
+                uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
+                groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
+                executionUuid = testEnvelope.executionUuid.toUuidProv()
+                publicKey = signingKeyPair.public.toHex() // different key than what is secified in envelopeService.error call
+                data = envelopeState
+                status = ContractScope.Envelope.Status.CREATED
+                scopeUuid = scopeRecord.uuid
+            }
+
+            //Execute
+            envelopeService.error(encryptionKeyPair.public, envelopeError)
+
+            //Validate
+            val record = EnvelopeTable.selectAll().last()
+            Assert.assertNotNull(record[EnvelopeTable.data].errorsList[0])
+            Assert.assertEquals(ContractScope.EnvelopeError.Type.CONTRACT_REJECTED, record[EnvelopeTable.data].errorsList[0].type)
+        }
+    }
 }

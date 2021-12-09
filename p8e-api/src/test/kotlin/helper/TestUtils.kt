@@ -201,9 +201,10 @@ class TestUtils {
                 )
                 .build()
 
-        fun generateTestEnvelope(keys: KeyPair, scopeData: ScopeRecord, scopeWithLastEvent: Boolean = true, executionUUID: UUID? = null, contract: Contracts.Contract? = null): ContractScope.Envelope {
+        fun generateTestEnvelope(keys: KeyPair, scopeData: ScopeRecord, scopeWithLastEvent: Boolean = true, executionUUID: UUID? = null, contract: Contracts.Contract? = null, encryptionKeyPair: KeyPair? = null): ContractScope.Envelope {
             val executionUuid = executionUUID?.toProtoUuidProv() ?: UUID.randomUUID().toProtoUuidProv()
             val contract = contract ?: generateTestContract(keys, scopeData)
+            val encKeyPair = encryptionKeyPair ?: keys
 
             val lastEvent = if(scopeWithLastEvent) {
                 ContractScope.Event.newBuilder()
@@ -232,7 +233,7 @@ class TestUtils {
                             .setSignature(UUID.randomUUID().toString())
                             .setSigner(
                                 PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                    .setEncryptionPublicKey(keys.public.toPublicKeyProto())
+                                    .setEncryptionPublicKey(encKeyPair.public.toPublicKeyProto())
                                     .setSigningPublicKey(keys.public.toPublicKeyProto())
                                     .build() // Build Signer
                             )
@@ -249,7 +250,7 @@ class TestUtils {
                                     .setSignerRole(ContractSpecs.PartyType.OWNER)
                                     .setSigner(
                                         PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                            .setEncryptionPublicKey(keys.public.toPublicKeyProto())
+                                            .setEncryptionPublicKey(encKeyPair.public.toPublicKeyProto())
                                             .setSigningPublicKey(keys.public.toPublicKeyProto())
                                             .build() // Build Signer
                                     )
@@ -264,7 +265,7 @@ class TestUtils {
                                     .setGroupUuid(groupUuid)
                                     .setExecutor(
                                         PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                            .setEncryptionPublicKey(keys.public.toPublicKeyProto())
+                                            .setEncryptionPublicKey(encKeyPair.public.toPublicKeyProto())
                                             .setSigningPublicKey(keys.public.toPublicKeyProto())
                                             .build() // Build Executor
                                     )
@@ -274,7 +275,7 @@ class TestUtils {
                                                 .setSignerRole(ContractSpecs.PartyType.OWNER)
                                                 .setSigner(
                                                     PK.SigningAndEncryptionPublicKeys.newBuilder()
-                                                        .setEncryptionPublicKey(keys.public.toPublicKeyProto())
+                                                        .setEncryptionPublicKey(encKeyPair.public.toPublicKeyProto())
                                                         .setSigningPublicKey(keys.public.toPublicKeyProto())
                                                         .build() // Build Signer
                                                 )

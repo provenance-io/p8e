@@ -459,10 +459,17 @@ class EnvelopeService(
             error.executionUuid.value,
             publicKey.toHex()
         )
+        
+        val signingPublicKey = try {
+            affiliateService.getSigningPublicKey(publicKey)
+        } catch (e: Exception) {
+            log.warn("Affiliate not found for key $publicKey when processing error")
+            throw e
+        }
 
         // XXX - We need to verify that the **ENCRYPTION** publicKey
         // matches a participant of the contract for errors received via mailbox..
-        return EnvelopeRecord.findForUpdate(publicKey, error.executionUuid.toUuidProv())
+        return EnvelopeRecord.findForUpdate(signingPublicKey, error.executionUuid.toUuidProv())
             ?.takeIf { it.data.errorsList.none { e -> e.uuid == error.uuid } }
             ?.also { it.data = it.newError(error) }
             ?.also {
@@ -479,7 +486,7 @@ class EnvelopeService(
                     "Cannot error envelope:{}, execution:{} for public key:{} not found or already handled",
                     error.groupUuid.value,
                     error.executionUuid.value,
-                    publicKey
+                    signingPublicKey.toHex()
                 )
                 null
             }
