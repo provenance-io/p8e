@@ -156,8 +156,10 @@ class EnvelopeService(
     fun stage(publicKey: PublicKey, env: Envelope): EnvelopeRecord {
         log.info("Staging envelope:{}, execution:{} for Public Key:{}", env.getUuid(), env.getExecUuid(), publicKey.toHex())
 
+        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+
         // Return existing for at-least-once handling
-        val record = EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey, env.getExecUuid())
+        val record = EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingKeyPair.public, env.getExecUuid())
         if (record != null) {
             log.warn(
                 "Cannot stage envelope:{}, execution:{} for Public Key:{} already exists",
@@ -169,9 +171,9 @@ class EnvelopeService(
         }
 
         val allParties = env.contract.recitalsList.toList().plus(env.scope.partiesList)
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
 
-        require(allParties.any { it.signer.signingPublicKey == publicKey.toPublicKeyProto() }) {
+        val signingPublicKeyProto = signingKeyPair.public.toPublicKeyProto()
+        require(allParties.any { it.signer.signingPublicKey == signingPublicKeyProto }) {
             "Public Key:${publicKey.toHex()} does not exist in participant list of contract:${env.ref.groupUuid.value}"
         }
 
@@ -459,10 +461,17 @@ class EnvelopeService(
             error.executionUuid.value,
             publicKey.toHex()
         )
+        
+        val signingPublicKey = try {
+            affiliateService.getSigningPublicKey(publicKey)
+        } catch (e: Exception) {
+            log.warn("Affiliate not found for key $publicKey when processing error")
+            throw e
+        }
 
         // XXX - We need to verify that the **ENCRYPTION** publicKey
         // matches a participant of the contract for errors received via mailbox..
-        return EnvelopeRecord.findForUpdate(publicKey, error.executionUuid.toUuidProv())
+        return EnvelopeRecord.findForUpdate(signingPublicKey, error.executionUuid.toUuidProv())
             ?.takeIf { it.data.errorsList.none { e -> e.uuid == error.uuid } }
             ?.also { it.data = it.newError(error) }
             ?.also {
@@ -479,7 +488,7 @@ class EnvelopeService(
                     "Cannot error envelope:{}, execution:{} for public key:{} not found or already handled",
                     error.groupUuid.value,
                     error.executionUuid.value,
-                    publicKey
+                    signingPublicKey.toHex()
                 )
                 null
             }
