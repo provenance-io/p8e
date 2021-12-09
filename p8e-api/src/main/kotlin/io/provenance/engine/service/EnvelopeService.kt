@@ -156,8 +156,10 @@ class EnvelopeService(
     fun stage(publicKey: PublicKey, env: Envelope): EnvelopeRecord {
         log.info("Staging envelope:{}, execution:{} for Public Key:{}", env.getUuid(), env.getExecUuid(), publicKey.toHex())
 
+        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
+
         // Return existing for at-least-once handling
-        val record = EnvelopeRecord.findByPublicKeyAndExecutionUuid(publicKey, env.getExecUuid())
+        val record = EnvelopeRecord.findByPublicKeyAndExecutionUuid(signingKeyPair.public, env.getExecUuid())
         if (record != null) {
             log.warn(
                 "Cannot stage envelope:{}, execution:{} for Public Key:{} already exists",
@@ -169,9 +171,9 @@ class EnvelopeService(
         }
 
         val allParties = env.contract.recitalsList.toList().plus(env.scope.partiesList)
-        val signingKeyPair = affiliateService.getSigningKeyPair(publicKey)
 
-        require(allParties.any { it.signer.signingPublicKey == publicKey.toPublicKeyProto() }) {
+        val signingPublicKeyProto = signingKeyPair.public.toPublicKeyProto()
+        require(allParties.any { it.signer.signingPublicKey == signingPublicKeyProto }) {
             "Public Key:${publicKey.toHex()} does not exist in participant list of contract:${env.ref.groupUuid.value}"
         }
 

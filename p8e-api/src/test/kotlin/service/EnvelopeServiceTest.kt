@@ -56,6 +56,8 @@ class EnvelopeServiceTest {
 
     val signingKeys: KeyPair = TestUtils.generateKeyPair()
 
+    val authKeys: KeyPair = TestUtils.generateKeyPair()
+
     @Before
     fun setup(){
         TestUtils.DatabaseConnect()
@@ -67,7 +69,7 @@ class EnvelopeServiceTest {
 
             scopeRecord = ScopeRecord.new {
                 uuid = EntityID(UUID.randomUUID(), ScopeTable)
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 scopeUuid = UUID.randomUUID()
                 data = ContractScope.Scope.getDefaultInstance()
                 lastExecutionUuid = UUID.randomUUID()
@@ -75,8 +77,8 @@ class EnvelopeServiceTest {
 
             AffiliateTable.insert {
                 it[alias] = "alias"
-                it[publicKey] = ecKeys.public.toHex()
-                it[privateKey] = ecKeys.private.toHex()
+                it[publicKey] = signingKeys.public.toHex()
+                it[privateKey] = signingKeys.private.toHex()
                 it[whitelistData] = null
                 it[encryptionPublicKey] = ecKeys.public.toHex()
                 it[encryptionPrivateKey] = ecKeys.private.toHex()
@@ -85,7 +87,7 @@ class EnvelopeServiceTest {
                 it[signingKeyUuid] = UUID.randomUUID()
                 it[encryptionKeyUuid] = UUID.randomUUID()
                 it[keyType] = DATABASE
-                it[authPublicKey] = ecKeys.public.toHex()
+                it[authPublicKey] = authKeys.public.toHex()
             }
         }
 
@@ -117,10 +119,9 @@ class EnvelopeServiceTest {
     @Test
     fun `Verify staged contract that does not exist`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
 
-        //Assumption that EC keys and Signing keys are the same.
-        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(ecKeys)
+        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(signingKeys)
 
         Assert.assertEquals(ContractScope.Envelope.Status.CREATED, testEnvelope.status)
 
@@ -135,7 +136,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Verify staged contracts that already exist`() {
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -151,14 +152,14 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CREATED
                 scopeUuid = scopeRecord.uuid
             }
 
             //Assumption that EC keys and Signing keys are the same.
-            Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(ecKeys)
+            Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(signingKeys)
 
             //Execute
             val envelopeResult = envelopeService.stage(ecKeys.public, testEnvelope)
@@ -173,7 +174,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate read envelope has been read with read timestamp`() {
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -189,7 +190,7 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CREATED
                 scopeUuid = scopeRecord.uuid
@@ -197,7 +198,7 @@ class EnvelopeServiceTest {
         }
 
         //Execute
-        val envelopeResult = transaction { envelopeService.read(ecKeys.public, testEnvelope.executionUuid.toUuidProv()) }
+        val envelopeResult = transaction { envelopeService.read(signingKeys.public, testEnvelope.executionUuid.toUuidProv()) }
 
         //Validate
         Assert.assertNotNull(envelopeResult.readTime)
@@ -210,7 +211,7 @@ class EnvelopeServiceTest {
     fun `Validate read envelopes that has been mark as errored`(){
 
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
 
         val errorUuid = UUID.randomUUID()
         val envelopeError = ContractScope.EnvelopeError.newBuilder()
@@ -241,14 +242,14 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CREATED
                 scopeUuid = scopeRecord.uuid
             }
 
             //Execute
-            val envelopeResult = envelopeService.read(ecKeys.public, testEnvelope.executionUuid.toUuidProv(), errorUuid)
+            val envelopeResult = envelopeService.read(signingKeys.public, testEnvelope.executionUuid.toUuidProv(), errorUuid)
 
             //Validate
             Assert.assertEquals(1, envelopeResult.data.errorsCount)
@@ -260,7 +261,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate envelope complete`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -275,7 +276,7 @@ class EnvelopeServiceTest {
             EnvelopeTable.insert {
                 it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
                 it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
-                it[publicKey] = ecKeys.public.toHex()
+                it[publicKey] = signingKeys.public.toHex()
                 it[scope] = scopeRecord.uuid
                 it[data] = envelopeState
                 it[status] = ContractScope.Envelope.Status.INDEX
@@ -283,7 +284,7 @@ class EnvelopeServiceTest {
             }
 
             //Execute
-            envelopeService.complete(ecKeys.public, testEnvelope.executionUuid.toUuidProv())
+            envelopeService.complete(signingKeys.public, testEnvelope.executionUuid.toUuidProv())
 
             //Validate
             val envelopeRecord = EnvelopeTable.selectAll().last()
@@ -295,7 +296,7 @@ class EnvelopeServiceTest {
     @Test(expected = NotFoundException::class)
     fun `Validate NotFoundException is thrown for EnvelopeRecord not in DB`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
 
         //Execute
         transaction{ envelopeService.complete(TestUtils.generateKeyPair().public, testEnvelope.executionUuid.toUuidProv()) }
@@ -305,10 +306,11 @@ class EnvelopeServiceTest {
 
     @Test
     fun `Validate envelope merge`(){
+        val otherKeys = TestUtils.generateKeyPair()
         //Setup
-        val contract = TestUtils.generateTestContract(ecKeys, scopeRecord)
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord, contract = contract)
-        val testEnvelope2 = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, executionUUID = testEnvelope.executionUuid.toUuidProv(), contract = contract)
+        val contract = TestUtils.generateTestContract(signingKeys, scopeRecord, encryptionKeys = ecKeys)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, contract = contract, encryptionKeyPair = ecKeys)
+        val testEnvelope2 = TestUtils.generateTestEnvelope(otherKeys, scopeRecord, executionUUID = testEnvelope.executionUuid.toUuidProv(), contract = contract)
 
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
@@ -319,14 +321,14 @@ class EnvelopeServiceTest {
             .setChaincodeTime(OffsetDateTime.now().minusSeconds(5).toProtoTimestampProv())
             .build()
 
-        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(ecKeys)
+        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(signingKeys)
 
         transaction {
             // Mutable Envelope Record
             EnvelopeTable.insert {
                 it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
                 it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
-                it[publicKey] = ecKeys.public.toHex()
+                it[publicKey] = signingKeys.public.toHex()
                 it[scope] = scopeRecord.uuid
                 it[data] = envelopeState
                 it[status] = ContractScope.Envelope.Status.FRAGMENT
@@ -347,7 +349,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate envelope merge for signature that already exists`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -357,14 +359,14 @@ class EnvelopeServiceTest {
             .setChaincodeTime(OffsetDateTime.now().minusSeconds(5).toProtoTimestampProv())
             .build()
 
-        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(ecKeys)
+        Mockito.`when`(affiliateService.getSigningKeyPair(ecKeys.public)).thenReturn(signingKeys)
 
         transaction {
             envelopeRecord = EnvelopeRecord.new {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CHAINCODE
                 scopeUuid = scopeRecord.uuid
@@ -381,7 +383,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate envelope index`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -396,7 +398,7 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CHAINCODE
                 scopeUuid = scopeRecord.uuid
@@ -420,14 +422,14 @@ class EnvelopeServiceTest {
         transaction {
             scopeRecord = ScopeRecord.new {
                 uuid = EntityID(UUID.randomUUID(), ScopeTable)
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 scopeUuid = UUID.randomUUID()
                 data = ContractScope.Scope.getDefaultInstance()
                 lastExecutionUuid = UUID.randomUUID()
 
             }
 
-            val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+            val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
             val envelopeState = ContractScope.EnvelopeState.newBuilder()
                 .setInput(testEnvelope)
                 .setResult(testEnvelope)
@@ -442,7 +444,7 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CHAINCODE
                 scopeUuid = scopeRecord.uuid
@@ -462,7 +464,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate indexing does not happen if Scope has last events`(){
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord, false)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, false, encryptionKeyPair = ecKeys)
         val envelopeState = ContractScope.EnvelopeState.newBuilder()
             .setInput(testEnvelope)
             .setResult(testEnvelope)
@@ -477,7 +479,7 @@ class EnvelopeServiceTest {
                 uuid = EntityID(UUID.randomUUID(), EnvelopeTable)
                 groupUuid = testEnvelope.ref.groupUuid.toUuidProv()
                 executionUuid = testEnvelope.executionUuid.toUuidProv()
-                publicKey = ecKeys.public.toHex()
+                publicKey = signingKeys.public.toHex()
                 data = envelopeState
                 status = ContractScope.Envelope.Status.CHAINCODE
                 scopeUuid = scopeRecord.uuid
@@ -496,7 +498,7 @@ class EnvelopeServiceTest {
     @Test
     fun `Validate errored envelope is recorded`() {
         //Setup
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
 
         val errorUuid = UUID.randomUUID()
         val envelopeError = ContractScope.EnvelopeError.newBuilder()
@@ -521,11 +523,13 @@ class EnvelopeServiceTest {
             .setInboxTime(OffsetDateTime.now().plusSeconds(10).toProtoTimestampProv())
             .build()
 
+        Mockito.`when`(affiliateService.getSigningPublicKey(ecKeys.public)).thenReturn(signingKeys.public)
+
         transaction {
             EnvelopeTable.insert {
                 it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
                 it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
-                it[publicKey] = ecKeys.public.toHex()
+                it[publicKey] = signingKeys.public.toHex()
                 it[scope] = scopeRecord.uuid
                 it[data] = envelopeState
                 it[status] = ContractScope.Envelope.Status.ERROR
@@ -544,7 +548,7 @@ class EnvelopeServiceTest {
 
     @Test
     fun `Validate errored envelope is recorded when two affiliates are on same instance and other is already errored`() {
-        val testEnvelope = TestUtils.generateTestEnvelope(ecKeys, scopeRecord)
+        val testEnvelope = TestUtils.generateTestEnvelope(signingKeys, scopeRecord, encryptionKeyPair = ecKeys)
 
         val errorUuid = UUID.randomUUID()
         val envelopeError = ContractScope.EnvelopeError.newBuilder()
@@ -570,6 +574,9 @@ class EnvelopeServiceTest {
             .build()
 
         val secondKeyPair = TestUtils.generateKeyPair()
+
+        Mockito.`when`(affiliateService.getSigningPublicKey(ecKeys.public)).thenReturn(signingKeys.public)
+        Mockito.`when`(affiliateService.getSigningPublicKey(secondKeyPair.public)).thenReturn(secondKeyPair.public)
 
         transaction {
             AffiliateTable.insert {
@@ -598,7 +605,7 @@ class EnvelopeServiceTest {
             EnvelopeTable.insert {
                 it[groupUuid] = testEnvelope.ref.groupUuid.toUuidProv()
                 it[executionUuid] = testEnvelope.executionUuid.toUuidProv()
-                it[publicKey] = ecKeys.public.toHex()
+                it[publicKey] = signingKeys.public.toHex()
                 it[scope] = scopeRecord.uuid
                 it[data] = envelopeState
                 it[status] = ContractScope.Envelope.Status.ERROR
