@@ -41,6 +41,12 @@ sourceSets {
 configurations.all {
     // This is brought in by the object store client... We don't want figure dependencies in the p8e-api.
     exclude group: 'com.figure', module: 'figure-util'
+
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'org.apache.logging.log4j') {
+            details.useVersion '2.15.0'
+        }
+    }
 }
 
 dependencies {
