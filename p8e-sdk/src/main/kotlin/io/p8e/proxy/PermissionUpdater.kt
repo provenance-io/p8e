@@ -4,6 +4,10 @@ import com.google.protobuf.Message
 import io.p8e.ContractManager
 import io.p8e.proto.Contracts.Contract
 import io.p8e.util.ThreadPoolFactory
+import io.p8e.util.base64Decode
+import io.p8e.util.loBytes
+import io.p8e.util.sha256
+import io.p8e.util.sha512
 import java.io.ByteArrayInputStream
 import java.security.PublicKey
 import java.util.UUID
@@ -26,7 +30,16 @@ class PermissionUpdater(
                 val obj = this.loadObject(fact.dataLocation.ref.hash)
                 val inputStream = ByteArrayInputStream(obj)
 
-                this.storeObject(inputStream, audience)
+                val hashBytes = fact.dataLocation.ref.hash.base64Decode()
+                val loHash = hashBytes.size == 16
+                val msgSha256 = obj.sha256()
+                val useSha256 = if (loHash) {
+                    msgSha256.loBytes().toByteArray().contentEquals(hashBytes)
+                } else {
+                    msgSha256.contentEquals(hashBytes)
+                }
+
+                this.storeObject(inputStream, audience, sha256 = useSha256, loHash = loHash)
             }
         }
     }

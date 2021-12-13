@@ -61,7 +61,7 @@ class ObjectGrpc(
         }.toSet()
 
         DefinitionService(osClient)
-            .save(encryptionPublicKey, msg, signer, audience)
+            .save(encryptionPublicKey, msg, signer, audience, sha256 = request.sha256, loHash = request.loHash)
             .toProto()
             .complete(responseObserver)
     }

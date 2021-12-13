@@ -89,4 +89,6 @@ message ChaincodeTransaction {
 message WithAudience {
     repeated bytes audience = 1;
     bytes message = 2;
+    bool sha256 = 3; // default bool is 'false'
+    bool loHash = 4; // default bool is 'false'
 }

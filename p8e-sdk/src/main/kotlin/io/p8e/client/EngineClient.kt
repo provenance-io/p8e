@@ -68,7 +68,7 @@ interface P8eClient {
 
     fun <T : Message> saveProto(msg: T, executionUuid: UUID?, audience: Set<PublicKey> = setOf()): Location
 
-    fun storeObject(inputStream: InputStream, audience: Set<PublicKey>): Location
+    fun storeObject(inputStream: InputStream, audience: Set<PublicKey>, sha256: Boolean = false, loHash: Boolean = false): Location
 
     fun loadObject(hash: String): ByteArray
 
@@ -195,12 +195,18 @@ abstract class EventMonitorClient(
 
     override fun storeObject(
         inputStream: InputStream,
-        audience: Set<PublicKey>
+        audience: Set<PublicKey>,
+        sha256: Boolean,
+        loHash: Boolean,
     ): Location {
         return objectClient.store(
             inputStream.use {
                 it.readAllBytes()
-            }.withAudience(audience.map(ECUtils::convertPublicKeyToBytes).toSet())
+            }.withAudience(
+                audience.map(ECUtils::convertPublicKeyToBytes).toSet(),
+                sha256 = sha256,
+                loHash = loHash
+            )
         )
     }
 

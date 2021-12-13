@@ -22,10 +22,12 @@ import io.provenance.os.proto.Objects
 import io.provenance.os.proto.Objects.Chunk.ImplCase
 import io.provenance.os.proto.PublicKeyServiceGrpc
 import io.provenance.os.proto.PublicKeys
+import io.provenance.os.util.loBytes
 import io.provenance.os.util.toHexString
 import io.provenance.os.util.toPublicKeyProtoOS
 import io.provenance.proto.encryption.EncryptionProtos.ContextType.RETRIEVAL
 import objectstore.Util
+import org.bouncycastle.its.asn1.HashAlgorithm.sha256
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -162,7 +164,9 @@ open class OsClient(
         signer: SignerImpl,
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
-        uuid: UUID = UUID.randomUUID()
+        uuid: UUID = UUID.randomUUID(),
+        sha256: Boolean = false,
+        loHash: Boolean = false,
     ): Objects.ObjectResponse {
         val bytes = message.toByteArray()
 
@@ -173,7 +177,9 @@ open class OsClient(
             bytes.size.toLong(),
             additionalAudiences,
             metadata,
-            uuid
+            uuid,
+            sha256 = sha256,
+            loHash = loHash
         )
     }
 
@@ -185,7 +191,9 @@ open class OsClient(
         additionalAudiences: Set<PublicKey> = setOf(),
         metadata: Map<String, String> = mapOf(),
         uuid: UUID = UUID.randomUUID(),
-        deadlineSeconds: Long = 60L
+        deadlineSeconds: Long = 60L,
+        sha256: Boolean = false,
+        loHash: Boolean = false,
     ): Objects.ObjectResponse {
         val signerPublicKey = signer.getPublicKey()
         val signatureInputStream = inputStream.sign(signer)
@@ -195,7 +203,8 @@ open class OsClient(
             payload = signatureInputStream,
             ownerEncryptionPublicKey = encryptionPublicKey,
             additionalAudience = mapOf(Pair(RETRIEVAL, additionalAudiences)),
-            processingAudienceKeys = listOf()
+            processingAudienceKeys = listOf(),
+            sha256 = sha256
         )
         val dimeInputStream = DIMEInputStream(
             dime.dime,
@@ -204,7 +213,8 @@ open class OsClient(
             metadata = metadata + (SIGNATURE_PUBLIC_KEY_FIELD_NAME to CertificateUtil.publicKeyToPem(signerPublicKey)),
             internalHash = true,
             externalHash = false,
-            extKeyCustodyApi = extEncryptSigningApi
+            extKeyCustodyApi = extEncryptSigningApi,
+            sha256Internal = sha256
         )
         val responseObserver = SingleResponseObserver<Objects.ObjectResponse>()
         val requestObserver = objectAsyncClient.put(responseObserver)
@@ -222,7 +232,13 @@ open class OsClient(
                     requestObserver.onNext(iterator.next())
                 }
 
-                requestObserver.onNext(propertyChunkRequest(HASH_FIELD_NAME to dimeInputStream.internalHash()))
+                val hash = if (loHash) {
+                    dimeInputStream.internalHash().loBytes().toByteArray()
+                } else {
+                    dimeInputStream.internalHash()
+                }
+
+                requestObserver.onNext(propertyChunkRequest(HASH_FIELD_NAME to hash))
                 requestObserver.onNext(propertyChunkRequest(SIGNATURE_FIELD_NAME to signatureInputStream.sign()))
                 requestObserver.onNext(propertyChunkRequest(SIGNATURE_PUBLIC_KEY_FIELD_NAME to signingPublicKey.toByteArray(Charsets.UTF_8)))
 

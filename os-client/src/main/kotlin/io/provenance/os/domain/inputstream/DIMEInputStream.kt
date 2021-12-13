@@ -35,7 +35,8 @@ class DIMEInputStream(
     val signatures: List<Signature> = listOf(),
     val internalHash: Boolean = true,
     val externalHash: Boolean = true,
-    val extKeyCustodyApi: ExternalKeyCustodyApi
+    val extKeyCustodyApi: ExternalKeyCustodyApi,
+    val sha256Internal: Boolean = false
 ) : FilterInputStream(BufferedInputStream(`in`)) {
 
     private val internalInputStream = `in`
@@ -90,7 +91,7 @@ class DIMEInputStream(
             System.arraycopy(dimeBytes, 0, this, 4 + 2 + 4 + uuidBytes.size + 4 + metadataBytes.size + 4 + uriBytes.size + 4 + signaturesBytes.size + 4, dimeBytes.size)
         }
 
-    private val internalDigest = MessageDigest.getInstance("SHA-512")
+    private val internalDigest = MessageDigest.getInstance(if (sha256Internal) "SHA-256" else "SHA-512")
     private val externalDigest = MessageDigest.getInstance("SHA-512")
         .apply {
             update(header, 0, header.size)
