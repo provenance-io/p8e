@@ -38,12 +38,19 @@ sourceSets {
     }
 }
 
+boolean isMoreRecent( String a, String b ) {
+    [a,b]*.tokenize('.')*.collect { it as int }.with { u, v ->
+        Integer result = [u,v].transpose().findResult{ x,y -> x <=> y ?: null } ?: u.size() <=> v.size()
+        return (result == 1)
+    }
+}
+
 configurations.all {
     // This is brought in by the object store client... We don't want figure dependencies in the p8e-api.
     exclude group: 'com.figure', module: 'figure-util'
 
     resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-        if (details.requested.group == 'org.apache.logging.log4j') {
+        if (details.requested.group == 'org.apache.logging.log4j' && !isMoreRecent(details.requested.version, '2.15.0')) {
             details.useVersion '2.15.0'
         }
     }
