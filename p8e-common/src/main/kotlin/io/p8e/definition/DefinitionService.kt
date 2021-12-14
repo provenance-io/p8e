@@ -11,6 +11,9 @@ import io.p8e.proto.Contracts.Fact
 import io.p8e.util.*
 import io.provenance.p8e.encryption.ecies.ECUtils
 import io.provenance.os.client.OsClient
+import io.provenance.os.util.loBytes
+import io.provenance.os.util.sha256
+import io.provenance.os.util.sha256LoBytes
 import io.provenance.p8e.encryption.model.KeyRef
 import io.provenance.proto.encryption.EncryptionProtos.DIME
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
@@ -246,20 +249,34 @@ class DefinitionService(
         encryptionPublicKey: PublicKey,
         msg: ByteArray,
         signer: SignerImpl,
-        audience: Set<PublicKey> = setOf()
+        audience: Set<PublicKey> = setOf(),
+        sha256: Boolean = false,
+        loHash: Boolean = false,
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())
+        val hash = when (sha256) {
+            true -> msg.sha256()
+            false -> msg.sha512()
+        }.let {
+            when (loHash) {
+                true -> it.loBytes().toByteArray()
+                false -> it
+            }
+        }
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), hash.base64String())
+
         if (putCache[putCacheKey] == true) {
-            return msg.sha512()
+            return hash
         }
         return osClient.put(
             ByteArrayInputStream(msg),
             encryptionPublicKey,
             signer,
             msg.size.toLong(),
-            audience
+            audience,
+            sha256 = sha256,
+            loHash = loHash,
         ).also {
-            putCache[PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.base64Sha512())] = true
+            putCache[putCacheKey] = true
         }.hash.toByteArray()
     }
 
@@ -267,17 +284,31 @@ class DefinitionService(
         encryptionPublicKey: PublicKey,
         msg: T,
         signer: SignerImpl,
-        audience: Set<PublicKey> = setOf()
+        audience: Set<PublicKey> = setOf(),
+        sha256: Boolean = false,
+        loHash: Boolean = false,
     ): ByteArray {
-        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), msg.toByteArray().base64Sha512())
+        val hash = when (sha256) {
+            true -> msg.toByteArray().sha256()
+            false -> msg.toByteArray().sha512()
+        }.let {
+            when (loHash) {
+                true -> it.loBytes().toByteArray()
+                false -> it
+            }
+        }
+
+        val putCacheKey = PutCacheKey(audience.toMutableSet().plus(encryptionPublicKey), hash.base64String())
         if (putCache[putCacheKey] == true) {
-            return msg.toByteArray().sha512()
+            return hash
         }
         return osClient.put(
             msg,
             encryptionPublicKey,
             signer,
-            additionalAudiences = audience
+            additionalAudiences = audience,
+            sha256 = sha256,
+            loHash = loHash,
         ).also {
             putCache[putCacheKey] = true
         }.hash.toByteArray()

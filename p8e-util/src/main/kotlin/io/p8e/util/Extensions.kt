@@ -35,6 +35,15 @@ fun String.base64Encode() = String(Base64.getEncoder().encode(toByteArray()))
 
 fun String.base64Decode() = Base64.getDecoder().decode(this)
 
+/* SHA-256 Functionality for interoperability with p8e-scope-sdk */
+fun ByteArray.sha256() = Hashing.sha256().hashBytes(this).asBytes()
+fun ByteArray.loBytes() = slice(0 until 16)
+fun ByteArray.sha256LoBytes(): ByteArray {
+    return Hashing.sha256().hashBytes(this)
+        .asBytes()
+        .loBytes()
+        .toByteArray()
+}
 
 fun ByteArray.sha512(): ByteArray = Hashing.sha512().hashBytes(this).asBytes()
 

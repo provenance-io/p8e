@@ -59,7 +59,7 @@ object ProvenanceAESCrypt {
      * Password based encryption using AES - GCM 256 bits.
      * additionalAuthenticatedData --AAD
      */
-    fun encrypt(inputStream: InputStream, additionalAuthenticatedData: String? = "", key: SecretKeySpec, useZeroIV: Boolean = false): InputStream {
+    fun encrypt(inputStream: InputStream, additionalAuthenticatedData: String? = "", key: SecretKeySpec, useZeroIV: Boolean = false, sha256: Boolean = false): InputStream {
         try {
             val iv = ByteArray(BLOCK_LENGTH)
             if (!useZeroIV) {
@@ -81,7 +81,7 @@ object ProvenanceAESCrypt {
             header.putInt(iv.size)
             header.put(iv)
 
-            return HashingCipherInputStream(inputStream, cipher, MessageDigest.getInstance("SHA-512"), header.array())
+            return HashingCipherInputStream(inputStream, cipher, MessageDigest.getInstance(if (sha256) "SHA-256" else "SHA-512"), header.array())
         } catch (t: Throwable) {
             throw CryptoException("Could not encrypt InputStream.", t)
         }

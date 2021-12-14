@@ -14,10 +14,12 @@ fun <T: Message> T.withAudience(audience: Set<ByteArray>): WithAudience {
         .build()
 }
 
-fun ByteArray.withAudience(audience: Set<ByteArray>): WithAudience {
+fun ByteArray.withAudience(audience: Set<ByteArray>, sha256: Boolean = false, loHash: Boolean = false): WithAudience {
     return WithAudience.newBuilder()
         .addAllAudience(audience.map { it.toByteString() })
         .setMessage(toByteString())
+        .setSha256(sha256)
+        .setLoHash(loHash)
         .build()
 }
 

@@ -320,7 +320,8 @@ object ProvenanceDIME {
                    additionalAudience: Map<EncryptionProtos.ContextType, Set<PublicKey>> = emptyMap(),
                    additionalAudienceAuthenticatedData: Map<EncryptionProtos.ContextType, Set<Pair<PublicKey, String>>> = emptyMap(),
                    processingAudienceKeys: List<PublicKey>,
-                   providedDEK: SecretKeySpec? = null
+                   providedDEK: SecretKeySpec? = null,
+                   sha256: Boolean = false,
     ): DIMEStreamProcessingModel {
 
         val messageDIME = EncryptionProtos.DIME.newBuilder()
@@ -330,9 +331,10 @@ object ProvenanceDIME {
         val processingScopedAudienceList = mutableListOf<Audience>()
 
         val encryptedPayload = ProvenanceAESCrypt.encrypt(
-                payload,
-                key = key,
-                useZeroIV = false
+            payload,
+            key = key,
+            useZeroIV = false,
+            sha256 = sha256
         )
 
         processingAudienceKeys.forEach { keyRef ->
