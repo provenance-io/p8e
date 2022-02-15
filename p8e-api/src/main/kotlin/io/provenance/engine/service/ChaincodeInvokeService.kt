@@ -79,6 +79,8 @@ class ChaincodeInvokeService(
                 scopeLockHeights.remove(it.key) // we only want to log this error once per scope
             }
         }
+
+        private val MEMORIALIZE_MESSAGE_TYPEURL = MsgP8eMemorializeContractRequest.getDefaultInstance().toAny().typeUrl
     }
 
     private val objectMapper = ObjectMapper().configureProvenance()
@@ -463,6 +465,9 @@ class ChaincodeInvokeService(
         } else {
             log.info("skipping gasMultiplier due to daily limit")
         }
+
+        estimate.messageFeesNanoHash = body.messagesList.count { it.typeUrl == MEMORIALIZE_MESSAGE_TYPEURL } * chaincodeProperties.memorializeMsgFeeNanoHash
+        log.info("Adding additional message fee of ${estimate.messageFeesNanoHash}nhash (${estimate.messageFeesNanoHash / 1000000000L}hash) for ${body.messagesList.size} messages")
 
         return provenanceGrpc.batchTx(body, accountNumber, sequenceNumber, estimate)
     }
