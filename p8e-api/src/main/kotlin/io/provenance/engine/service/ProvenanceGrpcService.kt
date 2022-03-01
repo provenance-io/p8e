@@ -33,7 +33,6 @@ import io.provenance.metadata.v1.ScopeSpecificationsAllRequest
 import io.provenance.p8e.shared.extension.logger
 import io.provenance.p8e.shared.service.AffiliateService
 import io.provenance.pbc.clients.roundUp
-import org.kethereum.DEFAULT_GAS_PRICE
 import org.kethereum.crypto.getCompressedPublicKey
 import org.springframework.stereotype.Service
 import java.net.URI
