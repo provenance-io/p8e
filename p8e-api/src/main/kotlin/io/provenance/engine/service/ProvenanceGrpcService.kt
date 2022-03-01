@@ -49,6 +49,7 @@ class ProvenanceGrpcService(
     private val accountProvider: Account,
     private val chaincodeProperties: ChaincodeProperties,
     private val affiliateService: AffiliateService,
+    private val gasPriceService: GasPriceService,
 ) {
     companion object {
         val executor = ThreadPoolFactory.newFixedThreadPool(5, "prov-grpc-%d")
@@ -81,6 +82,9 @@ class ProvenanceGrpcService(
     private val keyPair = accountProvider.getKeyPair()
     private val signer = PbSigner.signerFor(keyPair)
 
+    private val gasPrice: Double
+        get() = gasPriceService.getGasPriceNHash()
+
     fun accountInfo(): Auth.BaseAccount = accountService.account(QueryOuterClass.QueryAccountRequest.newBuilder()
             .setAddress(bech32Address)
             .build()
@@ -92,7 +96,7 @@ class ProvenanceGrpcService(
 
     fun getTx(hash: String): TxResponse = txService.getTx(GetTxRequest.newBuilder().setHash(hash).build()).txResponse
 
-    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0)): Tx {
+    fun signTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, gasEstimate: GasEstimate = GasEstimate(0, gasPrice = gasPrice)): Tx {
         val authInfo = AuthInfo.newBuilder()
             .setFee(Fee.newBuilder()
                 .addAllAmount(listOf(
@@ -141,7 +145,7 @@ class ProvenanceGrpcService(
                 .setTx(it)
                 .build()
             )
-        }.let { GasEstimate(it.gasInfo.gasUsed) }
+        }.let { GasEstimate(it.gasInfo.gasUsed, gasPrice = gasPrice) }
 
     fun batchTx(body: TxBody, accountNumber: Long, sequenceNumber: Long, estimate: GasEstimate): BroadcastTxResponse =
         signTx(body, accountNumber, sequenceNumber, estimate).run {
@@ -211,10 +215,9 @@ fun Message.toTxBody(): TxBody = listOf(this).toTxBody()
 
 fun Message.toAny(typeUrlPrefix: String = "") = Any.pack(this, typeUrlPrefix)
 
-data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_FEE_ADJUSTMENT) {
+data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_FEE_ADJUSTMENT, val gasPrice: Double) {
     companion object {
         private const val DEFAULT_FEE_ADJUSTMENT = 1.25
-        private const val DEFAULT_GAS_PRICE = 1905.00
     }
 
     private val adjustment = feeAdjustment ?: DEFAULT_FEE_ADJUSTMENT
@@ -226,5 +229,5 @@ data class GasEstimate(val estimate: Long, val feeAdjustment: Double? = DEFAULT_
     val limit
         get() = (estimate * adjustment * gasMultiplier).roundUp()
     val fees
-        get() = (limit * DEFAULT_GAS_PRICE + messageFeesNanoHash).roundUp()
+        get() = (limit * gasPrice + messageFeesNanoHash).roundUp()
 }
