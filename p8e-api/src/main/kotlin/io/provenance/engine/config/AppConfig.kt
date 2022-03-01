@@ -24,9 +24,14 @@ import io.provenance.engine.grpc.interceptors.JwtServerInterceptor
 import io.provenance.engine.grpc.interceptors.UnhandledExceptionInterceptor
 import io.provenance.engine.index.query.Operation
 import io.provenance.engine.index.query.OperationDeserializer
+import io.provenance.engine.service.CachedGasPriceService
+import io.provenance.engine.service.ConstantGasPriceService
 import io.provenance.engine.service.DataDogMetricCollector
+import io.provenance.engine.service.GasPriceService
 import io.provenance.engine.service.LogFileMetricCollector
 import io.provenance.engine.service.MetricsService
+import io.provenance.engine.service.UrlGasPriceClient
+import io.provenance.engine.service.UrlGasPriceService
 import io.provenance.p8e.shared.util.KeyClaims
 import io.provenance.p8e.shared.util.TokenManager
 import io.provenance.p8e.shared.state.EnvelopeStateEngine
@@ -107,6 +112,29 @@ class AppConfig : WebMvcConfigurer {
             .encoder(JacksonEncoder(objectMapper))
             .decoder(JacksonDecoder(objectMapper))
             .target(RPCClient::class.java, eventStreamProperties.rpcUri)
+    }
+
+    @Bean
+    fun gasPriceService(
+        objectMapper: ObjectMapper,
+        chaincodeProperties: ChaincodeProperties,
+    ): GasPriceService {
+        val uri: String? = chaincodeProperties.gasPriceUrl
+        val fallbackPrice = chaincodeProperties.defaultGasPrice
+        val cacheDurationSeconds = chaincodeProperties.gasPriceCacheDurationSeconds
+
+        return if (uri != null) {
+            Feign.builder()
+                .encoder(JacksonEncoder(objectMapper))
+                .decoder(JacksonDecoder(objectMapper))
+                .target(UrlGasPriceClient::class.java, uri).let {
+                    UrlGasPriceService(it, fallbackPrice)
+                }
+        } else {
+            ConstantGasPriceService(fallbackPrice)
+        }.let {
+            CachedGasPriceService(it, Duration.ofSeconds(cacheDurationSeconds))
+        }
     }
 
     @Bean

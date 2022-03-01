@@ -58,6 +58,9 @@ class ChaincodeProperties {
     @NotNull var maxGasMultiplierPerDay: Int = 1000
     @NotNull var blockHeightTimeoutInterval: Int = 20
     @NotNull var memorializeMsgFeeNanoHash: Long = 10
+    var gasPriceUrl: String? = null
+    @NotNull var defaultGasPrice: Double = 19050.0
+    @NotNull var gasPriceCacheDurationSeconds: Long = 3600
 }
 
 @ConfigurationProperties(prefix = "elasticsearch")
