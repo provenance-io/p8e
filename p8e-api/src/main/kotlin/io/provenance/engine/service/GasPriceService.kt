@@ -35,16 +35,16 @@ class ConstantGasPriceService(val gasPrice: Double): GasPriceService {
 }
 
 class CachedGasPriceService(val inner: GasPriceService, val cacheDuration: Duration): GasPriceService {
-    private var lastFetched: OffsetDateTime = OffsetDateTime.now()
-    private var lastFetchedPrice: Double = inner.getGasPriceNHash()
+    private data class GasPriceCache(val price: Double, val time: OffsetDateTime = OffsetDateTime.now())
+
+    private var lastFetched = GasPriceCache(inner.getGasPriceNHash())
 
     override fun getGasPriceNHash(): Double {
-        if (OffsetDateTime.now().isAfter(lastFetched.plusSeconds(cacheDuration.seconds))) {
-            lastFetchedPrice = inner.getGasPriceNHash()
-            lastFetched = OffsetDateTime.now()
+        if (OffsetDateTime.now().isAfter(lastFetched.time.plusSeconds(cacheDuration.seconds))) {
+            lastFetched = GasPriceCache(inner.getGasPriceNHash())
         }
 
-        return lastFetchedPrice
+        return lastFetched.price
     }
 }
 
