@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import cosmos.base.abci.v1beta1.Abci
 import cosmos.tx.v1beta1.ServiceOuterClass.BroadcastTxResponse
 import cosmos.tx.v1beta1.TxOuterClass.TxBody
+import io.grpc.StatusRuntimeException
 import io.p8e.proto.ContractScope.Envelope
 import io.p8e.proto.ContractSpecs
 import io.p8e.proto.ContractSpecs.ContractSpec
@@ -484,7 +485,12 @@ class ChaincodeInvokeService(
         var remaining = this
         while (deadline.isAfter(OffsetDateTime.now())) {
             remaining = remaining.filterNot {
-                val txResponse = provenanceGrpc.getTx(it)
+                val txResponse = try {
+                    provenanceGrpc.getTx(it)
+                } catch (e: StatusRuntimeException) {
+                    log.info("[waitForAllTxsToCompleteSuccessfully] received error: ${e.message}")
+                    return@filterNot false
+                }
 
                 if (txResponse.code > 0) {
                     throw Exception("Error adding contract spec while waiting for completion (code ${txResponse.code}): ${txResponse.rawLog}")
@@ -496,6 +502,8 @@ class ChaincodeInvokeService(
             if (remaining.isEmpty()) {
                 return true
             }
+
+            Thread.sleep(1000)
         }
         return false
     }
