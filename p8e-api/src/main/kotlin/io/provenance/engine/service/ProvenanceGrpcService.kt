@@ -207,8 +207,13 @@ class ProvenanceGrpcService(
         ).scopeSpecification.specification
 }
 
-fun Collection<Message>.toTxBody(): TxBody = TxBody.newBuilder()
+fun Collection<Message>.toTxBody(timeoutHeight: Long? = null): TxBody = TxBody.newBuilder()
     .addAllMessages(map { it.toAny() })
+    .also {
+        if (timeoutHeight != null) {
+            it.setTimeoutHeight(timeoutHeight)
+        }
+    }
     .build()
 
 fun Message.toTxBody(): TxBody = listOf(this).toTxBody()

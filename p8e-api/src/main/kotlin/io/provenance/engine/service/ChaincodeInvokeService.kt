@@ -212,9 +212,7 @@ class ChaincodeInvokeService(
                 val txBody = batch.map {
                     it.attempts++
                     it.request
-                }.toTxBody().toBuilder()
-                    .setTimeoutHeight(currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval)
-                .build()
+                }.toTxBody(currentBlockHeight + chaincodeProperties.blockHeightTimeoutInterval)
 
                 // Send the transactions to the blockchain.
                 val resp = synchronized(provenanceGrpc) { batchTx(txBody) }
@@ -433,15 +431,18 @@ class ChaincodeInvokeService(
                     .addAllSigners(owners)
                     .build()
             }
-            val txBody = contractSpecTx.plus(scopeSpecTx).toTxBody()
+            contractSpecTx.plus(scopeSpecTx).chunked(chaincodeProperties.specTxBatchSize).forEach { messages ->
+                log.info("sending batch of ${messages.size} contract spec messages")
+                val txBody = messages.toTxBody(provenanceGrpc.getLatestBlock().block.header.height + chaincodeProperties.blockHeightTimeoutInterval)
 
-            synchronized(provenanceGrpc) {
-                batchTx(txBody, applyMultiplier = false).also {
-                    if (it.txResponse.code != 0) {
-                        throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
+                synchronized(provenanceGrpc) {
+                    batchTx(txBody, applyMultiplier = false).also {
+                        if (it.txResponse.code != 0) {
+                            throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
+                        }
+
+                        log.info("contract spec batch made it to mempool with txhash = ${it.txResponse.txhash}")
                     }
-
-                    log.info("batch made it to mempool with txhash = ${it.txResponse.txhash}")
                 }
             }
         } catch(e: Throwable) {
