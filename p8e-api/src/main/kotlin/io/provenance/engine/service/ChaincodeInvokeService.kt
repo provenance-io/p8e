@@ -401,7 +401,8 @@ class ChaincodeInvokeService(
         scopeSpecIdToContractSpecHashes: Map<UUID, Collection<ByteString>>,
         contractSpecs: List<ContractSpec>,
     ) {
-        log.info("received a set of contract specs: ${contractSpecs.size} and scope specs: ${scopeSpecs.size}")
+        val logPrefix = "[addContractSpecs]"
+        log.info("$logPrefix received a set of contract specs: ${contractSpecs.size} and scope specs: ${scopeSpecs.size}")
 
         val owners = listOf(accountProvider.bech32Address())
 
@@ -431,24 +432,72 @@ class ChaincodeInvokeService(
                     .addAllSigners(owners)
                     .build()
             }
-            contractSpecTx.plus(scopeSpecTx).chunked(chaincodeProperties.specTxBatchSize).forEach { messages ->
-                log.info("sending batch of ${messages.size} contract spec messages")
+            val contractSpecHashes = contractSpecTx.chunked(chaincodeProperties.contractSpecTxBatchSize).map { messages ->
+                log.info("$logPrefix sending batch of ${messages.size} contract spec messages")
+                val txBody = messages.toTxBody(provenanceGrpc.getLatestBlock().block.header.height + chaincodeProperties.blockHeightTimeoutInterval)
+
+                synchronized(provenanceGrpc) {
+                    batchTx(txBody, applyMultiplier = false).let {
+                        if (it.txResponse.code != 0) {
+                            throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
+                        }
+
+                        log.info("$logPrefix contract spec batch made it to mempool with txhash = ${it.txResponse.txhash}")
+
+                        it.txResponse.txhash
+                    }
+                }
+            }
+
+            log.info("$logPrefix waiting for ${contractSpecHashes.size} contract spec batches to complete")
+
+            // wait for all contract specs to be written
+            if (!contractSpecHashes.waitForAllTxsToCompleteSuccessfully(OffsetDateTime.now().plusSeconds(
+                    chaincodeProperties.contractSpecTxTimeoutS.toLong()
+            ))) {
+                throw Exception("Timeout waiting for all contract spec txs to complete successfully")
+            }
+
+            log.info("$logPrefix all ${contractSpecHashes.size} contract spec batches completed successfully")
+
+            scopeSpecTx.chunked(chaincodeProperties.scopeSpecTxBatchSize).forEach { messages ->
+                log.info("$logPrefix sending batch of ${messages.size} scope spec messages")
                 val txBody = messages.toTxBody(provenanceGrpc.getLatestBlock().block.header.height + chaincodeProperties.blockHeightTimeoutInterval)
 
                 synchronized(provenanceGrpc) {
                     batchTx(txBody, applyMultiplier = false).also {
                         if (it.txResponse.code != 0) {
-                            throw Exception("Error adding contract spec: ${it.txResponse.rawLog}")
+                            throw Exception("Error adding scope spec: ${it.txResponse.rawLog}")
                         }
 
-                        log.info("contract spec batch made it to mempool with txhash = ${it.txResponse.txhash}")
+                        log.info("$logPrefix scope spec batch made it to mempool with txhash = ${it.txResponse.txhash}")
                     }
                 }
             }
         } catch(e: Throwable) {
-            log.warn("failed to add contract spec: ${e.message}")
+            log.warn("$logPrefix failed to add contract spec: ${e.message}")
             throw e
         }
+    }
+
+    fun List<String>.waitForAllTxsToCompleteSuccessfully(deadline: OffsetDateTime): Boolean {
+        var remaining = this
+        while (deadline.isAfter(OffsetDateTime.now())) {
+            remaining = remaining.filterNot {
+                val txResponse = provenanceGrpc.getTx(it)
+
+                if (txResponse.code > 0) {
+                    throw Exception("Error adding contract spec while waiting for completion (code ${txResponse.code}): ${txResponse.rawLog}")
+                }
+
+                txResponse.height > 0 && txResponse.code == 0 // filtering out transactions that have completed successfully
+            }
+
+            if (remaining.isEmpty()) {
+                return true
+            }
+        }
+        return false
     }
 
     fun batchTx(body: TxBody, applyMultiplier: Boolean = true): BroadcastTxResponse {
