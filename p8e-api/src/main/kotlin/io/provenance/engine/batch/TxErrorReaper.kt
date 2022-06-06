@@ -55,7 +55,7 @@ class TxErrorReaper(
                         val blockHeight = transactionStatus.height
                         if (blockHeight <= latestBlockHeight) { // EventStream is past this height, need to process manually
                             transactionStatus.scopeEvents()
-                                .also { events -> log.error("indexing ${events.size} events missed by eventStream") }
+                                .also { events -> log.warn("indexing ${events.size} events missed by eventStream") }
                                 .map { event -> event.toScopeEvent(it.transactionHash.value) }
                                 .also { events -> scopeStream.queueIndexScopes(blockHeight, events) }
                         }
